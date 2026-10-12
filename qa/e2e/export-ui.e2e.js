@@ -54,6 +54,21 @@ export async function run() {
         const pdf = await exportAs('pdf'); const head = await pdf.blob.slice(0, 5).text(); eq(head, '%PDF-', 'pdf header'); assert(pdf.blob.size > 2000, 'pdf size');
         assert(/\.docx$/.test(docx.name) && /\.pdf$/.test(pdf.name) && /\.md$/.test(md.name), 'extensions');
       }],
+      ['PDF with a non-Latin-1 name embeds Noto Sans; a character no font covers is reported, not silently lost', async () => {
+        const gi = $$('#transcript .grp').findIndex((g) => /Nadia Ríos/.test(g.querySelector('.who-name').textContent));
+        $$('#transcript .grp')[gi].querySelector('button.who').click();
+        const item = await waitFor(() => [...($('.menu')?.querySelectorAll('button') || [])].find((b) => /^Rename Nadia Ríos everywhere/.test(b.textContent)), { what: 'rename item' });
+        item.click();
+        const pd = await waitFor(() => document.querySelector('dialog[open] form'), { what: 'name dialog' });
+        pd.querySelector('input').value = 'Łukasz 李'; pd.requestSubmit();
+        await waitFor(() => /saved/.test($('.toast')?.textContent || ''), { what: 'saved' });
+        const pdf = await exportAs('pdf');
+        const raw = new TextDecoder('latin1').decode(await pdf.blob.arrayBuffer());
+        assert(/NotoSans/.test(raw) && /FontFile2/.test(raw), 'Noto Sans embedded');
+        assert(performance.getEntriesByType('resource').some((e) => /\/fonts\/NotoSans-Bold\.ttf$/.test(e.name)), 'font fetched from /fonts');
+        const msg = await waitFor(() => [...document.querySelectorAll('.toast')].map((t) => t.textContent).find((t) => /became/.test(t)), { what: 'export notice' });
+        assert(/\d+ characters? PDF can.t show/.test(msg) && /Word or text keeps them/.test(msg), `notice: ${msg}`);
+      }],
     ]);
   } finally { restore(); }
 }

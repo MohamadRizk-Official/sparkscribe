@@ -2,6 +2,7 @@
 // already loaded for the signed-in user (RLS decided what that is), so there is no export URL anyone could
 // guess. PDF and Word libraries load only when those formats are used. No AI is involved.
 import { fmtClock } from '../lib/segments.js';
+import { NOTO_RANGES } from './pdf-font-coverage.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -81,26 +82,60 @@ export async function toDocx(doc) {
 }
 
 // The standard PDF fonts cover Windows-1252; a few common characters outside it get plain equivalents.
-const PDF_MAP = { '→': '->', '←': '<-', '≈': '~', '¶': '', '✓': 'v', '−': '-', ' ': ' ', ' ': ' ', ' ': ' ' };
+const PDF_MAP = { '→': '->', '←': '<-', '≈': '~', '¶': '', '✓': 'v', '−': '-', ' ': ' ', ' ': ' ', ' ': ' ' };
 const CP1252_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ');
-const pdfSafe = (s) => [...String(s)].map((ch) => {
-  if (PDF_MAP[ch] != null) return PDF_MAP[ch];
-  const c = ch.codePointAt(0);
-  return c < 256 || CP1252_EXTRA.has(ch) ? ch : '?';
-}).join('');
+const builtinOk = (ch) => PDF_MAP[ch] != null || ch.codePointAt(0) < 256 || CP1252_EXTRA.has(ch);
+// Anything else (a name like "Łukasz", Greek, Cyrillic, Vietnamese…) needs an embedded font: a Noto Sans subset
+// (SIL OFL, ~124 KB per weight, public/fonts) that loads only for such documents. Scripts it doesn't cover
+// (Chinese, Japanese, Korean, Arabic, Hebrew, Thai, emoji…) still become "?", and the export says how many.
+const inNoto = (c) => NOTO_RANGES.some(([a, b]) => c >= a && c <= b);
+function pdfText(s, unicode, info) {
+  return [...String(s)].map((ch) => {
+    const c = ch.codePointAt(0);
+    if (unicode ? inNoto(c) || c < 32 : builtinOk(ch)) return unicode ? ch : PDF_MAP[ch] ?? ch;
+    if (PDF_MAP[ch] != null) return PDF_MAP[ch];
+    info.replaced = (info.replaced || 0) + 1;
+    return '?';
+  }).join('');
+}
+const docText = (doc) => [doc.title, ...doc.meta, ...doc.sections.flatMap((s) => [s.heading, ...s.blocks.map((b) => withTime(b))])].join(' ');
+function base64(bytes) {
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+async function addUnicodeFont(pdf, fetchFont) {
+  const [regular, bold] = await Promise.all(['NotoSans-Regular.ttf', 'NotoSans-Bold.ttf'].map(fetchFont));
+  pdf.addFileToVFS('NotoSans-Regular.ttf', base64(regular));
+  pdf.addFont('NotoSans-Regular.ttf', 'NotoSans', 'normal');
+  pdf.addFileToVFS('NotoSans-Bold.ttf', base64(bold));
+  pdf.addFont('NotoSans-Bold.ttf', 'NotoSans', 'bold');
+}
+const fetchPublicFont = async (name) => {
+  const res = await fetch(`/fonts/${name}`);
+  if (!res.ok) throw new Error(`font ${res.status}`);
+  return new Uint8Array(await res.arrayBuffer());
+};
 
-export async function toPdf(doc) {
+// info (optional) receives { unicode: whether the embedded font was used, replaced: characters shown as "?" }
+export async function toPdf(doc, info = {}, { fetchFont = fetchPublicFont } = {}) {
   const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({ unit: 'pt', format: 'a4' });
+  info.replaced = 0;
+  info.unicode = [...docText(doc)].some((ch) => !builtinOk(ch));
+  if (info.unicode) {
+    try { await addUnicodeFont(pdf, fetchFont); } catch { info.unicode = false; } // offline: fall back to "?"
+  }
   const M = 56, W = pdf.internal.pageSize.getWidth() - M * 2, H = pdf.internal.pageSize.getHeight();
   let y = M;
   // a heading never sits alone at the bottom of a page
   const keepWithNext = (size) => { if (y + size * 4.5 > H - M) { pdf.addPage(); y = M; } };
   const write = (text, { size = 11, bold = false, italic = false, color = [20, 24, 40], indent = 0, gap = 4, lead = 1.35 } = {}) => {
-    pdf.setFont('helvetica', bold && italic ? 'bolditalic' : bold ? 'bold' : italic ? 'italic' : 'normal');
+    if (info.unicode) pdf.setFont('NotoSans', bold ? 'bold' : 'normal'); // (no italic in the subset)
+    else pdf.setFont('helvetica', bold && italic ? 'bolditalic' : bold ? 'bold' : italic ? 'italic' : 'normal');
     pdf.setFontSize(size);
     pdf.setTextColor(...color);
-    for (const line of pdf.splitTextToSize(pdfSafe(text), W - indent)) {
+    for (const line of pdf.splitTextToSize(pdfText(text, info.unicode, info), W - indent)) {
       if (y + size > H - M) { pdf.addPage(); y = M; }
       pdf.text(line, M + indent, y + size);
       y += size * lead;
@@ -229,14 +264,17 @@ export function openExportDialog({ title, meta, sources, segments, coarse, prese
       const label = chosen.length === 1 ? chosen[0].label : 'Export';
       const name = `${fileBase(title, label === 'Original transcript' ? 'Transcript' : label)}.${f.ext}`;
       let blob;
+      const pdfInfo = {};
       if (f.subtitles) blob = new Blob([format === 'srt' ? toSrt(segments) : toVtt(segments)], { type: f.mime });
       else {
         const doc = { title: chosen.length === 1 ? `${title} — ${label}` : title, meta, sections: chosen.map((s) => ({ heading: s.label, blocks: s.blocks() })) };
-        blob = format === 'pdf' ? await toPdf(doc) : format === 'docx' ? await toDocx(doc)
+        blob = format === 'pdf' ? await toPdf(doc, pdfInfo) : format === 'docx' ? await toDocx(doc)
           : new Blob([format === 'md' ? toMarkdown(doc) : toText(doc)], { type: f.mime });
       }
       download(blob, name);
-      onDone?.(`Downloaded ${name}`);
+      onDone?.(pdfInfo.replaced
+        ? `Downloaded ${name}. ${pdfInfo.replaced} character${pdfInfo.replaced === 1 ? '' : 's'} PDF can’t show here (e.g. Chinese or emoji) became “?”: Word or text keeps them.`
+        : `Downloaded ${name}`);
       dismiss();
     } catch {
       err.textContent = 'That export didn’t work. Try another format.';

@@ -1,7 +1,7 @@
 // Export builders (src/insights/export.js): every implemented format, Unicode, special characters, line breaks,
 // long transcripts, empty input, subtitle timing. Node only: no browser, no network.
 import assert from 'node:assert/strict';
-const { toText, toMarkdown, toSrt, toVtt, fileBase, toDocx, FORMATS } = await import(new URL('../src/insights/export.js', import.meta.url).href);
+const { toText, toMarkdown, toSrt, toVtt, fileBase, toDocx, toPdf, FORMATS } = await import(new URL('../src/insights/export.js', import.meta.url).href);
 
 let pass = 0;
 const ok = (cond, msg) => { assert.ok(cond, msg); pass++; console.log('ok -', msg); };
@@ -68,5 +68,26 @@ ok(Object.keys(FORMATS).sort().join() === 'docx,md,pdf,srt,txt,vtt', 'formats im
 const blob = await toDocx(doc);
 const bytes = new Uint8Array(await blob.arrayBuffer());
 ok(bytes[0] === 0x50 && bytes[1] === 0x4b && blob.size > 2000, 'DOCX: a real zip package is produced');
+
+// ---- PDF: characters outside Windows-1252 (D23) ----
+const { readFileSync } = await import('node:fs');
+const fontDir = new URL('../public/fonts/', import.meta.url);
+const localFont = async (name) => new Uint8Array(readFileSync(new URL(name, fontDir)));
+const pdfOf = async (title, lines, opts) => {
+  const info = {};
+  const b = await toPdf({ title, meta: ['Exported test'], sections: [{ heading: 'Transcript', blocks: lines.map((text) => ({ t: 'p', text })) }] }, info, opts);
+  return { info, text: Buffer.from(await b.arrayBuffer()).toString('latin1'), size: b.size };
+};
+const plain = await pdfOf('Weekly sync', ['Sam: the launch is on Monday → slides by Friday.'], { fetchFont: localFont });
+ok(!plain.info.unicode && plain.info.replaced === 0 && /Helvetica/.test(plain.text) && !/NotoSans/.test(plain.text) && plain.size < 20000, `PDF: English text keeps the small built-in font (${plain.size} bytes, no font download)`);
+const intl = await pdfOf('Spotkanie z Łukaszem', ['Łukasz: dziękuję', 'Αθηνά: ευχαριστώ', 'Иван: спасибо', 'Nguyễn Thị Ánh: cảm ơn', 'Ğül & Şükrü → ok'], { fetchFont: localFont });
+ok(intl.info.unicode && intl.info.replaced === 0 && /NotoSans/.test(intl.text) && /FontFile2/.test(intl.text), `PDF: Polish, Greek, Cyrillic, Vietnamese and Turkish names embed Noto Sans and lose nothing (${Math.round(intl.size / 1024)} KB)`);
+const cjk = await pdfOf('Mixed', ['Li Wei 李伟: hello 😀'], { fetchFont: localFont });
+ok(cjk.info.unicode && cjk.info.replaced === 3, `PDF: characters no bundled font covers (李伟, 😀) are counted (${cjk.info.replaced}) so the user is told`);
+const offline = await pdfOf('Łódź', ['Łukasz'], { fetchFont: async () => { throw new Error('offline'); } });
+ok(!offline.info.unicode && offline.info.replaced === 3 && offline.size < 20000, 'PDF: if the font can’t load (offline), the export still works with "?" and says how many');
+const { NOTO_RANGES } = await import('../src/insights/pdf-font-coverage.js');
+const covers = (ch) => NOTO_RANGES.some(([a, b]) => ch.codePointAt(0) >= a && ch.codePointAt(0) <= b);
+ok([...'ŁĄęŻźĞşİ ΑΩαω АЯаяЁё ẠỹĐđ€–—…“”'].every(covers) && ![...'李😀ש'].some(covers), 'font coverage table matches the bundled subset (Latin Ext, Greek, Cyrillic, Vietnamese; not CJK/emoji/Hebrew)');
 
 console.log(`\n${pass} checks passed`);
