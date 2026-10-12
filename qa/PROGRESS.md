@@ -12,13 +12,13 @@ Evidence labels: **tested** (executed, result observed) · **simulated** (mocks/
 |---|---|---|
 | 0 | Branch, references, progress file | done |
 | 1 | Audit: feature inventory, risk ranking | done |
-| 2 | Automated regression suite (unit/integration, mocks) | in progress |
-| 3 | Browser end-to-end (local build, mocked backend) | in progress |
-| 4 | Speaker display layer (line merging) investigation | pending |
-| 5 | Performance and model caching | pending |
-| 6 | Security and privacy audit | pending |
-| 7 | Fixes + regression reruns | pending |
-| 8 | Final report | pending |
+| 2 | Automated regression suite (unit/integration, mocks) | done (143 unit) |
+| 3 | Browser end-to-end (local build, mocked backend) | done (51 e2e + 5 on prod build) |
+| 4 | Speaker display layer (line merging) investigation | done (D10) |
+| 5 | Performance and model caching | done (D6, D7) |
+| 6 | Security and privacy audit | done |
+| 7 | Fixes + regression reruns | done |
+| 8 | Final report | done — qa/REPORT.md |
 
 ## Audit (phase 1) — sources: 3 read-only code audits + my own measurements
 Feature inventory: home (upload/process/result/save), Library (list/search/folders/favorites/bulk), transcript page

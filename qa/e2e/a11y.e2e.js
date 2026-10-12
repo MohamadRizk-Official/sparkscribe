@@ -6,6 +6,8 @@ const key = (el, k) => { const ev = new KeyboardEvent('keydown', { key: k, bubbl
 export async function run() {
   return runTests([
     ['D9: the drop box is in the keyboard tab order and named', async () => {
+      if (visible($('#newBtn'))) { $('#newBtn').click(); await sleep(150); document.querySelector('dialog[open] [data-act="ok"]')?.click(); }
+      await waitFor(() => visible($('#dropzone')), { what: 'upload screen' });
       const dz = $('#dropzone');
       assert(visible(dz), 'drop box visible');
       eq(dz.tabIndex, 0, 'tabIndex');
