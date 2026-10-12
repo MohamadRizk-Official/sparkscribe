@@ -13,7 +13,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const BILLING_BRANCH = 'phase-6-billing';
 const BILLING = ['20261011000000_phase6_billing.sql', '20261011010000_phase6_billing_hardening.sql'];
 
-const BOOT = `
+export const BOOT = `
 create role anon nologin;
 create role authenticated nologin;
 create role service_role nologin bypassrls;
