@@ -21,7 +21,9 @@ import {
   AutoModelForAudioFrameClassification,
   LogitsProcessorList,
   Tensor,
+  env,
 } from '@huggingface/transformers';
+import { chunkedCache } from './engine/model-cache.js';
 import { analyzeAudio, preprocess } from './engine/preprocess.js';
 import { mergeOverlap } from './engine/merge.js';
 import { TokenLogprobRecorder, WhisperControl, compressionRatio } from './engine/decoding.js';
@@ -34,6 +36,10 @@ const ASR_MODELS = {
   small: 'onnx-community/whisper-small',
   turbo: 'onnx-community/whisper-large-v3-turbo',
 };
+// Model files are cached in this browser; files above Chromium's 256 MiB per-entry limit (the large-v3-turbo
+// encoder) are stored in parts, so they are downloaded once instead of on every visit (engine/model-cache.js).
+if (typeof caches !== 'undefined') { env.useCustomCache = true; env.customCache = chunkedCache(env.cacheKey); }
+
 const SEG_MODEL = 'onnx-community/pyannote-segmentation-3.0';
 const EMB_MODEL = 'onnx-community/wespeaker-voxceleb-resnet34-LM';
 

@@ -257,7 +257,7 @@ window.addEventListener('drop', (e) => {
 
 els.cancelBtn.addEventListener('click', startOver);
 els.newBtn.addEventListener('click', startOver);
-els.retryBtn.addEventListener('click', reset);
+els.retryBtn.addEventListener('click', () => reset({ restartWorker: true }));
 
 // A transcript that exists only on this screen (signed out, save failed, accounts off) is lost when the page is
 // left or the user starts over; so is a long run in progress. Ask first; edits waiting to sync are sent right away.
@@ -286,9 +286,13 @@ function show(panel) {
   [els.dropPanel, els.progressPanel, els.resultsPanel, els.errorPanel].forEach((p) => p.classList.toggle('hidden', p !== panel));
   window.scrollTo({ top: 0 });
 }
-function reset() {
-  killWorker();
-  getWorker().postMessage({ type: 'detect', forceCPU: FORCE_CPU });
+// The worker keeps the loaded models between recordings, so it is only restarted to stop a run in progress or
+// after an error; starting over from a finished result reuses it (no model reload).
+function reset({ restartWorker = !!run && !state?.lines } = {}) {
+  if (restartWorker) {
+    killWorker();
+    getWorker().postMessage({ type: 'detect', forceCPU: FORCE_CPU });
+  }
   els.player.pause();
   els.player.removeAttribute('src');
   if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }

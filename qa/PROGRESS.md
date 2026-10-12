@@ -34,8 +34,8 @@ speaker corrections persisting · exports.
 | D3 | P2 | results | 900 ms results timer not cancelled on reset → results re-opened over the drop panel (reproduced) | **fixed + verified** (e2e) |
 | D4 | **P1** | auth | open redirect: `next=%2F%09%2Fevil.com` passed safeNext and resolved to evil.com (reproduced) | **fixed + verified** (e2e: crafted link lands on /, /library still works) |
 | D5 | P1 | AI cost | no rate limit / quota on AI endpoints | inspected |
-| D6 | P2 | perf | 370 MB Whisper encoder exceeds Chromium's 256 MiB Cache Storage entry cap → re-downloaded on EVERY page load (measured: +368 MiB received on one reload+run); UI says model is saved | **reproduced** |
-| D7 | P2 | perf | "New file" terminates the worker → models reload (and encoder re-downloads) for every new file | inspected |
+| D6 | P2 | perf | 370 MB Whisper encoder exceeded Chromium's 256 MiB Cache Storage entry cap (measured: 255 MiB ok, 257 MiB refused) → re-downloaded on EVERY page load (+368 MiB per reload+run); UI claimed the model was saved | **fixed + verified** (real models: after reload +0.2 MiB, Get ready 8.4 s → 4.2 s) |
+| D7 | P2 | perf | "New file" terminated the worker → models reloaded for every new file | **fixed + verified** (real models: Get ready ~0 s, 13–15 s → 8.2 s per short file; transcript identical) |
 | D8 | P2 | data loss | "New file" / leaving the page discarded an unsaved transcript with no warning; pending edits dropped on New | **fixed + verified** (e2e: confirm dialog, beforeunload, pending sync flushed) |
 | D9 | P2 | a11y | file picker not reachable by keyboard (label wraps hidden input, no tabindex) | suspected |
 | D10 | P2 | transcript | short speaker turns dropped (MIN_TURN 0.3 s, single low-confidence word, "Thank you"/"you" filter, empty first pass never retried) → words lost; seen at 9:37 in the 23-min test | **reproduced** (data) |
@@ -59,6 +59,11 @@ switches that lines scored worse than the engine come from dropped short turns (
 
 - F2 (D4) src/lib/account.js safeNext: control chars refused, URL parser decides the origin. Evidence: qa/e2e/security.e2e.js 4/4 + live redirect check.
 - F3 (D16, D17, D18) export.js cue text one line + VTT escaping; library badge + quiz score escaped; transcript `line` regex. Evidence: tests/export-test.mjs 26/26 (old code fails check 1).
+
+- F4 (D6, D7) src/engine/model-cache.js (new): transformers.js custom cache over the same Cache Storage; files > 128 MiB
+  stored as parts + index written last; damaged sets = cache miss. src/worker.js wires it; src/main.js keeps the worker
+  on New (restarts only to stop a run or after an error). Evidence: qa/e2e/model-cache.e2e.js 6/6, home-save.e2e.js 8/8,
+  real-model runs on the release build (network counter).
 
 ## Test infrastructure (in repo)
 - qa/harness/dev-mock.mjs — real app + real /api code, fake signed-in user, in-memory DB, mock AI (port 5190)

@@ -83,6 +83,28 @@ export async function run() {
       document.querySelector('dialog[open] [data-act="cancel"]')?.click();
       knobs({ failSave: false });
     }],
+    ['D7: "New" after a finished result keeps the worker (models stay loaded)', async () => {
+      await toDrop();
+      await process(makeWav(10));
+      await waitFor(() => /saved/i.test(saveStatus()), { what: 'saved' });
+      const before = window.__qaLog.filter((e) => e.worker === 'terminated').length;
+      await toDrop();
+      await sleep(100);
+      eq(window.__qaLog.filter((e) => e.worker === 'terminated').length, before, 'worker not terminated');
+      await process(makeWav(8)); // the same worker processes the next file
+    }],
+    ['D7: Cancel during processing still stops the worker', async () => {
+      await toDrop();
+      const before = window.__qaLog.filter((e) => e.worker === 'terminated').length;
+      knobs({ worker: 'fake', runMs: 3000 });
+      feed(makeWav(10));
+      await waitFor(() => visible($('#progressPanel')), { what: 'progress' });
+      await sleep(400);
+      $('#cancelBtn').click();
+      await waitFor(() => visible($('#dropPanel')), { what: 'drop panel' });
+      eq(window.__qaLog.filter((e) => e.worker === 'terminated').length, before + 1, 'worker terminated once');
+      knobs({ runMs: 300 });
+    }],
     ['D8: leaving the page warns while a transcript is unsaved, not once it is saved', async () => {
       const leaveBlocked = () => { const ev = new Event('beforeunload', { cancelable: true }); dispatchEvent(ev); return ev.defaultPrevented; };
       await toDrop();
