@@ -112,10 +112,15 @@ switches that lines scored worse than the engine come from dropped short turns (
 # Phase 2 (approved 2026-10-12): Preview + AI limits + account deletion + remaining defects
 | # | Work | Status |
 |---|---|---|
-| 2.1 | Push qa/v1-release, Preview build identity, security headers, fixed defects on the real deployment | in progress |
-| 2.2 | Caching on the real Preview origin (real models, one download) | pending |
-| 2.3 | Isolated Postgres (PGlite) with the real migrations, for SQL-level tests | pending |
-| 2.4 | AI limits: concurrency, enforcement, errors, plans, cost-based policy (stays OFF) | pending |
-| 2.5 | Account deletion: design, migration (not applied), RPC, UI, isolated tests | pending |
-| 2.6 | Defects: shared-computer stash, converter timeout, PDF Unicode, short-turn word loss | pending |
-| 2.7 | Browser compatibility, consolidated report | pending |
+| 2.1 | Push qa/v1-release, Preview build identity, security headers, fixed defects on the real deployment | **done**: pushed d42952c, ccee2e2 (+ later); all 23 hashed assets present, HTML identical (CRLF only); headers on pages/JS/fonts/wasm/API; API 401 no-store signed out |
+| 2.2 | Caching on the real Preview origin (real models, one download) | **done**: 607.6 MiB first visit, +0.2 MiB per reload (encoder in 3 parts); found /assets served max-age=0 → immutable rule added (2c0455c) |
+| 2.3 | Isolated Postgres for SQL tests | **done**: PGlite with all production + billing migrations (qa/sql/pg.mjs); real PostgreSQL 18.4 via embedded-postgres for concurrency |
+| 2.4 | AI limits | **done (stays OFF)**: proposed migration + server wiring (32b37c3); SQL 26 + concurrency 8 + server 19 + e2e 4; PostgREST PGRST202 fallback confirmed live |
+| 2.5 | Account deletion | **done (not applied)**: proposed migration, SQL 20, Settings UI behind VITE_ACCOUNT_DELETION, e2e 5 (9c5ae7d, ec73ee4) |
+| 2.6 | Defects | stash privacy fixed (5ebccb9, e2e 6); converter stall fixed (0805644, unit 9, real build stall test); PDF Unicode fixed (44214ec, unit 5 + e2e 1); D10 analysed, not changed (needs word-level eval set) |
+| 2.7 | Browser compatibility, consolidated report | **done**: Safari < 16.4 CompressionStream crash fixed (e0097cb); support floor documented; REPORT.md phase 2 |
+
+Phase 2 regression (final): unit 163 checks (8 files), SQL 26 + 20 + 8, e2e: home-save 8, a11y 4, security 4, auth 8, library 7,
+transcript 8, insights 3, export-ui 4, ai-limits 4, account-deletion 5, pending-privacy 6, inputs on the build 4/4 applicable.
+Real services touched: Preview (read-only browsing, one tone file through FFmpeg), Supabase prod (read-only SELECTs only),
+PostgREST (one anonymous call to a non-existent RPC). AI spend in phase 2: $0. Model downloads: 0 new (FFmpeg 9.2 MB once).

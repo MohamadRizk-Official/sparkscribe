@@ -120,3 +120,109 @@ Not blockers: D10 follow-up, full CSP, server-only AI writes, P3 items.
 3. Speaker features approved earlier: confirm/adjust speaker count, merge speakers, split/move single lines.
 4. Full Content-Security-Policy; server-only writes for AI results.
 5. Keep running `npm test` and the qa/e2e suites on every change.
+
+---
+
+# Phase 2 report — Preview, AI limits, account deletion, remaining defects (2026-10-12)
+
+Branch `qa/v1-release`, pushed to GitHub (Preview `sparkscribe-git-qa-v1-release-moerizz.vercel.app`). Not merged, not in
+production. Production database: read-only checks only; no table, function, column or migration added (verified at the end).
+v1 speaker engine unchanged (`src/engine/diarize.js` blob 7ce03f9). AI spend this phase: $0.
+
+## 1. What passed, and against what
+
+| Area | Real services | Mocks / isolated | Result |
+|---|---|---|---|
+| Preview = this build | Preview (all 23 hashed assets, 5 pages) | — | identical (HTML differs only by local CRLF) |
+| Security headers | Preview: pages, JS, fonts, wasm, API | — | all present; HSTS added by Vercel; API 401 `no-store` signed out |
+| Model caching | Preview origin, real models | — | 607.6 MiB first visit → +0.2 MiB per reload; D7 worker reuse holds |
+| Converter (FFmpeg) | Preview: 9.2 MB Brotli → 31 MB, 0.6 s, decode OK | stall server on the prod build: clear error at 31 s, retry works | pass |
+| AI limits ledger | live PostgREST returns PGRST202 for the missing RPC → server runs unlimited | PGlite (26), real PostgreSQL 18.4 concurrency (8), server (19), browser (4) | pass; **stays off** |
+| Account deletion | production FK/cascade map (read-only) | PGlite (20), browser (5) | pass; **not applied** |
+| Shared-computer stash | — | browser (6) | fixed |
+| PDF Unicode | — | Node (5) + browser export (1); PDF rendered and text-extracted | fixed |
+| Safari < 16.4 | — | Node (3) | fixed |
+| Full regression | — | unit 163, SQL 54, e2e 67 | all pass |
+
+## 2. AI usage limits — design, tests, policy (nothing enabled)
+
+Design (`supabase/proposed/20261012100000_ai_usage_limits.sql`): append-only `ai_usage` ledger (users read their own rows,
+cannot insert/update/delete); `ai_reserve()` takes a per-user advisory lock, checks the hourly count and the period's spend
+against `ai_plan_limits` for the user's plan (from `private.entitlement`), then records or refuses; `ai_settle()` (server
+secret) records real tokens and cost; failed calls cost 0 but count toward the hour. Off unless `billing_settings.enforce_ai_limits`
+is on or the request origin is in `enforce_origins` (a Preview-only trial is possible). Replaces the old row-count limiter,
+which a user could reset by deleting results.
+
+Verified: 50 simultaneous connections on real Postgres → exactly 20 allowed; the same function **without** the lock lets 50/50
+through (so the test does detect races); budget race exact (7 of 12); per-user lock (same user waits, others don't); Plus
+limits and immediate fall-back to Free on cancel; anon denied; cross-user isolation; settle needs the secret and can't touch
+other users' rows; cascade on account deletion. Server: cached results never reserve; a refusal is HTTP 429 `rate_limited`
+("Try again in about N minutes", with Try again) or `quota_exceeded` ("renews on <date>", UTC); no model call, no row.
+
+Cost basis (production usage log, Haiku 5.5 at $0.10/M in, $0.50/M out): Ask $0.00044 · Overview $0.00065 · Insights ~$0.0011
+· Notes $0.00125 · Quiz $0.00166 · Action plan ~$0.0022 · Study guide $0.0033. A typical action costs about $0.001.
+
+| Plan | Hourly (burst guard) | Monthly model budget (cost guard) | ≈ actions/month | Worst-case AI cost vs price |
+|---|---|---|---|---|
+| Free | 20 | $0.15 | 100–340 | $0.15 per user (1,000 heavy free users ≤ $150/mo) |
+| Plus $7.99 | 120 | $1.50 | 1,000–3,000 | ≤ 19% of price (plus Stripe ~$0.53) |
+| Pro $14.99 | 240 | $3.50 | 2,000–8,000 | ≤ 23% of price (plus Stripe ~$0.73) |
+
+Recommendation: (1) apply the migration with enforcement **off** and set `AI_DB_SECRET` (or reuse `BILLING_DB_SECRET`), so the
+ledger records real costs for 2–4 weeks; (2) turn it on for the Preview origin only; (3) enable it for Free first (the monthly
+budget is what bounds cost), then the hourly guard. Values change with an UPDATE, no deploy. Check the price table against
+your Anthropic invoice; calls above 100k input tokens cost 5× (the settle step records that; estimates don't).
+**Needs your approval:** the migration, the secret, and any `enforce_*` change.
+
+## 3. Account deletion — design (implemented and tested in isolation; not applied)
+
+`delete_my_account('DELETE')` (`supabase/proposed/20261012110000_account_deletion.sql`) deletes the `auth.users` row. Production
+was checked read-only: every user table cascades (profiles, transcriptions, insights, artifacts, questions, folders, folder
+items, usage, subscriptions, and ai_usage if applied), and so do Supabase's own sessions, identities, refresh tokens, MFA and
+one-time tokens. Storage holds nothing (0 buckets). Guards enforced in the database: signed in; typed DELETE; latest sign-in
+(JWT `amr`) under 10 minutes, with the dialog re-checking the password right before; refused while a paid plan would keep
+charging. Kept: `billing_events` (accounting; pseudonymous id) and `private.account_deletions` (user id and Stripe customer id,
+for a later server job that deletes the Stripe customer; not built, billing is paused). After deletion the browser forgets the
+unsaved transcript, preferences and consent, and signs out; other devices' tokens can't write (FK) and refresh fails.
+Recovery: none, with no soft delete. Supabase backups keep deleted data until they rotate out (daily backups, 7 days on Pro;
+point-in-time recovery if enabled): say so in the privacy policy. Delete + re-sign-up resets free minutes (a hashed-email
+tombstone would stop it; not built, a privacy trade-off for you).
+UI: Settings → Account → "Delete account…" is hidden unless `VITE_ACCOUNT_DELETION=1` (set it in the release that applies
+the migration). **Needs your approval:** the migration and the flag.
+
+## 4. Remaining defects
+
+| Defect | Severity | Reproducible | Fix | Regression tests |
+|---|---|---|---|---|
+| Unsaved transcript parked for sign-in is saved into the **next** person's account on a shared computer | **P2** (privacy) | always, within 24 h, any signed-in visit to / | **fixed**: kept 1 h, remembers the account, offered only on the `?save=pending` return as Save/Discard, cleared on sign-out and deletion; the card no longer renders half off-screen | pending-privacy.e2e 6 |
+| Converter download stall leaves "Loading…" forever | P3 | with a stalled network (stall server) | **fixed**: 30 s no-bytes watchdog, 90 s start-up cap, progress, network-specific message, retry works | fetch-progress 9 + build stall test |
+| PDF turns non-Latin-1 text into "?" | P3 | always (Łukasz, Greek, Cyrillic, Vietnamese) | **fixed**: lazy Noto Sans subset (OFL, 124 KB per weight, only when needed); CJK/RTL/emoji still "?", and the notice says how many | export-test 5, export-ui 1 |
+| **D10** short turns dropped (0.3 s minimum, low-confidence single word, "Thank you"/"you" filter, empty pass not retried) | P2 (accuracy) | deterministic; 10.2 s (0.7%) and 4 of 33 switches on your reviewed 23-min recording | **not changed**: each filter trades lost words for invented ones; the only word-level references here are synthetic, AMI has speaker labels only, and your recording and held-out keys must not be tuned on | needs a public dev set with word timings (e.g. AMI word annotations), WER and hallucination rate before/after, plus the v1 regression |
+| Safari 16.0–16.3: transcription crashed (no CompressionStream) | P2 for those users | static analysis | **fixed**: skip that one retry signal there; other browsers byte-identical | compat-test 3 |
+
+Safest D10 order once you approve the experiment: (1) keep a high-confidence "Thank you." / "you" reply (gate the stock-phrase
+filter on confidence, not only on length); (2) retry an empty first pass once with 0.5 s more context; (3) leave the 0.3 s
+minimum. Each change ships only if WER improves and the hallucination count does not rise.
+
+## 5. Browser compatibility
+
+The build target (Vite 8 default) and the CSS used (`color-mix`, `:has`, `<dialog>`) set the floor at about **Chrome/Edge 111,
+Safari 16.4, Firefox 121**. WebGPU is optional (falls back to WebAssembly on CPU, which is slower). Guards and fallbacks were
+checked in code and in Chromium; Firefox and Safari/iOS were **not run** (see the manual list).
+
+## 6. Real deployment vs local mocks — differences found
+
+- Vercel serves the converter Brotli-compressed with no `content-length` (9.2 MB, not "32 MB"): copy and progress corrected.
+- Hashed `/assets/*` were revalidated on every load (`max-age=0`): immutable rule added; verified on the refreshed Preview.
+- PostgREST answers a missing RPC with `PGRST202` (404), confirmed live; the server's fallback relies on it.
+- The local harness can't run FFmpeg or real AI; those paths ran on the production build, the Preview, or the earlier real
+  Haiku run.
+
+## 7. Still needs you
+
+Approvals: AI-limits migration and secret (and any enforcement); account-deletion migration and flag; the D10 experiment;
+merging `qa/v1-release` and deploying.
+Manual tests on the Preview with a disposable account: save and reopen a real recording (text, speakers, timestamps intact);
+the D8 leave-warning with real speech; sign-up/confirm and reset emails; the "sign in to save" round trip (Save/Discard card);
+a PDF export with an accented speaker name; a framing check (an `<iframe>` of the Preview on another site is blocked);
+Firefox, Safari (macOS ≥ 16.4) and iOS Safari: one short transcription each.
