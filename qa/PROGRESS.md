@@ -106,3 +106,16 @@ switches that lines scored worse than the engine come from dropped short turns (
 ## Resource use
 - Real AI calls: 8 Haiku 5.5 calls, est. $0.0073 (budget ≤ 10 / $0.05); in-memory store only — qa/ai-real/run.mjs
 - Model downloads: 0 (models already cached in the in-app browser origin 127.0.0.1:4312 only)
+
+
+---
+# Phase 2 (approved 2026-10-12): Preview + AI limits + account deletion + remaining defects
+| # | Work | Status |
+|---|---|---|
+| 2.1 | Push qa/v1-release, Preview build identity, security headers, fixed defects on the real deployment | in progress |
+| 2.2 | Caching on the real Preview origin (real models, one download) | pending |
+| 2.3 | Isolated Postgres (PGlite) with the real migrations, for SQL-level tests | pending |
+| 2.4 | AI limits: concurrency, enforcement, errors, plans, cost-based policy (stays OFF) | pending |
+| 2.5 | Account deletion: design, migration (not applied), RPC, UI, isolated tests | pending |
+| 2.6 | Defects: shared-computer stash, converter timeout, PDF Unicode, short-turn word loss | pending |
+| 2.7 | Browser compatibility, consolidated report | pending |
