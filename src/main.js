@@ -11,6 +11,7 @@ import { mountInsights } from './insights/insights.js';
 import { sparkPulse } from './lib/brand.js';
 import { mountMascot } from './mascot/mascot.js';
 import { mascotSignal, mascotTravel } from './mascot/bus.js';
+import { confirmDialog } from './library/dialogs.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -254,9 +255,32 @@ window.addEventListener('drop', (e) => {
   if (f) start(f);
 });
 
-els.cancelBtn.addEventListener('click', reset);
-els.newBtn.addEventListener('click', reset);
+els.cancelBtn.addEventListener('click', startOver);
+els.newBtn.addEventListener('click', startOver);
 els.retryBtn.addEventListener('click', reset);
+
+// A transcript that exists only on this screen (signed out, save failed, accounts off) is lost when the page is
+// left or the user starts over; so is a long run in progress. Ask first; edits waiting to sync are sent right away.
+const unsavedResults = () => !!state?.lines?.length && !['saved', 'saving', 'syncing', 'pending'].includes(save.status);
+const longRunInProgress = () => !!run && !state?.lines && performance.now() - run.t0 > 20000;
+let leavingOnPurpose = false; // the sign-in hand-off parks the transcript first
+async function startOver(e) {
+  if (save.status === 'pending') syncNow(); // the payload is taken now; the update finishes in the background
+  const cancelling = e?.currentTarget === els.cancelBtn;
+  const ask = cancelling ? longRunInProgress() : unsavedResults();
+  if (ask) {
+    const ok = await confirmDialog(cancelling
+      ? { title: 'Stop processing?', bodyHtml: '<p>The work done so far on this recording will be lost.</p>', confirmLabel: 'Stop', danger: true }
+      : { title: 'Start over without saving?', bodyHtml: '<p>This transcript isn’t saved to your library. If you start over, it’s gone. Export it or save it first to keep it.</p>', confirmLabel: 'Start over', danger: true });
+    if (!ok) return;
+  }
+  reset();
+}
+addEventListener('beforeunload', (e) => {
+  if (leavingOnPurpose || !(unsavedResults() || longRunInProgress() || save.status === 'pending')) return;
+  e.preventDefault();
+  e.returnValue = '';
+});
 
 function show(panel) {
   [els.dropPanel, els.progressPanel, els.resultsPanel, els.errorPanel].forEach((p) => p.classList.toggle('hidden', p !== panel));
@@ -510,7 +534,9 @@ function onComplete({ lines, language, ms, device, stats }) {
   els.waveWrap.classList.add('done');
   sparkPulse();
   mascotSignal('transcribe-done');
+  const shownFor = state;
   setTimeout(() => {
+    if (state !== shownFor) return; // cancelled or started over during the pause
     show(els.resultsPanel);
     renderAll();
     renderNextSteps();
@@ -1090,7 +1116,9 @@ els.exportBtn.addEventListener('click', () => insights.openExport(state.view ===
 // ---------- account: save to My Library ----------
 // Only the finished transcript text (plus title, length, language) is stored. Audio never leaves the device.
 let session = null;
-const save = { id: null, status: 'idle', error: '', timer: null };
+// gen identifies the transcript on screen: a save or sync that finishes after the user started over belongs to the
+// previous transcript and must never be adopted (its id would make the next transcript overwrite that recording).
+const save = { id: null, status: 'idle', error: '', timer: null, gen: 0, editedWhileSaving: false };
 const CLOUD = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17l9-10"/></svg>';
 const WARN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4Z"/><path d="M12 10v4m0 3v.01"/></svg>';
@@ -1125,6 +1153,7 @@ const insights = mountInsights({
 // Park the transcript in this browser, sign in, then it's saved automatically on return.
 function signInToSave(mode) {
   if (!stashPending(savePayload())) return toast("Couldn't hold the transcript for sign-in. Export it first.");
+  leavingOnPurpose = true;
   location.href = `/auth?${mode === 'signup' ? 'mode=signup&' : ''}next=${encodeURIComponent('/?save=pending')}`;
 }
 // The header's own "Sign in" link would leave the page and lose an unsaved transcript: park it first,
@@ -1181,7 +1210,7 @@ if (isConfigured) {
 
 function resetSave() {
   clearTimeout(save.timer);
-  Object.assign(save, { id: null, status: 'idle', error: '', timer: null });
+  Object.assign(save, { id: null, status: 'idle', error: '', timer: null, gen: save.gen + 1, editedWhileSaving: false });
   els.saveBar?.classList.add('hidden');
 }
 
@@ -1199,13 +1228,20 @@ async function autoSave() {
 
 async function doSave() {
   if (save.id) return syncNow();
+  if (save.status === 'saving') return; // one insert per transcript (Retry while saving would create a duplicate)
+  const gen = save.gen;
   save.status = 'saving';
+  save.editedWhileSaving = false;
   renderSaveBar();
   try {
-    save.id = await saveTranscript(savePayload());
+    const id = await saveTranscript(savePayload());
+    if (gen !== save.gen) return; // the user started over: that recording is saved; nothing on screen belongs to it
+    save.id = id;
     save.status = 'saved';
     insights.setTranscription();
+    if (save.editedWhileSaving) { save.editedWhileSaving = false; scheduleSync(); return; } // renames made meanwhile
   } catch (err) {
+    if (gen !== save.gen) return;
     save.status = 'error';
     save.error = err.message || String(err);
   }
@@ -1214,7 +1250,7 @@ async function doSave() {
 
 // Speaker renames / reassignments after saving update the saved copy too.
 function scheduleSync() {
-  if (!save.id) return;
+  if (!save.id) { if (save.status === 'saving') save.editedWhileSaving = true; return; }
   clearTimeout(save.timer);
   save.status = 'pending';
   renderSaveBar();
@@ -1223,13 +1259,16 @@ function scheduleSync() {
 async function syncNow() {
   clearTimeout(save.timer);
   if (!save.id || !state?.lines) return;
+  const gen = save.gen;
   save.status = 'syncing';
   renderSaveBar();
   try {
     await updateTranscriptText(save.id, toTxt('original'), segmentsPayload());
+    if (gen !== save.gen) return;
     save.status = 'saved';
     insights.transcriptChanged(); // earlier summaries now show as out of date
   } catch (err) {
+    if (gen !== save.gen) return;
     save.status = 'sync-error';
     save.error = err.message || String(err);
   }
