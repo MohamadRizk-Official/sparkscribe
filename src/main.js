@@ -1143,13 +1143,17 @@ const insights = mountInsights({
     playbackTime: () => (els.player.getAttribute('src') ? els.player.currentTime || 0 : null),
     getRecordingType: () => state?.recordingType || null,
     nameMap: () => nameMapFromSegments((state?.lines || []).map((l) => ({ speaker: spk(l.speaker).name, orig: spk(l.speaker).orig }))),
-    setRecordingType: async (t) => { state.recordingType = t; if (save.id) await updateRecordingType(save.id, t); },
+    setRecordingType: async (t) => {
+      const prev = state.recordingType;
+      state.recordingType = t;
+      if (save.id) try { await updateRecordingType(save.id, t); } catch (e) { state.recordingType = prev; throw e; }
+    },
     duration: () => state?.duration || 0,
     autoGenerate: true, // a fresh transcription: summarize automatically once the user has turned summaries on
     coarse: false,
     title: () => base(),
     createdAt: () => null,
-    toast: (m) => toast(m),
+    toast: (m, ms) => toast(m, ms),
     typeSlot: () => $('typeSlot'),
   },
 });
@@ -1346,12 +1350,12 @@ function esc(s) { return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 function escRe(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function cssEsc(s) { return window.CSS?.escape ? CSS.escape(s) : s.replace(/"/g, '\\"'); }
 let toastEl;
-function toast(msg) {
-  if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'toast'; document.body.appendChild(toastEl); }
+function toast(msg, ms = 1600) {
+  if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'toast'; toastEl.setAttribute('role', 'status'); document.body.appendChild(toastEl); }
   toastEl.textContent = msg;
   toastEl.classList.add('show');
   clearTimeout(toastEl._t);
-  toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 1600);
+  toastEl._t = setTimeout(() => toastEl.classList.remove('show'), ms);
 }
 
 // ---------- home: brand motion ----------

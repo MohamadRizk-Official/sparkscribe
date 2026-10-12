@@ -58,4 +58,20 @@ Object.assign(row, { status: 'generating', updated_at: new Date(Date.now() - 320
 const third = await svc.generateArtifact(db2, { transcriptionId: T, kind: 'meeting_recap', settings: {}, force: true });
 ok(third.cached === false && third.artifact.status === 'ready', 'takeover: after 310 s a stuck job can be restarted');
 
+// ---- D13: a failed update of a summary keeps the previous result (and its version) visible ----
+const db3 = memoryStore();
+db3.seed({ id: T, title: 'Failure', duration_seconds: 120, transcript_text: 'x', segments: lines });
+const ok1 = await svc.generate(db3, { transcriptionId: T, kind: 'overview' });
+const v1 = ok1.insight.sourceVersion;
+db3.seed({ id: T, title: 'Failure', duration_seconds: 120, transcript_text: 'x', segments: lines.map((l, i) => (i ? l : { ...l, sp: 'Renamed' })) }); // transcript changed → summary out of date
+process.env.AI_MOCK_FAIL = '1';
+let failedUpdate = null;
+try { await svc.generate(db3, { transcriptionId: T, kind: 'overview', force: true }); } catch (e) { failedUpdate = e; }
+delete process.env.AI_MOCK_FAIL;
+const st = await svc.getState(db3, T);
+const ov = st.insights.find((i) => i.kind === 'overview');
+ok(failedUpdate && ov.status === 'failed' && ov.error, 'failed update is reported');
+ok(ov.content && ov.content.short_summary === ok1.insight.content.short_summary, 'previous summary is still returned to the browser');
+ok(ov.sourceVersion === v1, 'and keeps the version it was made from (so it reads as out of date, not current)');
+
 console.log(`\n${pass} checks passed`);

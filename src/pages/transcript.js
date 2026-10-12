@@ -247,12 +247,7 @@ function initials(name) {
     for (const s of segments) if (s.speaker === from) { s.orig ??= s.speaker; s.speaker = to; }
     afterSpeakerChange(`Renamed to ${to}`);
   }
-  async function afterSpeakerChange(msg) {
-    const y = scrollY;
-    renderTranscript();
-    renderHeader();
-    ui.refreshType();
-    scrollTo({ top: y });
+  function savedText() {
     // the saved text keeps its first block (title / length line) and is rebuilt from the segments below it
     const names = [...new Set(segments.map((s) => s.speaker).filter((s) => s !== 'Unknown'))];
     const head = (row.transcript_text || '').split(/\r?\n\r?\n/)[0]
@@ -263,15 +258,36 @@ function initials(name) {
       if (last && last.speaker === s.speaker) last.text += ' ' + s.text;
       else paras.push({ speaker: s.speaker, start: s.start, text: s.text });
     }
-    const text = `${head}\n\n${paras.map((g) => `[${fmtClock(g.start)}] ${g.speaker}:\n${g.text}`).join('\n\n')}\n`;
-    try {
-      await updateTranscriptText(row.id, text, segmentsToStored(segments));
-      row.transcript_text = text;
-      toast(`${msg} · saved`);
-      ui.transcriptChanged(); // results made before now show "out of date"
-    } catch (err) {
-      toast(`Couldn't save: ${err.message || err}`);
-    }
+    return `${head}\n\n${paras.map((g) => `[${fmtClock(g.start)}] ${g.speaker}:\n${g.text}`).join('\n\n')}\n`;
+  }
+  // Speaker edits are saved one at a time, always with the latest state: two quick edits whose requests finished
+  // out of order used to leave the older one in the database. A failed save stays "unsaved" and is retried with the
+  // next change; leaving the page warns meanwhile.
+  let saveChain = Promise.resolve();
+  let unsaved = false, saving = false, lastMsg = '';
+  addEventListener('beforeunload', (e) => { if (unsaved || saving) { e.preventDefault(); e.returnValue = ''; } });
+  function afterSpeakerChange(msg) {
+    const y = scrollY;
+    renderTranscript();
+    renderHeader();
+    ui.refreshType();
+    scrollTo({ top: y });
+    unsaved = true; lastMsg = msg;
+    saveChain = saveChain.then(async () => {
+      if (!unsaved) return; // already saved by an earlier turn of the queue with this state
+      const text = savedText(), stored = segmentsToStored(segments), msgNow = lastMsg;
+      unsaved = false; saving = true;
+      try {
+        await updateTranscriptText(row.id, text, stored);
+        row.transcript_text = text;
+        if (!unsaved) toast(`${msgNow} · saved`);
+        ui.transcriptChanged(); // results made before now show "out of date"
+      } catch (err) {
+        unsaved = true;
+        toast(`Couldn't save your change: ${err.message || err}. It stays on this page and is saved with your next change.`, 6000);
+      } finally { saving = false; }
+    });
+    return saveChain;
   }
 
   const ui = mountInsights({
@@ -286,7 +302,7 @@ function initials(name) {
       playbackTime: () => (player.getAttribute('src') ? player.currentTime || 0 : null),
       getRecordingType: () => recordingType,
       nameMap: () => nameMapFromSegments(segments),
-      setRecordingType: async (t) => { recordingType = t; await updateRecordingType(row.id, t); },
+      setRecordingType: async (t) => { const prev = recordingType; recordingType = t; try { await updateRecordingType(row.id, t); } catch (e) { recordingType = prev; throw e; } },
       typeSlot: () => $('typeSlot'),
       duration: () => row.duration_seconds || segments.at(-1)?.end || 0,
       autoGenerate: false, // reopening a saved transcript never starts generation by itself

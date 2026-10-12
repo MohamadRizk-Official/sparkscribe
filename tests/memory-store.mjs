@@ -36,9 +36,9 @@ export function memoryStore() {
       Object.assign(cur, { status: 'ready', content, error: null, model, input_tokens: usage.input, output_tokens: usage.output, updated_at: now() });
       return { ...cur };
     },
-    async failInsight(id, message) {
+    async failInsight(id, message, previousVersion) {
       const cur = insights.find((i) => i.id === id);
-      Object.assign(cur, { status: 'failed', error: message, updated_at: now() });
+      Object.assign(cur, { status: 'failed', error: message, updated_at: now(), ...(previousVersion != null ? { source_version: previousVersion } : {}) });
     },
     async listArtifacts(tid) { return artifacts.filter((a) => a.transcription_id === tid); },
     async getArtifact(tid, kind, key) { return artifacts.find((a) => a.transcription_id === tid && a.kind === kind && a.settings_key === key) || null; },

@@ -159,10 +159,10 @@ export function folderPicker({ ids, currentIds = [], onChange }) {
 }
 
 let toastEl;
-export function toast(msg) {
+export function toast(msg, ms = 2200) {
   if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'toast'; toastEl.setAttribute('role', 'status'); document.body.appendChild(toastEl); }
   toastEl.textContent = msg;
   toastEl.classList.add('show');
   clearTimeout(toastEl._t);
-  toastEl._t = setTimeout(() => toastEl.classList.remove('show'), 2200);
+  toastEl._t = setTimeout(() => toastEl.classList.remove('show'), ms);
 }

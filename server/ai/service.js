@@ -171,7 +171,8 @@ function publicArtifact(a) {
 
 function publicInsight(i) {
   return {
-    kind: i.kind, recordingType: i.recording_type, status: i.status, content: i.status === 'ready' ? i.content : null,
+    // a failed update still carries the previous result (with that result's version), so it stays visible
+    kind: i.kind, recordingType: i.recording_type, status: i.status, content: i.status === 'ready' || i.status === 'failed' ? i.content ?? null : null,
     error: i.status === 'failed' ? i.error : null, sourceVersion: i.source_version, updatedAt: i.updated_at,
   };
 }
@@ -298,6 +299,8 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
     }
   }
   await checkBudget(db);
+  // remembered before the row is claimed: a failed update keeps the previous result and its version (as artifacts do)
+  const previous = existing?.content ? existing.source_version : null;
   const claimed = await db.startInsight(existing, { transcriptionId, kind, recordingType: type, version });
   if (!claimed) return fromStorage(await db.getInsight(transcriptionId, kind, type));
 
@@ -310,7 +313,7 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
   } catch (err) {
     const message = err instanceof AIError ? err.message : 'Analysis failed.';
     meter.finish({ error: message });
-    await db.failInsight(claimed.id, message).catch(() => {});
+    await db.failInsight(claimed.id, message, previous).catch(() => {});
     throw err instanceof AIError ? err : new AIError(message);
   }
 }

@@ -53,8 +53,11 @@ export function supabaseStore(sb) {
       check(error, 'save the result');
       return data;
     },
-    async failInsight(id, message) {
-      await sb.from('transcription_insights').update({ status: 'failed', error: String(message).slice(0, 500) }).eq('id', id);
+    // keeps the previous content (and its version) when an update fails, so it stays visible
+    async failInsight(id, message, previousVersion) {
+      const patch = { status: 'failed', error: String(message).slice(0, 500) };
+      if (previousVersion != null) patch.source_version = previousVersion;
+      await sb.from('transcription_insights').update(patch).eq('id', id);
     },
     // ---- Phase 5 artifacts (same pattern as insights; a failed regeneration keeps the previous content) ----
     async listArtifacts(transcriptionId) {
