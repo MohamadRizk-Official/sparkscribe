@@ -37,13 +37,13 @@ speaker corrections persisting · exports.
 | D6 | P2 | perf | 370 MB Whisper encoder exceeded Chromium's 256 MiB Cache Storage entry cap (measured: 255 MiB ok, 257 MiB refused) → re-downloaded on EVERY page load (+368 MiB per reload+run); UI claimed the model was saved | **fixed + verified** (real models: after reload +0.2 MiB, Get ready 8.4 s → 4.2 s) |
 | D7 | P2 | perf | "New file" terminated the worker → models reloaded for every new file | **fixed + verified** (real models: Get ready ~0 s, 13–15 s → 8.2 s per short file; transcript identical) |
 | D8 | P2 | data loss | "New file" / leaving the page discarded an unsaved transcript with no warning; pending edits dropped on New | **fixed + verified** (e2e: confirm dialog, beforeunload, pending sync flushed) |
-| D9 | P2 | a11y | file picker not reachable by keyboard (label wraps hidden input, no tabindex) | suspected |
+| D9 | P2 (a11y) | home | the file picker (primary action) could not be reached by keyboard | **fixed + verified** (real Tab reaches the drop box, focus ring visible, Enter/Space open the picker; a11y.e2e.js) |
 | D10 | P2 | transcript | short speaker turns dropped (MIN_TURN 0.3 s, single low-confidence word, "Thank you"/"you" filter, empty first pass never retried) → words lost; seen at 9:37 in the 23-min test | **reproduced** (data) |
 | D11 | P2→P3 | AI | users can write AI result columns (content/status/source_version) → forge their own results; grade endpoint prompt was unbounded | grading prompt **bounded** (fixed + tested: 51 MB stored input → 3.4 KB prompt); column grants are by design (server writes AS the user); full fix = server-only writes (service role / SECURITY DEFINER) → **architecture change, needs approval** |
 | D12 | **P1** | saved page | two quick speaker edits whose saves finished out of order left the OLDER state in the database while the screen showed the newer one (reproduced: screen "Ava Final", DB "Ava"); a failed save had no retry and was lost on reload | **fixed + verified** (e2e transcript.e2e.js 8/8: saves serialized with latest state, failed edit retried with next change, leave warning) |
 | D13 | P2 | AI UI | a failed "Update" of a summary showed nothing; after reload the previous summary disappeared behind an error (server withheld content of failed insights and did not restore its version) | **fixed + verified** (insights.e2e.js 3/3, ai-limits-test.mjs: previous result + version kept, shown with the error) |
 | D12b | P2 | UI | a failed recording-type change: error toast overwritten by "Type: …", page kept the unsaved type | **fixed + verified** (insights.e2e.js) |
-| D14 | P2 | a11y | Space/arrow keys hijacked on results page while focus is on buttons | suspected |
+| D14 | P2 (a11y) | results | Space/arrow keys were taken by the player even when focus was on a button, tab or radio | **fixed + verified** (a11y.e2e.js: Space reaches focused buttons; body still plays/pauses) |
 | D15 | P2 | security | no security headers | **fixed (config)**: frame-ancestors none / X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy in vercel.json — verify on next Preview; full CSP proposed separately |
 | D16 | P3 | export | a line containing a blank line split its subtitle cue (SRT/VTT corrupt); "-->" and VTT markup unescaped (reproduced on old code) | **fixed + verified** (tests/export-test.mjs 26/26) |
 | D17 | P3 | XSS(self) | library type badge attribute and quiz score not escaped | **fixed** (inspected) |
@@ -75,6 +75,9 @@ switches that lines scored worse than the engine come from dropped short turns (
 - F7 (D12, D12b, D13) src/pages/transcript.js save queue; src/insights/insights.js failed results keep previous content,
   type change rollback; server/ai/service.js + server/db.js failInsight keeps previous version, publicInsight returns it;
   toasts accept a duration (home toast gets role=status).
+
+- F8 (D9, D14) index.html/src/main.js/src/style.css: drop box is a focusable button with focus ring; player shortcuts
+  ignore focused controls, modifiers and open dialogs.
 
 ## Test infrastructure (in repo)
 - qa/harness/dev-mock.mjs — real app + real /api code, fake signed-in user, in-memory DB, mock AI (port 5190)

@@ -242,6 +242,8 @@ els.cpuWhy.addEventListener('click', (e) => { e.preventDefault(); showDeviceInfo
 els.dropzone.addEventListener('dragleave', (e) => { e.preventDefault(); if (!els.dropzone.contains(e.relatedTarget)) els.dropzone.classList.remove('over'); });
 els.dropzone.addEventListener('drop', (e) => { e.preventDefault(); els.dropzone.classList.remove('over'); });
 els.dropzone.addEventListener('drop', (e) => { const f = e.dataTransfer.files?.[0]; if (f) start(f); });
+// keyboard: the drop box is a button that opens the file picker
+els.dropzone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); els.fileInput.click(); } });
 els.fileInput.addEventListener('change', () => { const f = els.fileInput.files?.[0]; if (f) start(f); els.fileInput.value = ''; });
 window.addEventListener('paste', (e) => {
   if (!els.dropPanel.classList.contains('hidden')) { const f = [...(e.clipboardData?.files || [])][0]; if (f) start(f); }
@@ -1037,7 +1039,9 @@ function updateActive(force) {
 
 document.addEventListener('keydown', (e) => {
   if (!state?.lines || els.resultsPanel.classList.contains('hidden')) return;
-  if (e.target.closest('input, select, textarea, [contenteditable="true"]')) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
+  // player shortcuts only when focus isn't on a control: Space must still press the focused button, arrows move radios
+  if (e.target.closest('input, select, textarea, button, a[href], summary, [contenteditable="true"], [role="button"], [role="tab"], [role="radio"], [role="menuitem"], [role="option"], [role="slider"], .menu')) return;
   if (e.key === ' ') { e.preventDefault(); els.playBtn.click(); }
   else if (e.key === 'ArrowLeft') { e.preventDefault(); seek(els.player.currentTime - 5); }
   else if (e.key === 'ArrowRight') { e.preventDefault(); seek(els.player.currentTime + 5); }
