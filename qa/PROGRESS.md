@@ -91,6 +91,10 @@ switches that lines scored worse than the engine come from dropped short turns (
   0 RPC results, anon has no privileges (read-only transactions, production). npm audit: 0 vulnerabilities.
   Mobile 375 px: Library, transcript page, speaker menu, Details fit; no horizontal scroll; dark contrast ≥ 6.75:1.
 
+- Input edge cases (tested on a production build, real decode + real models): PDF, 0-byte .m4a, text renamed .mp3 →
+  "Couldn't read …" in 0.2–0.4 s and Try again recovers; 0.2 s tone and 6 s silence → "No speech was recognised", no text.
+  Note: no timeout if the 32 MB converter download itself stalls (P3, not reproduced).
+
 ## Test infrastructure (in repo)
 - qa/harness/dev-mock.mjs — real app + real /api code, fake signed-in user, in-memory DB, mock AI (port 5190)
 - qa/harness/browser-mock.js — Supabase REST/RPC/auth mock, knobs (save delay/failure), fake worker (canned lines)

@@ -31,7 +31,7 @@ export function feed(file, inputSel = '#fileInput') {
   const input = $(inputSel); input.files = dt.files; input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-export const knobs = (k) => window.__qaKnobs(k);
+export const knobs = (k) => window.__qaKnobs?.(k) ?? {}; // no-op outside the QA harness (e.g. a production build)
 export const dbRows = () => window.__qaDb.rows;
 export const harnessState = async () => (await fetch('/__harness/state')).json();
 
