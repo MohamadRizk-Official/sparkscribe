@@ -50,6 +50,7 @@ speaker corrections persisting · exports.
 | D18 | P3 | UI | `/^d+$/` regex → search-hit `line` param ignored | **fixed** |
 | D19 | P2 | AI | a "generating" row could be taken over after 120 s while api/tools runs up to 300 s → duplicate paid generation | **fixed + tested**: takeover after 310 s (tools) / 75 s (insights, ask) |
 | D21 | P2 | AI | Meeting Recap / meeting Notes listed a task completed during the call ("Send the price list") as an action item — a completed task presented as outstanding (real Haiku run) | **fixed + verified** (shared ACTION_RULE: leave out tasks done/cancelled/replaced later; re-run: gone from recap and notes; n=1 real run) |
+| D22 | P2 (a11y) | Light theme | speaker names (and other speaker-coloured text) had 1.38–2.77:1 contrast in Light — the new default; speaker names measured 1.66:1 | **fixed + verified** (light-theme text mixes the hue 50% toward black: 5.0–8.1:1 for all palette colours; names measured 5.78–7.6:1) |
 | D20 | P1 | product | no delete-account / data deletion path | inspected (needs approval: auth/backend) |
 Line-merging investigation: merging joins only SAME-speaker stretches; it never hides another speaker. All 4 of 33 marked
 switches that lines scored worse than the engine come from dropped short turns (D10), not merging.
@@ -84,6 +85,11 @@ switches that lines scored worse than the engine come from dropped short turns (
   Action Plan 7/7 statuses right (open ×2 with deadlines, completed with resolution, discussed-only, cancelled, unclear,
   open decision); Ask: coffee = "not decided" (cited), off-topic refused (found=false), price = final 1.50 not the
   2.00 suggestion; Overview faithful; Recap decision = 1.50 only. Mock suites cover invented refs/quotes/evidence.
+
+- F10 (D22) src/style.css light-theme text colour for speaker names/initials and coloured mock labels.
+- Verified without change: RLS on all 12 tables, owner-only policies; simulated random signed-in user sees 0 rows /
+  0 RPC results, anon has no privileges (read-only transactions, production). npm audit: 0 vulnerabilities.
+  Mobile 375 px: Library, transcript page, speaker menu, Details fit; no horizontal scroll; dark contrast ≥ 6.75:1.
 
 ## Test infrastructure (in repo)
 - qa/harness/dev-mock.mjs — real app + real /api code, fake signed-in user, in-memory DB, mock AI (port 5190)

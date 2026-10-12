@@ -3249,3 +3249,8 @@ html.bg-paused .bg *, html.bg-paused .bg { animation-play-state: paused !importa
   .dz-orbit span:nth-child(1) { transform: scale(.36); } .dz-orbit span:nth-child(2) { transform: scale(.58); } .dz-orbit span:nth-child(3) { transform: scale(.82); opacity: .1; }
 }
 :root[data-theme="light"] .segctl [aria-checked="true"] { color: #0b1030; }
+
+/* Light theme: the speaker / accent colours are bright tones made for the dark background. As TEXT on the light page
+   they fall to 1.4–2.8:1 contrast (speaker names were 1.66:1). Text keeps the hue, mixed 50% toward black
+   (5.0–8.1:1 for every palette colour, WCAG AA). Icons and tinted backgrounds keep the bright colour. */
+:root[data-theme="light"] :is(.who, .avatar, .spk-name, .peek-outline, .pa-a .mono, .v-outline b, .va-a) { color: color-mix(in srgb, var(--c) 50%, #000); }
