@@ -5,7 +5,7 @@
 //     unpacks the entire file into raw memory at once, so it dies on long recordings and on
 //     codecs the browser doesn't ship.
 //  2. Robust path: FFmpeg compiled to WebAssembly. Handles every format and streams the
-//     conversion, so an hour-long voice message is fine. Costs a one-time ~32 MB download.
+//     conversion, so an hour-long voice message is fine. Costs a one-time download (~31 MB of WebAssembly, ~9 MB over the network compressed).
 import { fetchBlobURL, withTimeout, StallError } from './lib/fetch-progress.js';
 export const SAMPLE_RATE = 16000;
 
@@ -67,12 +67,12 @@ async function getFFmpeg(onStatus) {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
     const ff = new FFmpeg();
     const base = `${location.origin}/ffmpeg`;
-    onStatus('Loading audio converter (one-time ~32 MB download)…');
+    onStatus('Loading audio converter (one-time download)…');
     const mb = (n) => (n / 1048576).toFixed(0);
     try {
       const coreURL = await fetchBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript');
       const wasmURL = await fetchBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm', {
-        onProgress: (got, total) => onStatus(`Loading audio converter… ${mb(got)}${total >= got ? ` of ${mb(total)}` : ''} MB`), // a compressed response reports its compressed length
+        onProgress: (got, total) => onStatus(`Loading audio converter… ${total >= got ? `${Math.round((got / total) * 100)}%` : `${mb(got)} of ~31 MB`}`), // unpacked bytes; a compressed response (Vercel: ~9 MB Brotli) has no usable total
       });
       // starting it compiles ~32 MB of WebAssembly: allow a slow device, but not forever
       await withTimeout(ff.load({ coreURL, wasmURL }), 90_000, 'The audio converter didn’t start.', () => ff.terminate());
