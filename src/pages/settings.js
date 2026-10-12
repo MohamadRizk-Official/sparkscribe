@@ -24,15 +24,18 @@ function renderAccount(session) {
   const name = meta.full_name || meta.name || '';
   body.innerHTML = `<div class="set-who"><b>${esc(name || u.email || 'Signed in')}</b>${name ? `<span>${esc(u.email || '')}</span>` : ''}</div>
     <div class="set-actions"><a class="btn btn-ghost" href="/library">My Library</a><button class="btn btn-ghost" type="button" id="signOutBtn">Sign out</button></div>
-    <div class="set-danger"><div class="set-row-text"><h3>Delete account</h3><p>Permanently delete your account and everything saved in it.</p></div>
-      <button class="btn btn-danger" type="button" id="deleteAccountBtn">Delete account…</button></div>`;
+    ${DELETION_ON ? `<div class="set-danger"><div class="set-row-text"><h3>Delete account</h3><p>Permanently delete your account and everything saved in it.</p></div>
+      <button class="btn btn-danger" type="button" id="deleteAccountBtn">Delete account…</button></div>` : ''}`;
   $('signOutBtn').addEventListener('click', async () => { await signOut(); location.reload(); });
-  $('deleteAccountBtn').addEventListener('click', () => openDeleteDialog(u));
+  $('deleteAccountBtn')?.addEventListener('click', () => openDeleteDialog(u));
   showSaved();
 }
 
 // ---------- delete account ----------
 // What goes, said plainly; the password and the typed word guard against a slip or someone else at this computer.
+// Shown only once the database function exists (supabase/proposed/*_account_deletion.sql): set VITE_ACCOUNT_DELETION=1
+// in the same release that applies the migration.
+const DELETION_ON = import.meta.env.VITE_ACCOUNT_DELETION === '1';
 const justDeleted = new URLSearchParams(location.search).has('deleted');
 if (justDeleted) history.replaceState(null, '', '/settings');
 function openDeleteDialog(user) {

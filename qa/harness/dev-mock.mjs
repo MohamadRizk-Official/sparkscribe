@@ -16,6 +16,7 @@ const PORT = Number(process.argv[2]) || 5190;
 mkdirSync(resolve(ROOT, 'qa/out'), { recursive: true });
 process.env.SPARKSCRIBE_DEV_HARNESS = '1';
 process.env.AI_PROVIDER = 'mock'; // mock AI: no Anthropic calls
+process.env.VITE_ACCOUNT_DELETION = '1'; // show Settings > Delete account (its RPC is mocked in browser-mock.js)
 process.env.AI_USAGE_LOG = resolve(ROOT, 'qa/out/ai-usage.jsonl');
 
 const store = memoryStore();
