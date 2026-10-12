@@ -107,6 +107,16 @@ export function supabaseStore(sb) {
       check(error, 'load questions');
       return data.find((q) => norm(q.question) === normalized) || null;
     },
+    // AI work this user started since `since` (RLS: only their own rows are counted). Used by the optional hourly
+    // budget (AI_HOURLY_LIMIT). A count that can't be read never blocks anyone.
+    async countRecentAiWork(since) {
+      const count = async (table, col) => {
+        const { count: n, error } = await sb.from(table).select('id', { count: 'exact', head: true }).gte(col, since);
+        return error ? 0 : n || 0;
+      };
+      const [a, b, c] = await Promise.all([count('transcription_insights', 'updated_at'), count('transcription_artifacts', 'updated_at'), count('transcription_questions', 'created_at')]);
+      return a + b + c;
+    },
     async saveQuestion({ transcriptionId, question, answer, refs, found, version, model, usage }) {
       const { data, error } = await sb.from('transcription_questions').insert({
         transcription_id: transcriptionId, question, answer, refs, found, source_version: version, model,

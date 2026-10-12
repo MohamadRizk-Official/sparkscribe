@@ -26,7 +26,29 @@ import { selectContext, needsRetrieval, formatExcerpts } from './retrieve.js';
 import { segmentsFromRow, modelLine, estimateTokens, normalizeRecordingType, RECORDING_TYPES, isNotFound, refersToPlayback, isFollowUp } from '../../src/lib/segments.js';
 
 const PART_TOKENS = 80_000;
-const GENERATING_TIMEOUT_MS = 120_000;
+// A request that started a generation and then died (function timeout, closed tab) leaves the row "generating".
+// Another request may take it over only after the first could no longer be running, or the same result is paid
+// for twice: api/insights and api/ask run at most 60 s, api/tools 300 s (vercel.json).
+const INSIGHT_TAKEOVER_MS = 75_000;
+const ARTIFACT_TAKEOVER_MS = 310_000;
+// Optional per-user AI budget (requests that reach the model in the last hour). Off unless AI_HOURLY_LIMIT is set.
+export const hourlyLimit = () => { const n = Number(process.env.AI_HOURLY_LIMIT); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
+async function checkBudget(db) {
+  const limit = hourlyLimit();
+  if (!limit || typeof db.countRecentAiWork !== 'function') return;
+  const used = await db.countRecentAiWork(new Date(Date.now() - 3_600_000).toISOString());
+  if (used >= limit) throw new AIError("You've used a lot of AI in the last hour. Please try again a little later.", { status: 429, code: 'rate_limited' });
+}
+// The quiz grader reads the question from the user's own stored quiz, which the browser can write: bound every
+// field so it can't be turned into a large, general-purpose prompt.
+export function gradePromptFields(q, lines, given) {
+  const cut = (v, n) => String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+  return {
+    question: cut(q.question, 300), expected: cut(q.answer, 200),
+    accept: (Array.isArray(q.accept) ? q.accept : []).slice(0, 8).map((a) => cut(a, 120)),
+    explanation: cut(q.explanation, 400), evidence: cut([q.evidence, lines].filter(Boolean).join(' / '), 1200), answer: cut(given, 200),
+  };
+}
 const MAX_TRANSCRIPT_TOKENS = 600_000; // ~30+ hours of speech; beyond this we refuse rather than run up cost
 export const KINDS = ['overview', 'detailed_summary', 'notes', 'insights'];
 const CHAPTER_MIN_MINUTES = 8;
@@ -195,8 +217,9 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
   const existing = await db.getArtifact(transcriptionId, kind, key);
   if (existing) {
     if (existing.status === 'ready' && existing.source_version === version && !force) return fromStorage(existing);
-    if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < GENERATING_TIMEOUT_MS) return fromStorage(existing);
+    if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < ARTIFACT_TAKEOVER_MS) return fromStorage(existing);
   }
+  await checkBudget(db);
   // remembered before the row is claimed: a failed update falls back to the previous result and its version
   const previous = existing?.content ? existing.source_version : null;
   const claimed = await db.startArtifact(existing, { transcriptionId, kind, settings: normalized, settingsKey: key, version });
@@ -239,12 +262,13 @@ export async function gradeShortAnswer(db, { transcriptionId, artifactId, index,
   if (!q || q.type !== 'short_answer') throw new AIError("That quiz question doesn't exist.", { status: 404, code: 'not_found' });
   const { segments } = await loadTranscript(db, transcriptionId);
   const lines = (q.refs || []).map((r) => segments.find((s) => s.id === r)).filter(Boolean).map((s) => s.text).join(' ');
+  await checkBudget(db);
   const meter = createMeter({ feature: 'quiz:grade', transcriptionId, userId });
   try {
     const ai = getProvider();
     const r = await meter.call('grade', () => ai.complete({
       task: 'grade', ...taskConfig('grade'), system: GRADE_SYSTEM, schema: GRADE_SCHEMA,
-      messages: [{ role: 'user', content: gradeInstructions({ question: q.question, expected: q.answer, accept: q.accept || [], explanation: q.explanation || '', evidence: [q.evidence, lines].filter(Boolean).join(' / '), answer: given }) }],
+      messages: [{ role: 'user', content: gradeInstructions(gradePromptFields(q, lines, given)) }],
     }));
     const j = r.json || {};
     const verdict = ['correct', 'close', 'incorrect'].includes(j.verdict) ? j.verdict : 'incorrect';
@@ -269,10 +293,11 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
   if (existing) {
     const fresh = existing.source_version === version;
     if (existing.status === 'ready' && fresh && !force) return fromStorage(existing);
-    if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < GENERATING_TIMEOUT_MS) {
+    if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < INSIGHT_TAKEOVER_MS) {
       return fromStorage(existing); // someone else is already generating it
     }
   }
+  await checkBudget(db);
   const claimed = await db.startInsight(existing, { transcriptionId, kind, recordingType: type, version });
   if (!claimed) return fromStorage(await db.getInsight(transcriptionId, kind, type));
 
@@ -343,6 +368,7 @@ export async function askTranscript(db, { transcriptionId, question, at = null, 
     }
   }
 
+  await checkBudget(db);
   const ai = getProvider();
   const insights = await db.listInsights(transcriptionId);
   const current = insights.filter((i) => i.source_version === version);

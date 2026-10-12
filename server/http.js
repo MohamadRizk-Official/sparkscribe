@@ -7,8 +7,14 @@ const MAX_BODY = 16 * 1024;
 
 export async function readJson(req) {
   if (req.body !== undefined && req.body !== null) {
-    if (typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return req.body;
-    return JSON.parse(String(req.body) || '{}');
+    // the platform may have parsed the body already: the size limit and JSON errors still apply
+    if (typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
+      if (JSON.stringify(req.body).length > MAX_BODY) throw new AIError('Request too large.', { status: 413, code: 'bad_request' });
+      return req.body;
+    }
+    const text = String(req.body);
+    if (text.length > MAX_BODY) throw new AIError('Request too large.', { status: 413, code: 'bad_request' });
+    try { return text ? JSON.parse(text) : {}; } catch { throw new AIError('Invalid request.', { status: 400, code: 'bad_request' }); }
   }
   let raw = '';
   for await (const chunk of req) {

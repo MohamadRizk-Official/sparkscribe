@@ -104,7 +104,7 @@ export function anthropicProvider(apiKey) {
           if (ev.type === 'message_start') { model = ev.message?.model || model; Object.assign(usage, usageOf(ev.message?.usage)); }
           else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') { text += ev.delta.text; onDelta(ev.delta.text); }
           else if (ev.type === 'message_delta') { stop = ev.delta?.stop_reason || stop; if (ev.usage?.output_tokens) usage.output = ev.usage.output_tokens; }
-          else if (ev.type === 'error') throw new AIError(ev.error?.message || 'The analysis stream failed.');
+          else if (ev.type === 'error') throw new AIError('The analysis stream failed. Try again.'); // never forward provider error text
         }
       }
       if (stop === 'refusal') throw new AIError('The analysis was declined for this content.', { code: 'refused' });

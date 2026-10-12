@@ -63,6 +63,9 @@ export function memoryStore() {
       const cur = artifacts.find((a) => a.id === id);
       Object.assign(cur, { status: 'failed', error: message, updated_at: now(), ...(previousVersion != null ? { source_version: previousVersion } : {}) });
     },
+    async countRecentAiWork(since) {
+      return insights.filter((i) => i.updated_at >= since).length + artifacts.filter((a) => a.updated_at >= since).length + questions.filter((q) => q.created_at >= since).length;
+    },
     async listQuestions(tid) { return questions.filter((q) => q.transcription_id === tid); },
     async findAnswer(tid, normalized, version, norm) {
       return [...questions].reverse().find((q) => q.transcription_id === tid && q.source_version === version && norm(q.question) === normalized) || null;
