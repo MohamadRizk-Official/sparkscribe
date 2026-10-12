@@ -6,6 +6,7 @@
 //     codecs the browser doesn't ship.
 //  2. Robust path: FFmpeg compiled to WebAssembly. Handles every format and streams the
 //     conversion, so an hour-long voice message is fine. Costs a one-time ~32 MB download.
+import { fetchBlobURL, withTimeout, StallError } from './lib/fetch-progress.js';
 export const SAMPLE_RATE = 16000;
 
 const FAST_PATH_MAX_SECONDS = 15 * 60; // beyond this, go straight to FFmpeg
@@ -64,14 +65,21 @@ async function getFFmpeg(onStatus) {
   if (ffmpegPromise) return ffmpegPromise;
   ffmpegPromise = (async () => {
     const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-    const { toBlobURL } = await import('@ffmpeg/util');
     const ff = new FFmpeg();
     const base = `${location.origin}/ffmpeg`;
     onStatus('Loading audio converter (one-time ~32 MB download)…');
-    await ff.load({
-      coreURL: await toBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript'),
-      wasmURL: await toBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm'),
-    });
+    const mb = (n) => (n / 1048576).toFixed(0);
+    try {
+      const coreURL = await fetchBlobURL(`${base}/ffmpeg-core.js`, 'text/javascript');
+      const wasmURL = await fetchBlobURL(`${base}/ffmpeg-core.wasm`, 'application/wasm', {
+        onProgress: (got, total) => onStatus(`Loading audio converter… ${mb(got)}${total >= got ? ` of ${mb(total)}` : ''} MB`), // a compressed response reports its compressed length
+      });
+      // starting it compiles ~32 MB of WebAssembly: allow a slow device, but not forever
+      await withTimeout(ff.load({ coreURL, wasmURL }), 90_000, 'The audio converter didn’t start.', () => ff.terminate());
+    } catch (err) {
+      if (err instanceof StallError) throw Object.assign(new Error(`The audio converter couldn’t load: ${err.message} Recordings under 15 minutes in MP3, WAV, M4A or WebM usually don’t need it.`), { code: 'converter_unavailable' });
+      throw err;
+    }
     return ff;
   })();
   ffmpegPromise.catch(() => { ffmpegPromise = null; });

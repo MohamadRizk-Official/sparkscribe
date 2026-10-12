@@ -464,7 +464,8 @@ async function start(file) {
     const forceFFmpeg = new URLSearchParams(location.search).has('ffmpeg');
     decoded = await decodeToMono16k(file, onStatus, { forceFFmpeg });
   } catch (err) {
-    showError(`Couldn't read "${file.name}". It may not contain audio, or the format isn't supported.\n\n${err.message || err}`);
+    showError(err?.code === 'converter_unavailable' ? err.message // a network problem, not a problem with the file
+      : `Couldn't read "${file.name}". It may not contain audio, or the format isn't supported.\n\n${err.message || err}`);
     return;
   }
   if (currentFile !== file) return; // cancelled while decoding
