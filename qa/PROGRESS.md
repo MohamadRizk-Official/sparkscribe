@@ -49,6 +49,7 @@ speaker corrections persisting · exports.
 | D17 | P3 | XSS(self) | library type badge attribute and quiz score not escaped | **fixed** (inspected) |
 | D18 | P3 | UI | `/^d+$/` regex → search-hit `line` param ignored | **fixed** |
 | D19 | P2 | AI | a "generating" row could be taken over after 120 s while api/tools runs up to 300 s → duplicate paid generation | **fixed + tested**: takeover after 310 s (tools) / 75 s (insights, ask) |
+| D21 | P2 | AI | Meeting Recap / meeting Notes listed a task completed during the call ("Send the price list") as an action item — a completed task presented as outstanding (real Haiku run) | **fixed + verified** (shared ACTION_RULE: leave out tasks done/cancelled/replaced later; re-run: gone from recap and notes; n=1 real run) |
 | D20 | P1 | product | no delete-account / data deletion path | inspected (needs approval: auth/backend) |
 Line-merging investigation: merging joins only SAME-speaker stretches; it never hides another speaker. All 4 of 33 marked
 switches that lines scored worse than the engine come from dropped short turns (D10), not merging.
@@ -79,6 +80,11 @@ switches that lines scored worse than the engine come from dropped short turns (
 - F8 (D9, D14) index.html/src/main.js/src/style.css: drop box is a focusable button with focus ring; player shortcuts
   ignore focused controls, modifiers and open dialogs.
 
+- F9 (D21) server/ai/prompts.js ACTION_RULE. AI grounding results (real model, scripted meeting with known answers):
+  Action Plan 7/7 statuses right (open ×2 with deadlines, completed with resolution, discussed-only, cancelled, unclear,
+  open decision); Ask: coffee = "not decided" (cited), off-topic refused (found=false), price = final 1.50 not the
+  2.00 suggestion; Overview faithful; Recap decision = 1.50 only. Mock suites cover invented refs/quotes/evidence.
+
 ## Test infrastructure (in repo)
 - qa/harness/dev-mock.mjs — real app + real /api code, fake signed-in user, in-memory DB, mock AI (port 5190)
 - qa/harness/browser-mock.js — Supabase REST/RPC/auth mock, knobs (save delay/failure), fake worker (canned lines)
@@ -88,5 +94,5 @@ switches that lines scored worse than the engine come from dropped short turns (
 (none yet)
 
 ## Resource use
-- Real AI calls: 0 (budget: ≤ 10 Haiku calls, ≤ $0.05)
+- Real AI calls: 8 Haiku 5.5 calls, est. $0.0073 (budget ≤ 10 / $0.05); in-memory store only — qa/ai-real/run.mjs
 - Model downloads: 0 (models already cached in the in-app browser origin 127.0.0.1:4312 only)
