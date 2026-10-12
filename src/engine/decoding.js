@@ -190,6 +190,9 @@ export class WhisperControl extends LogitsProcessor {
 export async function compressionRatio(text) {
   const bytes = new TextEncoder().encode(text);
   if (bytes.length < 20) return 1;
+  // Safari before 16.4 has no CompressionStream: skip this extra retry signal there rather than fail the run
+  // (runaway repetitions are still cut separately). Every browser that has it behaves exactly as before.
+  if (typeof CompressionStream === 'undefined') return 1;
   const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('deflate'));
   const compressed = await new Response(stream).arrayBuffer();
   return bytes.length / compressed.byteLength;
