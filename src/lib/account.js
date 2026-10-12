@@ -47,6 +47,7 @@ export async function requireUser() {
 
 export async function signOut() {
   if (!isConfigured) return;
+  try { localStorage.removeItem('sparkscribe.pendingSave'); } catch {} // an unsaved transcript parked for sign-in (lib/transcripts.js)
   await supabase.auth.signOut();
 }
 

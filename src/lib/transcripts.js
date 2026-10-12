@@ -59,12 +59,15 @@ export async function deleteTranscript(id) {
 }
 
 // ---- hand-off when someone signs in *after* transcribing ----
-// The transcript is parked in this browser's localStorage, then saved once they're signed in.
-const PENDING_KEY = 'sparkscribe.pendingSave';
-const PENDING_TTL = 24 * 60 * 60 * 1000;
+// The transcript is parked in this browser's localStorage, then offered for saving once they're signed in.
+// It is private text that may sit on a shared computer, so it is kept for one hour only, remembers the account
+// it was made under (if any), is cleared on sign-out, and is only offered right after the "sign in to save" round
+// trip, as a Save / Discard choice (main.js) — never saved into whoever signs in next.
+export const PENDING_KEY = 'sparkscribe.pendingSave';
+const PENDING_TTL = 60 * 60 * 1000;
 
-export function stashPending(payload) {
-  try { localStorage.setItem(PENDING_KEY, JSON.stringify({ ...payload, at: Date.now() })); return true; } catch { return false; }
+export function stashPending(payload, owner = null) {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify({ ...payload, owner, at: Date.now() })); return true; } catch { return false; }
 }
 export function peekPending() {
   try {

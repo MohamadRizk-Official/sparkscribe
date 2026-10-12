@@ -1164,7 +1164,7 @@ const insights = mountInsights({
 
 // Park the transcript in this browser, sign in, then it's saved automatically on return.
 function signInToSave(mode) {
-  if (!stashPending(savePayload())) return toast("Couldn't hold the transcript for sign-in. Export it first.");
+  if (!stashPending(savePayload(), session?.user?.id ?? null)) return toast("Couldn't hold the transcript for sign-in. Export it first.");
   leavingOnPurpose = true;
   location.href = `/auth?${mode === 'signup' ? 'mode=signup&' : ''}next=${encodeURIComponent('/?save=pending')}`;
 }
@@ -1313,26 +1313,40 @@ function renderSaveBar() {
   bar.querySelector('a[href^="/transcript"]')?.addEventListener('click', mascotTravel); // the mascot follows to the saved copy
 }
 
-// Back from signing in with a parked transcript: save it, then open it.
-async function resumePendingSave() {
+// Back from signing in with a parked transcript: offer to save it, then open it. Only on the explicit return
+// (/?save=pending) — an ordinary visit by whoever uses this browser next never sees or saves it.
+async function resumePendingSave(confirmed = false) {
   const params = new URLSearchParams(location.search);
-  const pending = peekPending();
+  const fromSignIn = confirmed || params.get('save') === 'pending';
   if (params.has('save')) history.replaceState(null, '', '/');
-  if (!pending) return;
+  const pending = peekPending();
+  if (!pending || !fromSignIn) return;
   const s = await getSession();
-  if (!s) return; // stays parked until they sign in
+  if (!s) return; // stays parked (for up to an hour) until they sign in
+  if (pending.owner && pending.owner !== s.user.id) { clearPending(); return; } // made under another account
   const note = document.createElement('div');
   note.className = 'pending-card panel';
-  note.innerHTML = `<span class="spinner sm" aria-hidden="true"></span><span>Saving “${esc(pending.title)}” to My Library…</span>`;
+  note.setAttribute('role', 'dialog');
+  note.setAttribute('aria-label', 'Save your transcript');
   document.body.appendChild(note);
-  try {
-    const id = await saveTranscript(pending);
-    clearPending();
-    location.replace(`/transcript?id=${encodeURIComponent(id)}`);
-  } catch (err) {
-    note.innerHTML = `<span class="save-icon bad">${WARN}</span><span>Couldn't save “${esc(pending.title)}”: ${esc(err.message || err)}</span><button class="btn btn-ghost btn-sm" type="button">Retry</button>`;
-    note.querySelector('button').addEventListener('click', () => { note.remove(); resumePendingSave(); });
-  }
+  const save = async () => {
+    note.innerHTML = `<span class="spinner sm" aria-hidden="true"></span><span>Saving “${esc(pending.title)}” to My Library…</span>`;
+    try {
+      const id = await saveTranscript(pending);
+      clearPending();
+      location.replace(`/transcript?id=${encodeURIComponent(id)}`);
+    } catch (err) {
+      note.innerHTML = `<span class="save-icon bad">${WARN}</span><span>Couldn't save “${esc(pending.title)}”: ${esc(err.message || err)}</span><button class="btn btn-ghost btn-sm" type="button">Retry</button>`;
+      note.querySelector('button').addEventListener('click', () => { note.remove(); resumePendingSave(true); });
+    }
+  };
+  if (confirmed) return save();
+  const mins = Math.max(1, Math.round((Date.now() - pending.at) / 60000));
+  note.innerHTML = `<span class="pending-text">Save “${esc(pending.title)}” to My Library? It was transcribed in this browser ${mins} min ago.</span>
+    <span class="pending-actions"><button class="btn btn-ghost btn-sm" type="button" data-act="discard">Discard</button><button class="btn btn-primary btn-sm" type="button" data-act="save">Save</button></span>`;
+  note.querySelector('[data-act=save]').addEventListener('click', save);
+  note.querySelector('[data-act=discard]').addEventListener('click', () => { clearPending(); note.remove(); toast('Discarded. Nothing was saved.'); });
+  note.querySelector('[data-act=save]').focus();
 }
 
 // ---------- utils ----------
