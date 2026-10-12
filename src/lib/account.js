@@ -50,6 +50,42 @@ export async function signOut() {
   await supabase.auth.signOut();
 }
 
+// Things this browser keeps for the signed-in person: an unsaved transcript waiting to be saved, preferences,
+// AI consent, checklist ticks. Device-level settings (theme, the downloaded speech models) stay.
+const KEEP_ON_DEVICE = new Set(['sparkscribe.theme', 'sparkscribe.modelsCached']);
+export function forgetThisBrowser() {
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('sparkscribe') && !KEEP_ON_DEVICE.has(k)) localStorage.removeItem(k);
+    for (const k of Object.keys(sessionStorage)) if (k.startsWith('sparkscribe')) sessionStorage.removeItem(k);
+  } catch {}
+}
+
+// Permanently delete the signed-in account. The password (null for accounts without one) is checked by signing in again (the database refuses
+// unless the latest sign-in is under 10 minutes old), then one database call removes the account and everything in
+// it, all or nothing. Throws an Error with a message to show; nothing is deleted when it throws.
+export async function deleteMyAccount(password) {
+  if (!isConfigured) throw new Error('Accounts aren’t available here.');
+  const { data: { session } } = await supabase.auth.getSession();
+  const email = session?.user?.email;
+  if (!email) throw new Error('Sign in again to delete your account.');
+  if (password != null) {
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    if (authError) throw new Error(/invalid login|invalid_grant|credentials/i.test(authError.message) ? 'That password isn’t right.' : authError.message);
+  }
+  const { data, error } = await supabase.rpc('delete_my_account', { p_confirm: 'DELETE' });
+  if (error) {
+    if (error.code === 'PGRST202' || error.code === '42883') throw new Error('Deleting accounts isn’t switched on yet. Nothing was deleted.');
+    throw new Error('Your account couldn’t be deleted, and nothing was removed. Try again.');
+  }
+  if (!data?.deleted) {
+    throw new Error(data?.reason === 'subscription'
+      ? 'You have a paid plan that is still active. Cancel it first, then delete your account.'
+      : password != null ? 'Please enter your password again.' : 'For your security, sign out and sign in again, then delete your account within 10 minutes.');
+  }
+  forgetThisBrowser();
+  await supabase.auth.signOut({ scope: 'local' }).catch(() => {}); // the account is gone; just drop this browser's session
+}
+
 async function loadProfile(user) {
   const { data } = await supabase.from('profiles').select('display_name, avatar_url').eq('id', user.id).maybeSingle();
   const meta = user.user_metadata || {};

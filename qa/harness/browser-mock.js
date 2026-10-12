@@ -5,7 +5,7 @@
   // - Optional fake processing worker (canned lines, real message protocol) so UI flows can be tested
   //   without downloading speech models. Real-model runs are tested separately.
   // Knobs: sessionStorage.__qa = JSON {saveDelayMs, failSave, failPatch, patchDelayMs, worker:'fake'|'real',
-  //        runMs, lines:'meeting'|'unicode'|'empty'|'one', signedOut}
+  //        runMs, lines:'meeting'|'unicode'|'empty'|'one', signedOut, failDelete, deleteReason}
   const REF = 'strkrrdndoofpcenopxk';
   const USER = { id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email: 'tester@example.com', user_metadata: { full_name: 'Test User' }, app_metadata: { provider: 'email' }, created_at: '2026-10-07T00:00:00Z' };
   const knobs = () => { try { return JSON.parse(sessionStorage.getItem('__qa') || '{}'); } catch { return {}; } };
@@ -63,6 +63,7 @@
     if (p === '/auth/v1/token') {
       if (body?.password === 'wrong-password') return json({ error: 'invalid_grant', error_description: 'Invalid login credentials', msg: 'Invalid login credentials' }, 400);
       sessionStorage.removeItem('__signedOut'); window.__qaKnobs({ signedOut: false });
+      if (body?.password) sessionStorage.setItem('__reauthAt', String(Date.now())); // like the JWT's amr timestamp
       return json(sessionToken());
     }
     if (p === '/auth/v1/signup') return json({ id: crypto.randomUUID(), email: body?.email, confirmation_sent_at: new Date().toISOString() });
@@ -115,6 +116,15 @@
       if (method === 'DELETE') { const gone = where(url, db.items, ['folder_id', 'transcription_id']); db.items = db.items.filter((i) => !gone.includes(i)); persist(); return out([]); }
     }
     // ---- RPCs (simplified versions of the SQL functions, same result shapes) ----
+    if (p === '/rest/v1/rpc/delete_my_account') { // same guards and result shape as the proposed SQL function
+      if (K.failDelete) return json({ code: 'XX000', message: 'QA: delete failed' }, 500);
+      if (body?.p_confirm !== 'DELETE') return json({ code: '22023', message: 'type DELETE to confirm' }, 400);
+      if (K.deleteReason) return json({ deleted: false, reason: K.deleteReason });
+      if (Date.now() - Number(sessionStorage.getItem('__reauthAt') || 0) > 600_000) return json({ deleted: false, reason: 'reauth' });
+      db.rows = []; db.folders = []; db.items = []; persist(); window.__qaDb = db;
+      sessionStorage.setItem('__accountDeleted', '1'); sessionStorage.setItem('__signedOut', '1'); // the account no longer exists
+      return json({ deleted: true });
+    }
     if (p === '/rest/v1/rpc/library_list') {
       const a = body || {};
       let rows = db.rows.filter((t) => (a.p_view !== 'favorites' || t.is_favorite)
