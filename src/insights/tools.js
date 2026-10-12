@@ -527,7 +527,7 @@ export function createToolsUI(api) {
       <div class="pick" role="radiogroup" aria-labelledby="ql-${name}">${Object.keys(spec[name].options).map((v) => `<button type="button" role="radio" aria-checked="${sel[name] === v}" tabindex="${sel[name] === v ? 0 : -1}" class="${sel[name] === v ? 'on' : ''}" data-set="${name}" data-val="${v}">${esc(label(name, v))}</button>`).join('')}</div></div>`;
     const n = a?.content?.questions?.length || 0;
     const empty = a?.content && !n;
-    const last = a?.progress?.last_score != null ? ` · Last score ${a.progress.last_score}/${a.progress.total}` : '';
+    const last = a?.progress?.last_score != null ? ` · Last score ${Number(a.progress.last_score) || 0}/${Number(a.progress.total) || 0}` : '';
     return `<div class="study study-setup">
       ${crumb()}
       <section class="study-card setup-card" aria-labelledby="quizTitle">

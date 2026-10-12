@@ -32,7 +32,7 @@ speaker corrections persisting · exports.
 | D1 | **P1** | save | "New" during "Saving…" carried the old save id into the next run → the next transcript OVERWROTE the earlier recording (reproduced: row text replaced, version 1→2, second recording never saved) | **fixed + verified** (e2e) |
 | D2 | P2 | save | edits made while the first save is in flight were never synced | **fixed + verified** (e2e) |
 | D3 | P2 | results | 900 ms results timer not cancelled on reset → results re-opened over the drop panel (reproduced) | **fixed + verified** (e2e) |
-| D4 | P1 | auth | open redirect: `next=/%09/evil.com` passes safeNext | suspected |
+| D4 | **P1** | auth | open redirect: `next=%2F%09%2Fevil.com` passed safeNext and resolved to evil.com (reproduced) | **fixed + verified** (e2e: crafted link lands on /, /library still works) |
 | D5 | P1 | AI cost | no rate limit / quota on AI endpoints | inspected |
 | D6 | P2 | perf | 370 MB Whisper encoder exceeds Chromium's 256 MiB Cache Storage entry cap → re-downloaded on EVERY page load (measured: +368 MiB received on one reload+run); UI says model is saved | **reproduced** |
 | D7 | P2 | perf | "New file" terminates the worker → models reload (and encoder re-downloads) for every new file | inspected |
@@ -44,9 +44,9 @@ speaker corrections persisting · exports.
 | D13 | P2 | UI | Summary "Update"/detailed retry fails silently | suspected |
 | D14 | P2 | a11y | Space/arrow keys hijacked on results page while focus is on buttons | suspected |
 | D15 | P2 | security | no security headers (frame-ancestors, referrer, nosniff) | inspected |
-| D16 | P3 | export | VTT cue text not escaped | suspected |
-| D17 | P3 | XSS(self) | library type badge attribute and quiz score not escaped | inspected |
-| D18 | P3 | UI | `/^d+$/` regex → search-hit `line` param ignored | inspected |
+| D16 | P3 | export | a line containing a blank line split its subtitle cue (SRT/VTT corrupt); "-->" and VTT markup unescaped (reproduced on old code) | **fixed + verified** (tests/export-test.mjs 26/26) |
+| D17 | P3 | XSS(self) | library type badge attribute and quiz score not escaped | **fixed** (inspected) |
+| D18 | P3 | UI | `/^d+$/` regex → search-hit `line` param ignored | **fixed** |
 | D19 | P2 | AI | long jobs vs Vercel limits → rows stuck "generating", duplicate paid generations | inspected |
 | D20 | P1 | product | no delete-account / data deletion path | inspected (needs approval: auth/backend) |
 Line-merging investigation: merging joins only SAME-speaker stretches; it never hides another speaker. All 4 of 33 marked
@@ -56,6 +56,9 @@ switches that lines scored worse than the engine come from dropped short turns (
 - F1 (D1, D2, D3, D8) src/main.js: save generation guard; edits during first save synced after it lands; results
   timer bound to its transcript; confirm before discarding unsaved results / stopping a long run; beforeunload
   warning; pending sync flushed on New. Evidence: qa/e2e/home-save.e2e.js 6/6 (4/5 failed before the fix).
+
+- F2 (D4) src/lib/account.js safeNext: control chars refused, URL parser decides the origin. Evidence: qa/e2e/security.e2e.js 4/4 + live redirect check.
+- F3 (D16, D17, D18) export.js cue text one line + VTT escaping; library badge + quiz score escaped; transcript `line` regex. Evidence: tests/export-test.mjs 26/26 (old code fails check 1).
 
 ## Test infrastructure (in repo)
 - qa/harness/dev-mock.mjs — real app + real /api code, fake signed-in user, in-memory DB, mock AI (port 5190)

@@ -4,9 +4,14 @@ import { adoptAccountPrefs } from './prefs.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Only ever redirect to a path on this site.
+// Only ever redirect to a path on this site. Browsers drop tabs and newlines while parsing a URL, so "/\t/evil.com"
+// would become "//evil.com": reject control characters and backslashes, then let the URL parser decide the origin.
 export function safeNext(value, fallback = '/') {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') ? value : fallback;
+  if (typeof value !== 'string' || !value.startsWith('/') || /[\u0000-\u001f\u007f\\]/.test(value)) return fallback;
+  try {
+    const u = new URL(value, location.origin);
+    return u.origin === location.origin ? u.pathname + u.search + u.hash : fallback;
+  } catch { return fallback; }
 }
 
 export const currentPath = () => location.pathname + location.search;

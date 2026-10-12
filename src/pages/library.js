@@ -82,7 +82,7 @@ function shortDate(iso) {
   const sameYear = d.getFullYear() === new Date().getFullYear();
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
 }
-const badge = (type) => (type && type !== 'general' ? `<span class="type-badge t-${type}">${esc(RECORDING_TYPE_LABEL[type])}</span>` : '');
+const badge = (type) => (type && type !== 'general' ? `<span class="type-badge t-${esc(type)}">${esc(RECORDING_TYPE_LABEL[type])}</span>` : '');
 const openUrl = (id, extra = '') => `/transcript?id=${encodeURIComponent(id)}${extra}`;
 
 // ---------- header stats + type chips ----------

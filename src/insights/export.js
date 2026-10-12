@@ -139,11 +139,15 @@ function cues(segments) {
     const next = all[i + 1]?.start;
     let end = s.end > s.start ? s.end : s.start + 2;
     if (next != null && end > next) end = Math.max(s.start + 0.2, next);
-    return { start: s.start, end, text: s.speaker && s.speaker !== 'Unknown' ? `${s.speaker}: ${s.text}` : s.text };
+    // one line of text per cue: a blank line or a literal "-->" inside the text would end or corrupt the cue
+    const text = (s.speaker && s.speaker !== 'Unknown' ? `${s.speaker}: ${s.text}` : s.text).replace(/\s*[\r\n]+\s*/g, ' ').replace(/-->/g, '->');
+    return { start: s.start, end, text };
   });
 }
+// WebVTT cue text is markup: & and < must be escaped (> too, for safety)
+const vttText = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 export const toSrt = (segments) => cues(segments).map((c, i) => `${i + 1}\n${srtTime(c.start, ',')} --> ${srtTime(c.end, ',')}\n${c.text}\n`).join('\n');
-export const toVtt = (segments) => `WEBVTT\n\n${cues(segments).map((c) => `${srtTime(c.start, '.')} --> ${srtTime(c.end, '.')}\n${c.text}\n`).join('\n')}`;
+export const toVtt = (segments) => `WEBVTT\n\n${cues(segments).map((c) => `${srtTime(c.start, '.')} --> ${srtTime(c.end, '.')}\n${vttText(c.text)}\n`).join('\n')}`;
 
 function download(blob, name) {
   const a = document.createElement('a');

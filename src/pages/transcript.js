@@ -22,7 +22,7 @@ const RTL_LANGS = new Set(['ar', 'fa', 'ur', 'he', 'yi', 'ps', 'sd', 'ug']);
 const params = new URLSearchParams(location.search);
 const id = params.get('id') || '';
 const startAt = Number.isFinite(parseFloat(params.get('t'))) ? Math.max(0, parseFloat(params.get('t'))) : null;
-const startLine = /^d+$/.test(params.get('line') || '') ? Number(params.get('line')) : null;
+const startLine = /^\d+$/.test(params.get('line') || '') ? Number(params.get('line')) : null;
 
 function notFound(message) {
   $('tTitle').textContent = 'Transcript not found';
