@@ -173,7 +173,7 @@ function emptyHtml() {
     <div class="lib-empty-icon" aria-hidden="true">${key === 'favorites' ? ICON.star : key === 'folder' ? ICON.folder : '<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'}</div>
     <h2>${esc(title)}</h2><p>${esc(text)}</p>
     ${cta ? '<a class="btn btn-primary" href="/">Transcribe something</a>' : ''}
-    ${st.type && st.type !== 'general' ? '<p class="lib-empty-hint">Tip: set a recording’s type from its Notes or Insights tab.</p>' : ''}
+    ${st.type && st.type !== 'general' ? '<p class="lib-empty-hint">Tip: open a recording and set its type with the Type button at the top.</p>' : ''}
   </div>`;
 }
 
