@@ -63,8 +63,22 @@ export function memoryStore() {
       const cur = artifacts.find((a) => a.id === id);
       Object.assign(cur, { status: 'failed', error: message, updated_at: now(), ...(previousVersion != null ? { source_version: previousVersion } : {}) });
     },
-    async countRecentAiWork(since) {
-      return insights.filter((i) => i.updated_at >= since).length + artifacts.filter((a) => a.updated_at >= since).length + questions.filter((q) => q.created_at >= since).length;
+    // AI usage ledger with the same rules as ai_reserve / ai_settle (tests set store.aiLimits = { perHour, budget })
+    aiLimits: null,
+    _ai: [],
+    async reserveAi(feature, estimateMicrousd) {
+      const lim = this.aiLimits, now = Date.now();
+      const hour = this._ai.filter((r) => now - r.at < 3_600_000).length;
+      const spent = this._ai.filter((r) => r.status !== 'failed').reduce((s, r) => s + (r.cost ?? r.estimate), 0);
+      if (lim && hour >= lim.perHour) return { allowed: false, reason: 'hourly', retry_after_s: 1200 };
+      if (lim && spent + estimateMicrousd > lim.budget) return { allowed: false, reason: 'monthly', period_end: '2026-11-01T00:00:00Z' };
+      const row = { id: this._ai.length + 1, feature, estimate: estimateMicrousd, status: 'reserved', cost: null, at: now };
+      this._ai.push(row);
+      return { allowed: true, id: row.id };
+    },
+    async settleAi(id, ok, { input, output, costMicrousd }) {
+      const r = this._ai.find((x) => x.id === id && x.status === 'reserved');
+      if (r) Object.assign(r, { status: ok ? 'done' : 'failed', cost: ok ? costMicrousd : 0, input, output });
     },
     async listQuestions(tid) { return questions.filter((q) => q.transcription_id === tid); },
     async findAnswer(tid, normalized, version, norm) {

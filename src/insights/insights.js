@@ -353,6 +353,8 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   const loading = (label) => `<div class="ins-loading" role="status"><span class="spinner sm" aria-hidden="true"></span><span>${esc(label)}…</span></div>`;
   function errorBox(err, retryAct, lead = "Analysis couldn't be generated.") {
     if (err?.code === 'not_configured') return `<div class="ins-msg">${ICON.lock}<span>${esc(err.message)}</span></div>`;
+    // a usage limit: the server's message already says when it frees up (the hourly one can be retried later on this page)
+    if (err?.code === 'rate_limited' || err?.code === 'quota_exceeded') return `<div class="ins-msg warn" role="status">${ICON.warn}<span>${esc(err.message)}</span>${err.code === 'rate_limited' ? `<button class="btn btn-ghost btn-sm" type="button" data-act="${retryAct}">Try again</button>` : ''}</div>`;
     // add the reason only when it says something specific (busy, timed out, signed out…)
     const msg = String(err?.message || '');
     const detail = msg && !/failed\.?$|couldn['’]t be generated|went wrong|^Request failed/i.test(msg) ? ` ${msg}` : '';

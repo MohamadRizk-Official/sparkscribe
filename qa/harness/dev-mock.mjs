@@ -2,7 +2,7 @@
 // and the mock AI provider. No Supabase or Anthropic calls leave this machine for /api/*, and the browser
 // mock (browser-mock.js) answers the Supabase REST/auth calls the pages make.
 //   node qa/harness/dev-mock.mjs [port]      (default 5190)
-// Test-only endpoints under /__harness/: seed, state, fail (mock AI failure), model (model override).
+// Test-only endpoints under /__harness/: seed, state, fail (mock AI failure), model (model override), ai-limits.
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -42,6 +42,13 @@ const server = await createServer({
         if (!/^AI_MODEL(_SUMMARY|_ASK|_INSIGHTS)?$/.test(k || '')) { res.statusCode = 400; return res.end('bad'); }
         if (q.get('value')) process.env[k] = q.get('value'); else delete process.env[k];
         res.end(`${k}=${process.env[k] ?? '(default)'}`);
+      });
+      s.middlewares.use('/__harness/ai-limits', (req, res) => { // ?perHour=N&budget=µ$ (no params = unlimited); ledger count in the reply
+        const q = new URL(req.url, 'http://x').searchParams;
+        store.aiLimits = q.has('perHour') ? { perHour: Number(q.get('perHour')), budget: Number(q.get('budget') ?? 1e9) } : null;
+        if (q.has('clear')) store._ai.length = 0;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ limits: store.aiLimits, ledger: store._ai }));
       });
       s.middlewares.use('/__harness/fail', (req, res) => {
         process.env.AI_MOCK_FAIL = req.url.includes('on=1') ? '1' : '';

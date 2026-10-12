@@ -110,15 +110,22 @@ export function supabaseStore(sb) {
       check(error, 'load questions');
       return data.find((q) => norm(q.question) === normalized) || null;
     },
-    // AI work this user started since `since` (RLS: only their own rows are counted). Used by the optional hourly
-    // budget (AI_HOURLY_LIMIT). A count that can't be read never blocks anyone.
-    async countRecentAiWork(since) {
-      const count = async (table, col) => {
-        const { count: n, error } = await sb.from(table).select('id', { count: 'exact', head: true }).gte(col, since);
-        return error ? 0 : n || 0;
-      };
-      const [a, b, c] = await Promise.all([count('transcription_insights', 'updated_at'), count('transcription_artifacts', 'updated_at'), count('transcription_questions', 'created_at')]);
-      return a + b + c;
+    // AI usage ledger (supabase/proposed/*_ai_usage_limits.sql). Before that migration is applied the functions
+    // don't exist: every request is allowed, exactly as before. Any other database error also allows the request
+    // (an accounting problem must not take the AI features down); it is logged without data.
+    async reserveAi(feature, estimateMicrousd) {
+      const { data, error } = await sb.rpc('ai_reserve', { p_feature: String(feature).slice(0, 80), p_estimate_microusd: estimateMicrousd | 0 });
+      if (error) {
+        if (!['PGRST202', '42883'].includes(error.code)) console.error('[ai-usage] reserve failed:', error.code || 'error');
+        return { allowed: true, id: null };
+      }
+      return data;
+    },
+    async settleAi(id, ok, { input, output, costMicrousd }) {
+      const secret = process.env.AI_DB_SECRET || process.env.BILLING_DB_SECRET;
+      if (!id || !secret) return;
+      const { error } = await sb.rpc('ai_settle', { p_secret: secret, p_id: id, p_ok: !!ok, p_input_tokens: input | 0, p_output_tokens: output | 0, p_cost_microusd: costMicrousd | 0 });
+      if (error) console.error('[ai-usage] settle failed:', error.code || 'error');
     },
     async saveQuestion({ transcriptionId, question, answer, refs, found, version, model, usage }) {
       const { data, error } = await sb.from('transcription_questions').insert({

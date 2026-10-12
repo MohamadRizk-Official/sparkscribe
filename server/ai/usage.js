@@ -38,6 +38,10 @@ function emit(entry) {
 export function createMeter({ feature, transcriptionId, userId }) {
   const calls = [];
   return {
+    feature,
+    slot: null, // AI usage ledger reservation (service.js reserveAi); settled by finish()
+    onSettle: null,
+    refused(reason) { emit({ ts: new Date().toISOString(), feature, transcriptionId, userId, task: feature, refused: reason, cached: false, inputTokens: 0, outputTokens: 0, estimatedCostUsd: 0 }); },
     // wraps one provider call: measures latency, records usage
     async call(task, fn) {
       const t0 = Date.now();
@@ -57,11 +61,23 @@ export function createMeter({ feature, transcriptionId, userId }) {
       });
       return r;
     },
+    // Logs the calls and, when a ledger slot was reserved, settles it with the real totals. Returns a promise:
+    // await it so the settle finishes before a serverless function returns. Never throws.
     finish({ groundingPassed = null, droppedItems = 0, cached = false, error = null } = {}) {
       const base = { ts: new Date().toISOString(), feature, transcriptionId, userId };
+      let costUsd = 0, input = 0, output = 0;
+      for (const c of calls) {
+        if (c.failed) continue;
+        costUsd += estimateCost(c.model, { uncached: c.uncachedInputTokens, cacheWrite: c.cacheWriteTokens, cacheRead: c.cacheReadTokens, output: c.outputTokens }) || 0;
+        input += c.inputTokens; output += c.outputTokens;
+      }
+      const settle = this.slot != null && this.onSettle
+        ? Promise.resolve().then(() => this.onSettle(!error, { input, output, costMicrousd: Math.round(costUsd * 1e6) })).catch(() => {})
+        : Promise.resolve();
+      this.slot = null; // settle once
       if (cached && !calls.length) {
         emit({ ...base, task: feature, model: null, cached: true, inputTokens: 0, outputTokens: 0, latencyMs: 0, estimatedCostUsd: 0, actualCostUsd: null, groundingPassed: null });
-        return;
+        return settle;
       }
       for (const c of calls) {
         emit({
@@ -71,6 +87,7 @@ export function createMeter({ feature, transcriptionId, userId }) {
           groundingPassed, droppedItems, ...(error && { error }),
         });
       }
+      return settle;
     },
   };
 }

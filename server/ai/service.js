@@ -31,13 +31,33 @@ const PART_TOKENS = 80_000;
 // for twice: api/insights and api/ask run at most 60 s, api/tools 300 s (vercel.json).
 const INSIGHT_TAKEOVER_MS = 75_000;
 const ARTIFACT_TAKEOVER_MS = 310_000;
-// Optional per-user AI budget (requests that reach the model in the last hour). Off unless AI_HOURLY_LIMIT is set.
-export const hourlyLimit = () => { const n = Number(process.env.AI_HOURLY_LIMIT); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
-async function checkBudget(db) {
-  const limit = hourlyLimit();
-  if (!limit || typeof db.countRecentAiWork !== 'function') return;
-  const used = await db.countRecentAiWork(new Date(Date.now() - 3_600_000).toISOString());
-  if (used >= limit) throw new AIError("You've used a lot of AI in the last hour. Please try again a little later.", { status: 429, code: 'rate_limited' });
+// Per-user AI usage limits (database ledger: supabase/proposed/*_ai_usage_limits.sql). Every action that reaches
+// the model reserves a slot first (cached results never do) and is settled with its real tokens and cost after the
+// call. Whether anything is refused is decided in the database per plan (off until switched on). Without the
+// database functions, everything runs unlimited, as before.
+const EXPECTED_OUTPUT_TOKENS = { ask: 400, overview: 900, detailed_summary: 1800, notes: 2200, insights: 1800, grade: 150 };
+export function estimateMicrousd(feature, promptTokens) {
+  // Haiku 5.5 base rates: $0.10 / M input = 0.1 µ$ per token, $0.50 / M output = 0.5 µ$ per token
+  const kind = String(feature).split(':')[0] === 'tool' ? 'tool' : String(feature).split(':')[0];
+  const out = EXPECTED_OUTPUT_TOKENS[kind] ?? 3000;
+  return Math.round(Math.max(0, promptTokens) * 0.1 + out * 0.5);
+}
+const promptTokensOf = (segments) => Math.min(estimateTokens(segments.map(modelLine).join('\n')), PART_TOKENS);
+async function reserveAi(db, meter, promptTokens) {
+  if (typeof db.reserveAi !== 'function') return null;
+  const slot = await db.reserveAi(meter.feature, estimateMicrousd(meter.feature, promptTokens));
+  if (slot && slot.allowed === false) {
+    meter.refused(slot.reason);
+    if (slot.reason === 'hourly') {
+      const mins = Math.max(1, Math.ceil((slot.retry_after_s || 600) / 60));
+      throw new AIError(`You've used SparkScribe's AI a lot in the last hour. Try again in about ${mins} minute${mins === 1 ? '' : 's'}.`, { status: 429, code: 'rate_limited' });
+    }
+    const when = slot.period_end ? new Date(slot.period_end).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' }) : 'next month';
+    throw new AIError(`You've used this month's AI allowance on your plan. It renews on ${when}.`, { status: 429, code: 'quota_exceeded' });
+  }
+  meter.slot = slot?.id ?? null;
+  if (meter.slot != null && typeof db.settleAi === 'function') meter.onSettle = (ok, totals) => db.settleAi(meter.slot ?? slot.id, ok, totals);
+  return slot;
 }
 // The quiz grader reads the question from the user's own stored quiz, which the browser can write: bound every
 // field so it can't be turned into a large, general-purpose prompt.
@@ -213,14 +233,14 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
   const meter = createMeter({ feature: key ? `tool:${kind}:${key}` : `tool:${kind}`, transcriptionId, userId });
   const { row, segments } = await loadTranscript(db, transcriptionId);
   const version = row.content_version;
-  const fromStorage = (a) => { meter.finish({ cached: true }); return { artifact: publicArtifact(a), cached: true }; };
+  const fromStorage = async (a) => { await meter.finish({ cached: true }); return { artifact: publicArtifact(a), cached: true }; };
 
   const existing = await db.getArtifact(transcriptionId, kind, key);
   if (existing) {
     if (existing.status === 'ready' && existing.source_version === version && !force) return fromStorage(existing);
     if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < ARTIFACT_TAKEOVER_MS) return fromStorage(existing);
   }
-  await checkBudget(db);
+  await reserveAi(db, meter, promptTokensOf(segments));
   // remembered before the row is claimed: a failed update falls back to the previous result and its version
   const previous = existing?.content ? existing.source_version : null;
   const claimed = await db.startArtifact(existing, { transcriptionId, kind, settings: normalized, settingsKey: key, version });
@@ -240,11 +260,11 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
     tool.after?.(g.content, segments);
     if (ctx.count) g.content.target = ctx.count;
     const saved = await db.finishArtifact(claimed.id, { content: g.content, model: r.model, usage: r.usage });
-    meter.finish({ groundingPassed: g.dropped + extra === 0, droppedItems: g.dropped + extra });
+    await meter.finish({ groundingPassed: g.dropped + extra === 0, droppedItems: g.dropped + extra });
     return { artifact: publicArtifact(saved), cached: false, dropped: g.dropped + extra };
   } catch (err) {
     const message = err instanceof AIError ? err.message : 'Generation failed.';
-    meter.finish({ error: message });
+    await meter.finish({ error: message });
     await db.failArtifact(claimed.id, message, previous).catch(() => {});
     throw err instanceof AIError ? err : new AIError(message);
   }
@@ -263,8 +283,8 @@ export async function gradeShortAnswer(db, { transcriptionId, artifactId, index,
   if (!q || q.type !== 'short_answer') throw new AIError("That quiz question doesn't exist.", { status: 404, code: 'not_found' });
   const { segments } = await loadTranscript(db, transcriptionId);
   const lines = (q.refs || []).map((r) => segments.find((s) => s.id === r)).filter(Boolean).map((s) => s.text).join(' ');
-  await checkBudget(db);
   const meter = createMeter({ feature: 'quiz:grade', transcriptionId, userId });
+  await reserveAi(db, meter, 600); // a bounded grading prompt (gradePromptFields)
   try {
     const ai = getProvider();
     const r = await meter.call('grade', () => ai.complete({
@@ -273,10 +293,10 @@ export async function gradeShortAnswer(db, { transcriptionId, artifactId, index,
     }));
     const j = r.json || {};
     const verdict = ['correct', 'close', 'incorrect'].includes(j.verdict) ? j.verdict : 'incorrect';
-    meter.finish({});
+    await meter.finish({});
     return { verdict, feedback: String(j.feedback || '').slice(0, 240), corrected: typeof j.corrected === 'string' ? j.corrected.slice(0, 200) : null };
   } catch (err) {
-    meter.finish({ error: err?.message || 'failed' });
+    await meter.finish({ error: err?.message || 'failed' });
     throw err instanceof AIError ? err : new AIError("Your answer couldn't be checked.");
   }
 }
@@ -288,7 +308,7 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
   const meter = createMeter({ feature: kind === 'overview' ? 'overview' : `${kind}:${type}`, transcriptionId, userId });
   const { row, segments } = await loadTranscript(db, transcriptionId);
   const version = row.content_version;
-  const fromStorage = (insight) => { meter.finish({ cached: true }); return { insight: publicInsight(insight), cached: true }; };
+  const fromStorage = async (insight) => { await meter.finish({ cached: true }); return { insight: publicInsight(insight), cached: true }; };
 
   const existing = await db.getInsight(transcriptionId, kind, type);
   if (existing) {
@@ -298,7 +318,7 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
       return fromStorage(existing); // someone else is already generating it
     }
   }
-  await checkBudget(db);
+  await reserveAi(db, meter, promptTokensOf(segments));
   // remembered before the row is claimed: a failed update keeps the previous result and its version (as artifacts do)
   const previous = existing?.content ? existing.source_version : null;
   const claimed = await db.startInsight(existing, { transcriptionId, kind, recordingType: type, version });
@@ -308,11 +328,11 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
     const r = await GENERATORS[kind](row, segments, type, meter);
     const saved = await db.finishInsight(claimed.id, { content: r.content, model: r.model, usage: r.usage });
     // "passed" = every item the model returned pointed at real lines (nothing had to be dropped)
-    meter.finish({ groundingPassed: r.dropped === 0, droppedItems: r.dropped });
+    await meter.finish({ groundingPassed: r.dropped === 0, droppedItems: r.dropped });
     return { insight: publicInsight(saved), cached: false, dropped: r.dropped };
   } catch (err) {
     const message = err instanceof AIError ? err.message : 'Analysis failed.';
-    meter.finish({ error: message });
+    await meter.finish({ error: message });
     await db.failInsight(claimed.id, message, previous).catch(() => {});
     throw err instanceof AIError ? err : new AIError(message);
   }
@@ -366,12 +386,12 @@ export async function askTranscript(db, { transcriptionId, question, at = null, 
     const prev = await db.findAnswer(transcriptionId, normQuestion(question), version, normQuestion);
     if (prev && !isNotFound(prev.answer) && Date.parse(prev.created_at) >= ASK_RULES_SINCE) {
       emit({ type: 'cached' });
-      meter.finish({ cached: true });
+      await meter.finish({ cached: true });
       return { id: prev.id, question: prev.question, answer: prev.answer, refs: prev.refs, found: prev.found, cached: true };
     }
   }
 
-  await checkBudget(db);
+  await reserveAi(db, meter, promptTokensOf(segments));
   const ai = getProvider();
   const insights = await db.listInsights(transcriptionId);
   const current = insights.filter((i) => i.source_version === version);
@@ -408,13 +428,13 @@ export async function askTranscript(db, { transcriptionId, question, at = null, 
   try {
     r = await meter.call('ask', () => ai.stream({ task: 'ask', ...taskConfig('ask'), system: ASK_SYSTEM, messages }, (text) => emit({ type: 'delta', text })));
   } catch (err) {
-    meter.finish({ error: err?.message || 'failed' });
+    await meter.finish({ error: err?.message || 'failed' });
     throw err;
   }
   usageIn += r.usage.input; usageOut += r.usage.output;
   const g = groundAnswer(r.text, ctx.ids);
   // "passed" = no citation of a line the model wasn't given, and a found answer cites at least one line
-  meter.finish({ groundingPassed: g.invalidCitations === 0 && !g.unsupported, droppedItems: g.invalidCitations });
+  await meter.finish({ groundingPassed: g.invalidCitations === 0 && !g.unsupported, droppedItems: g.invalidCitations });
   const saved = await db.saveQuestion({
     transcriptionId, question, answer: g.answer, refs: g.refs, found: g.found, version, model: r.model, usage: { input: usageIn, output: usageOut },
   });

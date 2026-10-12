@@ -1,0 +1,9 @@
+{
+  "name": "sparkscribe-qa-sql",
+  "private": true,
+  "type": "module",
+  "description": "QA only: isolated Postgres (PGlite) that applies the real migrations for SQL-level tests. Not part of the app.",
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.3.7"
+  }
+}

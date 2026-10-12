@@ -76,7 +76,7 @@ ok(!sg2.cached && sg2.artifact.sourceVersion === 2, 'out-of-date study guide reg
 process.env.AI_MOCK_FAIL = '1';
 await assert.rejects(svc.generateArtifact(db, { transcriptionId: T, kind: 'quiz', force: true }));
 process.env.AI_MOCK_FAIL = '';
-const afterFail = (await svc.getState(db, T)).artifacts.find((a) => a.kind === 'quiz' && !a.settingsKey); console.log('DEBUG', JSON.stringify({ s: afterFail.status, v: afterFail.sourceVersion, n: afterFail.content?.questions?.length, e: afterFail.error }));
+const afterFail = (await svc.getState(db, T)).artifacts.find((a) => a.kind === 'quiz' && !a.settingsKey);
 ok(afterFail.status === 'failed' && afterFail.content?.questions?.length === 3 && afterFail.sourceVersion === 1, 'failed update keeps previous quiz and its version');
 pass++;
 
