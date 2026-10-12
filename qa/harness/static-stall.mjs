@@ -3,12 +3,13 @@
 //   node qa/harness/static-stall.mjs [port=4312]
 //   GET /__stall?on=1   → /ffmpeg/ffmpeg-core.wasm sends 1 MB, then nothing (connection left open)
 //   GET /__stall?on=0   → normal
-// Serves only files under dist/. No Supabase or AI calls are made by this server.
+// Serves only files under dist/ (and the qa/e2e test suites). No Supabase or AI calls are made by this server.
 import { createServer } from 'node:http';
 import { createReadStream, existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, normalize, resolve } from 'node:path';
 
-const ROOT = resolve(process.argv[1], '../../../dist');
+const REPO = resolve(process.argv[1], '../../..');
+const ROOT = join(REPO, 'dist');
 const PORT = Number(process.argv[2]) || 4312;
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json', '.woff2': 'font/woff2', '.glb': 'model/gltf-binary', '.onnx': 'application/octet-stream' };
 const vercel = JSON.parse(readFileSync(resolve(ROOT, '../vercel.json'), 'utf8'));
@@ -20,8 +21,9 @@ createServer((req, res) => {
   if (url.pathname === '/__stall') { stall = url.searchParams.get('on') === '1'; return res.end(`stall=${stall}`); }
   let p = decodeURIComponent(url.pathname);
   if (p.endsWith('/')) p += 'index.html';
-  let file = normalize(join(ROOT, p));
-  if (!file.startsWith(ROOT)) { res.statusCode = 403; return res.end(); }
+  const base = p.startsWith('/qa/e2e/') ? REPO : ROOT; // the in-page test suites, so they can run against the build
+  let file = normalize(join(base, p));
+  if (!file.startsWith(base === REPO ? join(REPO, 'qa', 'e2e') : ROOT)) { res.statusCode = 403; return res.end(); }
   if (!existsSync(file) && existsSync(file + '.html')) file += '.html';           // clean URLs like Vercel
   if (!existsSync(file) || statSync(file).isDirectory()) { res.statusCode = 404; return res.end('not found'); }
   for (const [k, v] of Object.entries(HEADERS)) res.setHeader(k, v);
