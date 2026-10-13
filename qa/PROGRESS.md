@@ -124,3 +124,12 @@ Phase 2 regression (final): unit 163 checks (8 files), SQL 26 + 20 + 8, e2e: hom
 transcript 8, insights 3, export-ui 4, ai-limits 4, account-deletion 5, pending-privacy 6, inputs on the build 4/4 applicable.
 Real services touched: Preview (read-only browsing, one tone file through FFmpeg), Supabase prod (read-only SELECTs only),
 PostgREST (one anonymous call to a non-existent RPC). AI spend in phase 2: $0. Model downloads: 0 new (FFmpeg 9.2 MB once).
+
+# Launch-blocker resolution (2026-10-13) — report: docs/launch/LAUNCH-READINESS.md
+| Blocker | Status |
+|---|---|
+| Auth email | diagnosed: confirmation required, no domain, built-in Supabase sender mails org members only; app resend + failure message (42744d7); Resend/DNS/SMTP steps in docs/launch/01 |
+| AI cost controls | daily service breaker, real cost on failures (not charged to users), abandoned = estimate, Pro/trial/past_due, settlement maths, notices (47cba90); SQL 38, unit 39, e2e 5, concurrency 8, rollback 4 |
+| Account deletion | flag-before-migration safe (d0b4d1d); data inventory + disclosures in docs/launch/03 |
+| Legal/ops | drafts 04–08 (privacy, terms, AI disclosure, support/incident, hosting); Supabase Free = no backups + pausing; Preview shares the prod database |
+Totals: unit 186, SQL 72, browser 66. Production untouched (read-only checks only).
