@@ -5,6 +5,7 @@
   "description": "QA only: isolated Postgres (PGlite) that applies the real migrations for SQL-level tests. Not part of the app.",
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.7",
+    "axe-core": "^4.10.2",
     "embedded-postgres": "^18.4.0-beta.17",
     "pg": "^8.23.1"
   }

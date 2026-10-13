@@ -487,7 +487,7 @@
   --k-7c5cff-70: rgba(38, 0, 194, 0.7);
   --k-7c5cff-75: rgba(38, 0, 194, 0.75);
   --k-7c5cff-80: rgba(38, 0, 194, 0.8);
-  --k-7f89af: #707ba6;
+  --k-7f89af: #5a648e;   /* tertiary text in light: 5.3:1 on the page (was 3.8:1) */
   --k-7f8ab5: #6f7cac;
   --k-8296ff-04: rgba(0, 25, 156, 0.045);
   --k-8a93b9: #3b4991;
@@ -1669,12 +1669,13 @@ dialog.sheet p.dlg-dim, .dlg-dim { color: var(--dim); font-size: 13px; margin: 0
 .title-row .icon-btn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 
 @media (max-width: 640px) {
-  .lib-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .lib-toolbar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; } /* a wrapping column sizes children to their content, not the screen */
   .type-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
   .type-filter::-webkit-scrollbar { display: none; }
   .type-filter .type-chip { flex: none; }
-  .lib-controls { margin-left: 0; }
-  .lib-controls .lib-select { flex: 1; min-width: 0; }
+  .lib-controls { margin-left: 0; flex-wrap: wrap; min-width: 0; }
+  /* two selects + Select fit one row from ~360 px; narrower phones wrap instead of widening the page */
+  .lib-controls .lib-select { flex: 1 1 110px; min-width: 0; }
   .lib-card-main { padding: 14px 0 14px 14px; }
   .lib-card-actions { padding: 8px 6px 0 0; }
   .lib-card-actions .icon-btn { width: 40px; height: 40px; }
@@ -2728,7 +2729,7 @@ button.grp-time:hover { color: var(--k-67e8f9); background: var(--k-22d3ee-10); 
   --pop: #161c3c;                 /* opaque: popovers over text */
 }
 :root[data-theme="light"] {
-  --ink: #12183a; --ink-2: #3c4470; --ink-3: #66709a;
+  --ink: #12183a; --ink-2: #3c4470; --ink-3: #5a648e;
   --hair: rgba(70, 80, 160, .14); --hair-2: rgba(70, 80, 160, .26);
   --card: linear-gradient(180deg, rgba(255, 255, 255, .92), rgba(250, 250, 255, .86));
   --card-hover: linear-gradient(180deg, #fff, rgba(252, 252, 255, .96));
