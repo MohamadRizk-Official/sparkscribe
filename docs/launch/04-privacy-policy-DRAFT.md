@@ -5,8 +5,8 @@
 > facts only you can confirm. Everything else describes how SparkScribe works today (release candidate, 2026-10-12).
 
 **Effective date:** [DATE] **[CONFIRM]**
-**Who we are:** SparkScribe is operated by [LEGAL ENTITY NAME, e.g. "SparkScribe LLC"], [POSTAL ADDRESS], [COUNTRY/STATE]
-("we", "us"). Contact: [privacy@your-domain] **[CONFIRM: entity, address, contact address]**
+**Who we are:** SparkScribe is operated by [LLC NAME — registration pending], [POSTAL ADDRESS], [COUNTRY/STATE]
+("we", "us"). Contact: privacy@sparkscribe.ai **[CONFIRM: entity, address, contact address]**
 
 ## 1. The short version
 - **Your audio never leaves your device.** Recordings are converted and transcribed inside your browser.
@@ -57,7 +57,8 @@ required).
 | Vercel | hosting the website and server functions | request data; the transcript text and questions passing through AI requests | United States |
 | Supabase | accounts, authentication, database | account and saved content, usage records | United States (us-east-1) |
 | Anthropic | AI features | transcript text and your question for each AI request | United States |
-| [Email provider, e.g. Resend] | sign-up confirmation and password-reset emails | email address, message content | United States **[CONFIRM provider]** |
+| Resend **[CONFIRM provider]** | sign-up confirmation and password-reset emails (sent from auth.sparkscribe.ai) | email address, message content | United States |
+| Stripe (when paid plans launch) | payments and subscriptions | name, email, card details (entered directly with Stripe), billing address | United States |
 | Hugging Face; jsDelivr | delivering the speech-recognition model and runtime files to your browser | your IP address (standard web request); no content | global CDNs |
 | Google Fonts | delivering the website's fonts | your IP address (standard web request) | global **[CONFIRM: self-host fonts instead to avoid this transfer]** |
 
@@ -110,4 +111,4 @@ If we make material changes, we'll update the date above and tell signed-in user
 take effect.
 
 ## 12. Contact
-[privacy@your-domain] · [LEGAL ENTITY NAME, POSTAL ADDRESS] **[CONFIRM]**
+privacy@sparkscribe.ai · [LLC NAME — registration pending], [POSTAL ADDRESS] **[CONFIRM]**

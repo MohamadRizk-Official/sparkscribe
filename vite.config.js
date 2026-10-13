@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import { resolve } from 'node:path';
-import { BRAND_HTML, MARK_HTML, BRAND_FONT_LINK } from './src/lib/brand-markup.js';
+import { BRAND_HTML, MARK_HTML, BRAND_FONT_LINK, LEGAL_HTML } from './src/lib/brand-markup.js';
 import { THEME_BOOT } from './src/lib/theme.js';
 
 // Server-only settings the /api functions read from process.env. Locally they come from .env.local;
@@ -19,8 +19,10 @@ const pages = {
   settings: 'settings.html',
   pricing: 'pricing.html',
   account: 'account.html',
+  privacy: 'privacy.html',
+  terms: 'terms.html',
 };
-const cleanRoutes = new Set(['/auth', '/auth/callback', '/library', '/transcript', '/settings', '/pricing', '/account']);
+const cleanRoutes = new Set(['/auth', '/auth/callback', '/library', '/transcript', '/settings', '/pricing', '/account', '/privacy', '/terms']);
 
 export default defineConfig(({ mode }) => ({
   // The Supabase settings live in Vercel as NEXT_PUBLIC_* (public, browser-safe values).
@@ -51,6 +53,7 @@ export default defineConfig(({ mode }) => ({
     ${THEME_BOOT}`)
           .replace('<!-- sparkscribe:brand -->', BRAND_HTML)
           .replaceAll('<!-- sparkscribe:mark -->', MARK_HTML)
+          .replace('<!-- sparkscribe:legal -->', LEGAL_HTML)
           .replace('</head>', `  ${BRAND_FONT_LINK}\n  </head>`),
       },
     },

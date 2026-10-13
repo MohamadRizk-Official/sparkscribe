@@ -1,134 +1,120 @@
-# Authentication email delivery — diagnosis and production setup
+# Authentication email delivery — diagnosis and exact setup (sparkscribe.ai)
 
-Status: **prepared, needs your accounts.** Nothing has been changed in Supabase, DNS or any email provider.
+Status: **prepared; needs your accounts.** Nothing has been changed in Supabase, DNS, Microsoft 365 or any email
+provider. **[CONFIRM] Your domain is `sparkscribe.ai`.** I inferred this from public DNS: it uses GoDaddy nameservers,
+Microsoft 365 mail and DMARC. `sparkscribe.app` belongs to someone else (Amazon SES in Tokyo); `sparkscribe.com` is
+registered elsewhere.
 
-## 1. What prevents external users from receiving emails
+## 1. Why external users can't receive SparkScribe's emails today
 
-Facts checked read-only on 2026-10-12:
+- Sign-up requires email confirmation, and password reset is email-only. Email is the only sign-in method.
+- The Supabase project has no custom email sender configured. No email-provider credentials exist anywhere in the project
+  or Vercel. So it uses **Supabase's built-in sender**, which (official docs) delivers **only to members of your Supabase
+  organization**, at a few messages per hour, with no delivery guarantee.
+- Production evidence: 1 of 3 accounts was sent a confirmation email and never confirmed; no password reset was ever
+  requested.
+- **[CONFIRM]** Supabase → Authentication → Emails → SMTP Settings shows "custom SMTP" **off**.
 
-- **Sign-up requires email confirmation** (`mailer_autoconfirm: false`). Sign-up is open, and email/password is the only
-  provider. Every new user therefore needs the confirmation email before they can sign in.
-- **Password reset is email-only:** `resetPasswordForEmail`, then a link to `/auth/callback`, then `/auth?mode=update`.
-- **No custom domain exists.** The Vercel account has 0 domains, and production runs on `sparkscribe-moerizz.vercel.app`.
-  No email-provider credentials exist anywhere in the project or its environment variables. So the project is almost
-  certainly using **Supabase's built-in email sender**.
-- **Supabase's built-in sender** (official docs, "Send emails with custom SMTP"):
-  - It **only delivers to members of your Supabase organization**. Every other address fails with
-    `Email address not authorized`.
-  - It is limited to a few messages per hour, has no delivery guarantee, and is "not meant for production use".
-- **Production evidence:** 1 of the 3 accounts was sent a confirmation email and never confirmed. No password reset has
-  ever been requested. Logs only go back 24 hours, so earlier send errors can't be read.
+App-side fallback, already built on `prelaunch/dev`:
+- After sign-up, and when sign-in says "email not confirmed", the page offers **Send the link again**.
+- If the email service refuses or fails, users see a plain "couldn't send the email" message.
 
-**Conclusion:** with the built-in sender, a member of the public can create an account but never receives the
-confirmation email, so they can never sign in. Password resets fail the same way.
+## 2. A problem with your existing company email (found while checking)
 
-**[CONFIRM]** In the Supabase dashboard → Authentication → Emails → SMTP Settings, check whether "Enable custom SMTP"
-is off. That is the one fact that can't be read from outside.
+Public DNS for `sparkscribe.ai`, checked via Google DNS on 2026-10-13:
 
-Already done in the app (QA branch, commit 42744d7):
-- After sign-up, and when sign-in says "email not confirmed", the page offers **Send the link again**
-  (`supabase.auth.resend`).
-- If the email service refuses or fails, the user sees "We couldn't send the email just now… contact support" instead of
-  a raw error.
+| Record | Found | Effect |
+|---|---|---|
+| MX | `sparkscribe-ai.mail.protection.outlook.com` | Microsoft 365 receives your mail ✔ |
+| `_dmarc` | `v=DMARC1; p=reject; adkim=r; aspf=r; rua=…@onsecureserver.net` | receivers must **reject** mail that fails SPF/DKIM alignment |
+| SPF (`v=spf1…` at the root) | **none** | Microsoft 365 isn't authorised to send for the domain |
+| DKIM (`selector1/selector2._domainkey`) | **none** | Microsoft 365 signs only with its own `onmicrosoft.com` key, which doesn't align |
 
-## 2. Recommended setup
+Result: mail sent from `@sparkscribe.ai` through Microsoft 365 probably **fails DMARC and is rejected** by Gmail, Outlook
+and others. That includes support replies and anything a user sends to `support@`. Fix it before launch.
 
-| Item | Recommendation | Why | Cost |
+**Fix (GoDaddy DNS + Microsoft 365 admin, about 15 minutes):**
+1. GoDaddy → DNS → add TXT at `@`: `v=spf1 include:spf.protection.outlook.com -all`.
+   Only one SPF record may exist at the root.
+2. Microsoft Defender portal → Email & collaboration → Policies → Threats → Email authentication settings → DKIM →
+   `sparkscribe.ai` → it shows two CNAME records. Add them in GoDaddy:
+   - `selector1._domainkey` → `selector1-sparkscribe-ai._domainkey.<your tenant>.onmicrosoft.com`
+   - `selector2._domainkey` → `selector2-sparkscribe-ai._domainkey.<your tenant>.onmicrosoft.com`
+
+   Then enable DKIM there. Copy the exact targets from the portal; the tenant part is yours.
+3. Send a test from Outlook to a Gmail address → "Show original": SPF, DKIM and DMARC should each say **PASS**.
+
+Keep the existing DMARC record; it's a good policy once SPF and DKIM pass.
+
+## 3. Transactional email setup (recommended: Resend, on a subdomain)
+
+Use `auth.sparkscribe.ai` only for SparkScribe's automatic emails. That keeps them separate from your Microsoft 365 mail.
+Your root DMARC `p=reject` also covers the subdomain, which is fine because Resend's DKIM aligns.
+
+| Item | Value |
+|---|---|
+| Provider | Resend (free: 3,000 emails/month, 100/day; Pro $20/month **[CONFIRM pricing]**) |
+| Sending domain | `auth.sparkscribe.ai` |
+| From | `SparkScribe <no-reply@auth.sparkscribe.ai>` |
+| Reply-to (in templates or provider) | `support@sparkscribe.ai` (a Microsoft 365 mailbox or alias) **[CONFIRM address]** |
+| Region | us-east-1 (next to Supabase) |
+
+**DNS records to add in GoDaddy** (the exact values come from Resend after you add the domain; they look like this):
+
+| Type | Host (in GoDaddy) | Value | Purpose |
 |---|---|---|---|
-| Domain | Buy one (for example `sparkscribe.app`, or `.com` if available) | SPF/DKIM need a domain you control, and a branded From address helps deliverability | about $10–40 a year **[CONFIRM name and registrar]** |
-| Email provider | **Resend** | Documented Supabase SMTP integration; simple DNS; free tier covers launch | Free: 3,000 emails/month, 100/day. Pro: $20/month for 50,000 **[CONFIRM current pricing]** |
-| Alternative | Postmark (strong deliverability, $15/month for 10k) or AWS SES ($0.10 per 1,000, more setup) | standby provider | — |
-| Sending address | `no-reply@auth.<domain>` (a subdomain just for auth mail) | keeps auth reputation separate from any future marketing | — |
-| App domain (optional) | Point `<domain>` at the Vercel project | emails and site share one brand; fewer spam flags | included with the domain |
+| MX | `send.auth` | `feedback-smtp.us-east-1.amazonses.com` (priority 10) | bounces |
+| TXT | `send.auth` | `v=spf1 include:amazonses.com ~all` | SPF for the bounce domain |
+| TXT | `resend._domainkey.auth` | `p=MIGfMA0GCSqGSIb3…` (from Resend) | DKIM, aligned with `sparkscribe.ai` |
+| — | `_dmarc` | **already exists, don't add another** | — |
 
-## 3. Exact steps (you, in your accounts)
+These don't touch the website (no A/CNAME on `@` or `www`), so the public domain stays unpointed.
 
-1. **Domain:** buy it (Vercel → Domains, Cloudflare or Namecheap). If you want the app on it, add it in Vercel → Project
-   → Domains.
-2. **Resend:** create an account → Domains → Add `auth.<domain>` → choose the region (us-east-1, to sit near Supabase).
-3. **DNS:** add the records Resend shows. Copy the values exactly from Resend; they look like this:
-
-   | Type | Name | Value | Purpose |
-   |---|---|---|---|
-   | MX | `send.auth` | `feedback-smtp.us-east-1.amazonses.com` (priority 10) | bounce handling |
-   | TXT | `send.auth` | `v=spf1 include:amazonses.com ~all` | SPF |
-   | TXT | `resend._domainkey.auth` | `p=MIGfMA0…` (long key from Resend) | DKIM |
-   | TXT | `_dmarc` | `v=DMARC1; p=none; rua=mailto:dmarc@<domain>` | DMARC: start at `none`, move to `quarantine` after 2–4 clean weeks |
-
-   Wait until Resend shows **Verified**.
-4. **API key:** Resend → API Keys → create one with **sending access only**, restricted to `auth.<domain>`. Keep it in
-   Resend and Supabase only. Never paste it into chat or the repo.
-5. **Supabase → Authentication → Emails → SMTP Settings:** enable custom SMTP with:
+**Steps (you):**
+1. Resend → Domains → Add `auth.sparkscribe.ai` (us-east-1) → add the records in GoDaddy → wait for **Verified**.
+2. Resend → API Keys → "Sending access", restricted to `auth.sparkscribe.ai`. Paste it only into Supabase.
+3. Supabase → Authentication → Emails → SMTP Settings → enable custom SMTP:
    - Host `smtp.resend.com`
    - Port `465`
-   - Username `resend`
+   - User `resend`
    - Password: the API key
-   - Sender email `no-reply@auth.<domain>`
-   - Sender name `SparkScribe`
-6. **Supabase → Authentication → Rate Limits:** custom SMTP starts at 30 emails per hour. Raise it to about 100 per hour
-   for launch, within Resend's 100 per day on the free tier.
-7. **Supabase → Authentication → URL Configuration:**
-   - Site URL = your production URL.
-   - Redirect URLs must include `https://<production host>/auth/callback` and, for Preview testing,
-     `https://sparkscribe-git-*-moerizz.vercel.app/auth/callback`.
-   - If you move to the new domain, add it **before** switching.
-8. **Templates:** paste the templates below into Supabase → Authentication → Emails → Templates. Keep them short, with no
-   marketing (spam filters penalise AI-related promotional text).
+   - Sender `no-reply@auth.sparkscribe.ai`
+   - Name `SparkScribe`
+4. Supabase → Authentication → Rate Limits → emails per hour: about 60–100 (Resend free allows 100 a day).
+5. Supabase → Authentication → Emails → Templates: paste `email-templates/confirm-signup.html`,
+   `email-templates/reset-password.html` and `email-templates/change-email.html`.
+   Subjects:
+   - "Confirm your SparkScribe account"
+   - "Reset your SparkScribe password"
+   - "Confirm your new email address"
 
-## 4. Email templates (plain, no marketing)
+   Keep "Email OTP expiration" at 3600 s (the templates say 1 hour).
+6. Supabase → Authentication → URL Configuration:
+   - **Site URL:** `https://sparkscribe-moerizz.vercel.app` (until you point a domain at the app).
+   - **Redirect URLs:**
+     - `https://sparkscribe-moerizz.vercel.app/auth/callback`
+     - `https://*-moerizz.vercel.app/**` (Previews)
+     - `http://localhost:5173/**` (development)
+     - Later: `https://sparkscribe.ai/auth/callback`.
 
-**Confirm signup** — subject `Confirm your SparkScribe account`
-```
-Hi,
+## 4. Verification (about 15 minutes)
 
-Confirm your email address to finish creating your SparkScribe account:
+1. On the Preview, sign up with a Gmail address that isn't in your Supabase organization. The email arrives within about a
+   minute, from `no-reply@auth.sparkscribe.ai`.
+2. Gmail → "Show original": SPF **PASS**, DKIM **PASS** (`d=auth.sparkscribe.ai`), DMARC **PASS**; not in spam.
+3. Open the link in the same browser: you're signed in. Use "Send the link again" once: a second email arrives.
+4. Forgot password → the email arrives → choose a new password → sign in with it.
+5. Resend → Logs: each message `delivered`. Optional: send one to a mail-tester.com address and aim for a 9/10 score or
+   better.
 
-{{ .ConfirmationURL }}
+## 5. Failure behaviour
 
-Open the link in the same browser you signed up in. If you didn't create an account, you can ignore this email.
-```
-
-**Reset password** — subject `Reset your SparkScribe password`
-```
-Hi,
-
-Use this link to choose a new password:
-
-{{ .ConfirmationURL }}
-
-Open it in the same browser you asked from. If you didn't ask for this, ignore this email; your password stays the same.
-```
-
-**Change email address** — subject `Confirm your new email address`
-```
-Hi,
-
-Confirm that you want to use this address for your SparkScribe account:
-
-{{ .ConfirmationURL }}
-
-If you didn't ask for this, ignore this email.
-```
-(The app doesn't send magic links or invites, so those templates aren't used.)
-
-## 5. Verification (about 15 minutes, before launch)
-
-1. On the Preview, sign up with an address that is **not** in your Supabase organization (for example a fresh Gmail).
-   The email should arrive within about a minute.
-2. In Gmail → "Show original", check that SPF, DKIM and DMARC all say **PASS** and the mail isn't in spam.
-3. Open the link in the same browser: you land signed in.
-4. Use "Send the link again" once and confirm the second email arrives.
-5. Forgot password → the email arrives → set a new password → sign in with it.
-6. Resend → Logs shows each message as `delivered`.
-
-## 6. Failure behaviour and fallback
-
-| Situation | What users see | What you do |
+| Situation | User sees | You do |
 |---|---|---|
-| Email slow or in spam | "Check … (and spam)" plus **Send the link again** | nothing |
-| Provider refuses or fails | "We couldn't send the email just now… contact support" | check Resend status and logs; Supabase → Logs → Auth |
-| Provider outage over 1 hour | same | switch the Supabase SMTP settings to the standby (Postmark; verify its domain in advance) |
-| Sign-up bots hurting reputation | — | turn on Supabase CAPTCHA (Turnstile); needs a small app change (post-launch) |
-| Do **not** | — | disable email confirmation to "fix" delivery: it lets anyone register someone else's address |
+| Slow or in spam | "check spam" + **Send the link again** | — |
+| Provider refuses or fails | "We couldn't send the email just now… contact support" | Resend status/logs; Supabase → Logs → Auth |
+| Outage over 1 hour | same | switch Supabase SMTP to a standby provider (Postmark), verified in advance on `mail.sparkscribe.ai` |
+| Sign-up bots | — | enable Supabase CAPTCHA (Turnstile); needs a small app change (post-launch) |
+| Never | — | disable email confirmation to "fix" delivery |
 
-Monthly cost at launch: about $1 (the domain) while under 3,000 emails a month.
+Cost: $0 within Resend's free tier. The domain is already owned.

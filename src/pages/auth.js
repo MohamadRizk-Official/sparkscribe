@@ -66,6 +66,7 @@ function setMode(m) {
   $('passwordField').classList.toggle('hidden', m === 'forgot');
   $('forgotLink').classList.toggle('hidden', m !== 'signin');
   $('confirmField').classList.toggle('hidden', !(m === 'signup' || m === 'update'));
+  $('authLegal')?.classList.toggle('hidden', m !== 'signup');
   $('password').autocomplete = m === 'signin' ? 'current-password' : 'new-password';
   $('backToSignin').classList.toggle('hidden', m !== 'forgot');
   hideMsg();

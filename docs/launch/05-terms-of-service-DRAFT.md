@@ -4,7 +4,7 @@
 > rules). **[CONFIRM]** marks business facts. It describes SparkScribe as built today: a free service, no paid plans at
 > launch.
 
-**Effective date:** [DATE] · **Operator:** [LEGAL ENTITY NAME], [ADDRESS] · **Contact:** [support@your-domain] **[CONFIRM]**
+**Effective date:** [DATE] · **Operator:** [LLC NAME — registration pending], [ADDRESS] · **Contact:** support@sparkscribe.ai **[CONFIRM]**
 
 ## 1. Agreement
 By creating an account or using SparkScribe you agree to these Terms and the Privacy Policy. If you use SparkScribe for an
@@ -19,8 +19,24 @@ features require a free account. Features may change; we'll try to give notice o
 per month) and a service-wide daily cap. When a limit is reached, the app tells you when you can continue. We may adjust
 limits. **[CONFIRM: whether limits are published as numbers]**
 
-**Paid plans.** There are no paid plans at launch. If we introduce them, their prices and terms will be shown before you
-buy. **[CONFIRM]**
+**Paid plans.** Paid plans (Plus and Pro) are **not available yet**; nothing in SparkScribe can charge you today. When
+they launch, the following applies (it describes how the billing system is built) **[CONFIRM prices and LEGAL REVIEW]**:
+
+- **Plans and prices:** Plus $7.99/month (20 hours of transcription a month), Pro $14.99/month (50 hours), plus taxes
+  where applicable **[CONFIRM: tax handling]**. The Free plan includes [60 minutes] a month **[CONFIRM]**. Allowances
+  measure the length of recordings you transcribe and save; AI features, exports and opening old recordings don't use
+  time.
+- **Payment:** handled by Stripe. We never see or store your card details. Subscriptions renew automatically each
+  month until cancelled.
+- **Upgrades:** take effect immediately; Stripe shows any prorated amount before you confirm.
+- **Cancellation:** at any time in Plan & usage → Manage Billing. Your plan stays active until the end of the period
+  you've paid for, then you return to Free. Nothing in your library is deleted.
+- **Failed payments:** Stripe retries; you keep access during retries, and if payment can't be collected you return to
+  Free.
+- **Refunds:** [Payments are non-refundable except where required by law / We refund the current month on request
+  within 7 days] **[CONFIRM policy + LEGAL REVIEW: consumer withdrawal rights, e.g. EU 14-day rule]**.
+- **Price changes:** at least [30] days' notice by email before the next renewal; you can cancel before then
+  **[CONFIRM]**.
 
 ## 3. Your account
 Keep your password secure and your email address current. You're responsible for activity in your account. You can
@@ -70,4 +86,4 @@ We'll give at least [14] days' notice of material changes in the app or by email
 they take effect means you accept them.
 
 ## 12. Contact
-[support@your-domain] **[CONFIRM]**
+support@sparkscribe.ai **[CONFIRM]**
