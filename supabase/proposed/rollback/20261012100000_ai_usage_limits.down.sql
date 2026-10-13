@@ -10,3 +10,4 @@ drop function if exists private.ai_limits_enforced();
 drop table if exists public.ai_usage;
 drop table if exists public.ai_plan_limits;
 alter table public.billing_settings drop column if exists enforce_ai_limits;
+alter table public.billing_settings drop column if exists ai_daily_budget_microusd;

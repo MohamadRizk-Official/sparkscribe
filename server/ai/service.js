@@ -52,6 +52,9 @@ async function reserveAi(db, meter, promptTokens) {
   const slot = await db.reserveAi(meter.feature, estimateMicrousd(meter.feature, promptTokens));
   if (slot && slot.allowed === false) {
     meter.refused(slot.reason);
+    if (slot.reason === 'paused') { // the service-wide daily breaker (billing_settings.ai_daily_budget_microusd)
+      throw new AIError("SparkScribe's AI tools are paused for a few hours because of unusually high demand. Transcription still works; please try the AI tools again later.", { status: 503, code: 'ai_paused' });
+    }
     if (slot.reason === 'unavailable') {
       throw new AIError("SparkScribe's AI is briefly unavailable. Nothing was used; try again in a minute.", { status: 503, code: 'ai_unavailable' });
     }

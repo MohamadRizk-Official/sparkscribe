@@ -14,6 +14,10 @@
 --     on (or the request comes from an origin in enforce_origins, e.g. a Preview), so applying this changes nothing.
 
 alter table public.billing_settings add column if not exists enforce_ai_limits boolean not null default false;
+-- Service-wide circuit breaker: total AI model spend (all users) allowed in any 24 hours, in micro-dollars. Applies
+-- whether or not per-user limits are enforced; null switches it off. Starts at $5/day; change with an UPDATE.
+alter table public.billing_settings add column if not exists ai_daily_budget_microusd integer default 5000000
+  check (ai_daily_budget_microusd is null or ai_daily_budget_microusd > 0);
 
 create table public.ai_plan_limits (
   plan              text primary key references public.billing_plans (key),
@@ -44,6 +48,7 @@ create table public.ai_usage (
   settled_at    timestamptz
 );
 create index ai_usage_user_created_idx on public.ai_usage (user_id, created_at);
+create index ai_usage_created_idx on public.ai_usage (created_at);
 alter table public.ai_usage enable row level security;
 revoke all on public.ai_usage from anon, authenticated;
 grant select on public.ai_usage to authenticated;
@@ -78,6 +83,8 @@ declare
   enforced boolean := private.ai_limits_enforced();
   hour_count integer;
   spent bigint;
+  daily_budget integer;
+  spent_today bigint;
   new_id bigint;
 begin
   if uid is null then raise exception 'not signed in' using errcode = '42501'; end if;
@@ -94,6 +101,16 @@ begin
   -- always on, enforced or not: a ceiling no real use comes near, so direct calls can't flood the ledger
   if hour_count >= 1000 then
     return json_build_object('allowed', false, 'reason', 'hourly', 'plan', e.plan, 'limit', 1000, 'retry_after_s', 3600);
+  end if;
+  -- service-wide breaker (last 24 h, every user, real cost where known); not serialized across users, so a burst
+  -- can pass it by at most the requests already in flight
+  select ai_daily_budget_microusd into daily_budget from public.billing_settings where id;
+  if daily_budget is not null then
+    select coalesce(sum(coalesce(cost_microusd, estimate_microusd)), 0) into spent_today from public.ai_usage
+     where created_at > now() - interval '24 hours';
+    if spent_today + greatest(coalesce(p_estimate_microusd, 0), 0) > daily_budget then
+      return json_build_object('allowed', false, 'reason', 'paused');
+    end if;
   end if;
   -- enforced but the limits can't be determined: refuse rather than run unmetered
   if enforced and (lim.plan is null or e.period_start is null or e.period_end is null) then
@@ -119,8 +136,9 @@ $$;
 revoke all on function public.ai_reserve(text, integer) from public, anon;
 grant execute on function public.ai_reserve(text, integer) to authenticated;
 
--- Record the real usage of a reserved action. Server only (secret). A failed call keeps its row (it still counts
--- toward the hourly limit, so hammering a failing feature is limited too) but costs nothing.
+-- Record the real usage of a reserved action. Server only (secret). A failed call keeps its row and its real cost
+-- (for the service-wide total and your accounting) and still counts toward the hourly limit, but not toward the
+-- user's monthly allowance: users aren't charged for our failures.
 create or replace function public.ai_settle(p_secret text, p_id bigint, p_ok boolean, p_input_tokens integer, p_output_tokens integer, p_cost_microusd integer)
 returns void language plpgsql security definer set search_path = '' as $$
 begin
@@ -128,7 +146,7 @@ begin
   update public.ai_usage
      set status = case when p_ok then 'done' else 'failed' end,
          input_tokens = greatest(coalesce(p_input_tokens, 0), 0), output_tokens = greatest(coalesce(p_output_tokens, 0), 0),
-         cost_microusd = case when p_ok then greatest(coalesce(p_cost_microusd, 0), 0) else 0 end, settled_at = now()
+         cost_microusd = greatest(coalesce(p_cost_microusd, 0), 0), settled_at = now()
    where id = p_id and user_id = auth.uid() and status = 'reserved';
 end;
 $$;

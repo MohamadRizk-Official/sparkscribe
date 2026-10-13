@@ -66,7 +66,17 @@ ok((await db.query('select cost_microusd from public.ai_usage where id = $1', [i
 const fid = (await reserve(b, 'ask', 500)).id;
 await P.asUser(b, (d) => d.query('select public.ai_settle($1, $2, false, 0, 0, 999)', [SECRET, fid]));
 const frow = (await db.query('select status, cost_microusd from public.ai_usage where id = $1', [fid])).rows[0];
-ok(frow.status === 'failed' && frow.cost_microusd === 0, 'a failed call costs nothing but stays in the hourly count');
+ok(frow.status === 'failed' && frow.cost_microusd === 999, "a failed call keeps its real cost on record (service total, accounting)");
+{ // …but isn't charged to the user's monthly allowance; an abandoned call (never settled) counts at its estimate
+  const f = await P.createUser('fairness@example.com');
+  const x = (await reserve(f, 'tool:quiz', 100)).id;
+  await P.asUser(f, (d) => d.query('select public.ai_settle($1, $2, false, 9000, 9000, 140000)', [SECRET, x]));
+  ok((await reserve(f, 'tool:quiz', 100000)).allowed === true, "a failed $0.14 call doesn't use the user's $0.15 allowance");
+  const g = await P.createUser('abandoned@example.com');
+  await reserve(g, 'tool:study_guide', 120000); // the function was killed before settling: stays 'reserved'
+  const r2 = await reserve(g, 'tool:quiz', 40000);
+  ok(r2.allowed === false && r2.reason === 'monthly', 'an abandoned call counts at its estimate (no free retries by timing out)');
+}
 
 // ---- plans: an active Plus subscription gets the Plus limits ----
 await db.query(`insert into public.subscriptions (user_id, plan, status, livemode, current_period_start, current_period_end)
@@ -80,6 +90,12 @@ ok((await reserve(plus)).allowed === true, 'Plus is not stopped at the Free limi
 await db.query(`update public.subscriptions set status = 'canceled' where user_id = $1`, [plus]);
 const afterCancel = await reserve(plus);
 ok(afterCancel.allowed === false && afterCancel.plan === 'free', 'canceled subscription falls back to Free limits immediately');
+for (const [status, label] of [['trialing', 'trial'], ['past_due', 'payment retrying']]) {
+  const u = await P.createUser(`${status}@example.com`);
+  await db.query(`insert into public.subscriptions (user_id, plan, status, livemode, current_period_start, current_period_end) values ($1, 'pro', $2, false, now() - interval '1 day', now() + interval '29 days')`, [u, status]);
+  const r = await reserve(u);
+  ok(r.plan === 'pro' && r.hour_limit === 240 && r.budget_microusd === 3500000, `Pro (${label}): 240/hour, $3.50 budget`);
+}
 
 // ---- concurrency: many simultaneous reservations never exceed the limit ----
 const d = await P.createUser('burst@example.com');
@@ -108,6 +124,16 @@ const t2 = await reserve(team);
 ok(t2.allowed === false && t2.reason === 'unavailable', 'enforced with no limits defined at all → refused, not unmetered');
 await db.query(`update public.billing_settings set enforce_ai_limits = false`);
 ok((await reserve(team)).allowed === true, '…and with enforcement off it still only records');
+
+// ---- service-wide breaker: total spend in 24 h across all users ----
+await db.query(`update public.billing_settings set ai_daily_budget_microusd = (select sum(coalesce(cost_microusd, estimate_microusd))::int + 1000 from public.ai_usage where created_at > now() - interval '24 hours')`);
+const h = await P.createUser('breaker@example.com');
+ok((await reserve(h, 'ask', 500)).allowed === true, 'under the daily service budget: allowed');
+const tripped = await reserve(h, 'ask', 900);
+ok(tripped.allowed === false && tripped.reason === 'paused', 'over the daily service budget: every user is paused (even with per-user limits off)');
+await db.query(`update public.billing_settings set ai_daily_budget_microusd = null`);
+ok((await reserve(h, 'ask', 900)).allowed === true, 'breaker switched off (null): allowed again');
+await db.query(`update public.billing_settings set ai_daily_budget_microusd = 5000000`);
 
 // ---- account deletion removes the ledger ----
 await db.query('delete from auth.users where id = $1', [b]);

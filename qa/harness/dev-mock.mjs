@@ -46,7 +46,7 @@ const server = await createServer({
       });
       s.middlewares.use('/__harness/ai-limits', (req, res) => { // ?perHour=N&budget=µ$ (no params = unlimited); ledger count in the reply
         const q = new URL(req.url, 'http://x').searchParams;
-        store.aiLimits = q.has('perHour') ? { perHour: Number(q.get('perHour')), budget: Number(q.get('budget') ?? 1e9) } : null;
+        store.aiLimits = q.has('force') ? { force: q.get('force') } : q.has('perHour') ? { perHour: Number(q.get('perHour')), budget: Number(q.get('budget') ?? 1e9) } : null;
         if (q.has('clear')) store._ai.length = 0;
         res.setHeader('content-type', 'application/json');
         res.end(JSON.stringify({ limits: store.aiLimits, ledger: store._ai }));

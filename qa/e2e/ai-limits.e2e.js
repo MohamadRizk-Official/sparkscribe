@@ -43,6 +43,21 @@ export async function run() {
       assert(box && !box.querySelector('button'), 'no retry button for the monthly allowance');
       eq((await limits('?perHour=100&budget=1')).ledger.length, 0, 'ledger rows after a refusal');
     }],
+    ['service-wide pause and an unavailable check read as notices (with Try again), not failures', async () => {
+      await limits('?force=paused');
+      tab('Ask');
+      const input = await waitFor(() => $('.ask-input'), { what: 'ask input' });
+      input.value = 'Who is presenting?'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      $('.ask-form').requestSubmit();
+      await waitFor(() => /paused for a few hours because of unusually high demand/.test(pageText()), { what: 'paused notice' });
+      await limits('?force=unavailable');
+      tab('Summary');
+      const btn = await waitFor(() => [...$$('#insightsHost button')].find((b) => /Summarize|Try again/.test(b.textContent)), { what: 'summarize' });
+      btn.click();
+      await waitFor(() => /briefly unavailable\. Nothing was used/.test(pageText()), { what: 'unavailable notice' });
+      const box = $$('.ins-msg.warn').find((m) => /briefly unavailable/.test(m.textContent));
+      assert(box && /Try again/.test(box.textContent) && !/couldn.t be generated/.test(pageText()), 'notice with Try again, no failure wording');
+    }],
     ['no limit: the same actions work again and each model call is one settled ledger row', async () => {
       await limits();
       tab('Summary');

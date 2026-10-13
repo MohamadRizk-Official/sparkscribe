@@ -68,6 +68,7 @@ export function memoryStore() {
     _ai: [],
     async reserveAi(feature, estimateMicrousd) {
       const lim = this.aiLimits, now = Date.now();
+      if (lim?.force) return { allowed: false, reason: lim.force }; // 'paused' | 'unavailable' (harness)
       const hour = this._ai.filter((r) => now - r.at < 3_600_000).length;
       const spent = this._ai.filter((r) => r.status !== 'failed').reduce((s, r) => s + (r.cost ?? r.estimate), 0);
       if (lim && hour >= lim.perHour) return { allowed: false, reason: 'hourly', retry_after_s: 1200 };
