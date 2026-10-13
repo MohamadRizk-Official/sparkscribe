@@ -37,5 +37,6 @@ Done. Handoff report: `docs/launch/PRELAUNCH-REPORT.md`.
 ## Blockers needing you
 - Domain/email accounts (GoDaddy, Microsoft 365, Resend, Supabase SMTP), Vercel Deployment Protection, legal review,
   plan decisions, approvals for migrations/env/merge. See the report.
-- Docker Desktop on this PC: "Troubleshoot → Clean / Purge data" or a Windows restart (only needed for a local
-  Supabase stack).
+- Docker stays optional. Docker Desktop on this PC stops at start-up (stale `%LOCALAPPDATA%\Dockerun\dockerInference`
+  socket). Non-destructive fixes only: restart Windows, then start Docker Desktop; if it persists, update Docker Desktop.
+  Do **not** use "Clean / Purge data" or "Reset to factory defaults" (they delete containers and volumes).
