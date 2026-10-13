@@ -1255,6 +1255,8 @@ mark.cur { background: var(--k-fbbf24-60); }
 }
 .field input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px var(--k-22d3ee-14); }
 .auth-msg { font-size: 13.5px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); }
+.auth-resend { margin-left: 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.auth-resend:disabled { opacity: .6; cursor: default; }
 .auth-msg.error { color: var(--k-fecdd3); border-color: var(--k-fb7185-40); background: var(--k-fb7185-08); }
 .auth-msg.success { color: var(--k-d9f99d); border-color: var(--k-a3e635-35); background: var(--k-a3e635-07); }
 .auth-foot { margin: 14px 0 0; font-size: 13.5px; }

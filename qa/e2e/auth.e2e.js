@@ -59,6 +59,21 @@ export async function run() {
       await fill('new.person@example.com', 'a-good-password', 'a-good-password');
       await waitFor(() => /confirmation link/i.test(msg()), { what: 'confirm message' });
     }],
+    ['the confirmation email can be requested again (sign-up message offers it)', async () => {
+      const btn = await waitFor(() => d().querySelector('#authMsg .auth-resend'), { what: 'resend button' });
+      btn.click();
+      await waitFor(() => /Sent again to new\.person@example\.com/.test(msg()), { what: 'resent message' });
+      eq(w().__qaResends, 1, 'resend requests');
+    }],
+    ['signing in before confirming explains it and offers to resend; a send failure is explained plainly', async () => {
+      await open('/auth');
+      await fill('new.person@example.com', 'unconfirmed-password');
+      await waitFor(() => /confirm your email first/i.test(msg()), { what: 'not confirmed message' });
+      knobs({ failResend: true });
+      d().querySelector('#authMsg .auth-resend').click();
+      await waitFor(() => /couldn.t send the email just now/i.test(msg()), { what: 'send failure message' });
+      knobs({ failResend: false });
+    }],
     ['sign up: mismatched passwords are caught before any request', async () => {
       await open('/auth?mode=signup');
       await fill('new.person@example.com', 'a-good-password', 'another-password');

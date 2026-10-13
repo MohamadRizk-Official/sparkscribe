@@ -71,10 +71,25 @@ function setMode(m) {
   hideMsg();
 }
 
-function showMsg(text, kind = 'info') {
+function showMsg(text, kind = 'info', resendTo = null) {
   const el = $('authMsg');
   el.textContent = text;
   el.className = `auth-msg ${kind}`;
+  if (resendTo) {
+    // the confirmation email didn't arrive (spam, typo-free but slow, or expired): ask for a fresh one
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'auth-resend';
+    b.textContent = 'Send the link again';
+    b.addEventListener('click', () => resend(resendTo, b));
+    el.append(' ', b);
+  }
+}
+async function resend(email, btn) {
+  btn.disabled = true;
+  const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: callbackUrl(next) } });
+  if (error) { btn.disabled = false; return showMsg(explain(error), 'error'); }
+  showMsg(`Sent again to ${email}. It can take a few minutes; check spam too. The link works in this browser.`, 'success');
 }
 function hideMsg() { $('authMsg').className = 'auth-msg hidden'; }
 
@@ -87,7 +102,9 @@ function busy(on) {
 function explain(error) {
   const msg = error?.message || String(error);
   if (/invalid login credentials/i.test(msg)) return 'Wrong email or password.';
-  if (/email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox for the link we sent.';
+  if (/email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox (and spam) for the link we sent.';
+  // the email service refused or failed: not the user's fault, and retrying right away rarely helps
+  if (/not authori[sz]ed|error sending|sending (confirmation|recovery|magic link)|smtp/i.test(msg)) return "We couldn't send the email just now. Please try again in a few minutes; if it keeps happening, contact support.";
   if (/already registered|already exists/i.test(msg)) return 'An account with this email already exists. Try signing in.';
   if (/rate limit|too many/i.test(msg)) return 'Too many attempts. Please wait a minute and try again.';
   if (/redirect/i.test(msg)) return `${msg} (The site address may not be allowed in the Supabase auth settings yet.)`;
@@ -116,7 +133,7 @@ async function submit(e) {
       if (error) throw error;
       if (data.session) return location.replace(next); // email confirmation is off
       // With confirmation on, Supabase deliberately gives the same answer for new and existing emails.
-      showMsg(`Check ${email} for a confirmation link. Open it in this browser to finish creating your account.`, 'success');
+      showMsg(`Check ${email} for a confirmation link. Open it in this browser to finish creating your account.`, 'success', email);
       $('authForm').reset();
     } else if (mode === 'forgot') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: callbackUrl('/auth?mode=update') });
@@ -129,7 +146,7 @@ async function submit(e) {
       setTimeout(() => location.replace('/library'), 900);
     }
   } catch (err) {
-    showMsg(explain(err), 'error');
+    showMsg(explain(err), 'error', mode === 'signin' && /email not confirmed/i.test(err?.message || '') ? email : null);
   } finally {
     busy(false);
   }

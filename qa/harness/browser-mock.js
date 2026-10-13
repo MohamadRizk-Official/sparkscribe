@@ -61,6 +61,7 @@
     if (p === '/auth/v1/settings') return json({ external: { google: false, email: true } });
     if (p === '/auth/v1/logout') { sessionStorage.setItem('__signedOut', '1'); return new Response(null, { status: 204 }); }
     if (p === '/auth/v1/token') {
+      if (body?.password === 'unconfirmed-password') return json({ error: 'invalid_grant', error_code: 'email_not_confirmed', error_description: 'Email not confirmed', msg: 'Email not confirmed' }, 400);
       if (body?.password === 'wrong-password') return json({ error: 'invalid_grant', error_description: 'Invalid login credentials', msg: 'Invalid login credentials' }, 400);
       sessionStorage.removeItem('__signedOut'); window.__qaKnobs({ signedOut: false });
       if (body?.password) sessionStorage.setItem('__reauthAt', String(Date.now())); // like the JWT's amr timestamp
@@ -68,6 +69,7 @@
     }
     if (p === '/auth/v1/signup') return json({ id: crypto.randomUUID(), email: body?.email, confirmation_sent_at: new Date().toISOString() });
     if (p === '/auth/v1/recover') return json({});
+    if (p === '/auth/v1/resend') { window.__qaResends = (window.__qaResends || 0) + 1; return K.failResend ? json({ code: 500, error_code: 'unexpected_failure', msg: 'Error sending confirmation email' }, 500) : json({}); }
     if (p === '/rest/v1/profiles') return out([{ display_name: 'Test User', avatar_url: null }]);
     // ---- transcriptions ----
     if (p === '/rest/v1/transcriptions') {
