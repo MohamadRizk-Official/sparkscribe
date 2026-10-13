@@ -26,6 +26,12 @@ Done. Handoff report: `docs/launch/PRELAUNCH-REPORT.md`.
 | P8 | Appearance suite 5/5; `npm run test:sql` | done | 806ed68 |
 | P9 | Full regression: unit 186, SQL 143, browser 80/80 (14 suites), axe 0, layout 0, real-model transcription WER 0 on the production build; Preview checks | done | 806ed68 |
 | P10 | `.env.example` documents every billing switch | done | 81a14e8 |
+| P11 | Anonymous use vs Free 60 min: verified (counted only at save, enforced in the DB; AI via ledger); fixed raw `quota_exceeded` + useless Retry on "sign in to save" → plain message + Download text; analysis `docs/launch/10` | done | 70cf937, 8631c0d |
+| P12 | Preview exposure audit (protection off, 40+2 public deployments, noindex, no source maps, old CLI deployments hold a private recording in source only) + exact protection steps `docs/launch/11` | done (no settings changed) | 00d3c45 |
+| P13 | Domain: RDAP (GoDaddy, 2025-04-29, privacy proxy) — ownership not provable publicly; `scripts/check-email-dns.mjs <domain>`; email doc no longer assumes the domain | done | 6d344f5 |
+| P14 | Billing copy while payments off: footers no longer advertise Stripe; FAQ says only saved recordings count | done | 6d344f5 |
+| P15 | Legal launch guard: production builds fail while /privacy or /terms are drafts; `build-legal.mjs --final` refuses with notes/placeholders left (19+6 / 14+5 today) | done | 6d344f5 |
+| P16 | Regression for changed code: unit 190, pending-privacy 7/7, billing pricing/account 3/3, home-save 8/8, Preview verified | done | 00d3c45 |
 | — | Isolated real Supabase stack: Docker Desktop fails at start on this PC (stale `dockerInference` socket). Not reset (your system). Used PGlite / real Postgres + fakes | blocked (environment) | — |
 
 ## Blockers needing you

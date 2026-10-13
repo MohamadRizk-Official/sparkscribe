@@ -1,5 +1,12 @@
 # SparkScribe — pre-launch handoff (2026-10-13)
 
+> **Update (same day):**
+> - Anonymous-use analysis: `10-free-plan-and-anonymous-use.md`.
+> - Preview exposure and protection steps: `11-preview-exposure.md`.
+> - Domain-agnostic email checker: `scripts/check-email-dns.mjs`.
+> - Production builds now refuse draft legal pages.
+> - Billing copy no longer mentions payments while they're off.
+
 **Branch:** `prelaunch/dev` (this report's commit) — built on the verified release candidate `qa/v1-release` plus the
 paused Phase 6 billing work. **Preview:** https://sparkscribe-git-prelaunch-dev-moerizz.vercel.app
 **Production:** untouched. `main` = 95bf377; no production data, migrations, environment variables, DNS or auth settings
