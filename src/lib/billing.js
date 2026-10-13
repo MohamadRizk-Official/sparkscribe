@@ -66,7 +66,9 @@ export function durationText(seconds) {
   return `${m} minute${m === 1 ? '' : 's'}`;
 }
 
-export const dateText = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+// in UTC: the Free month and AI allowances reset at 00:00 UTC, so a US evening must not show "October 31" for a
+// reset that is November 1 (same rule as the server's limit messages)
+export const dateText = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric', timeZone: 'UTC' });
 
 // calm until it matters: 80% -> "warn", 95% or out -> "high"
 export function usageLevel(used, total) {

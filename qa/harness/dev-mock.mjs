@@ -32,6 +32,11 @@ const server = await createServer({
   plugins: [{
     name: 'qa-harness',
     configureServer(s) {
+      // billing never runs here: it would call Supabase/Stripe for real (the browser mock answers /api/billing)
+      s.middlewares.use((req, res, next) => {
+        if (/^\/api\/(billing|stripe-webhook)/.test(req.url)) { res.statusCode = 501; res.setHeader('content-type', 'application/json'); return res.end('{"error":"not_in_harness"}'); }
+        next();
+      });
       s.middlewares.use('/__harness/seed', (req, res) => {
         let raw = '';
         req.on('data', (c) => (raw += c));

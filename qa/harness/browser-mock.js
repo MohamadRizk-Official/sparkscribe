@@ -37,8 +37,39 @@
   const speakers = (r) => Array.isArray(r.segments) && r.segments.length ? new Set(r.segments.map((s) => s.sp).filter((s) => s !== 'Unknown')).size
     : new Set([...(r.transcript_text || '').matchAll(/^\[\d{1,2}(?::\d{2}){1,2}\] ([^\n]+):$/gm)].map((m) => m[1]).filter((s) => s !== 'Unknown')).size;
 
+  // ---- billing (knobs: plan 'free'|'plus'|'pro', usedSeconds, enforced, upgrades, cancelAtPeriodEnd, paymentProblem) ----
+  const PLANS = [
+    { key: 'free', name: 'Free', tagline: 'Start free', price_cents: 0, currency: 'usd', billing_interval: null, monthly_seconds: 3600, sort_order: 0, is_default: true },
+    { key: 'plus', name: 'Plus', tagline: 'For everyday use', price_cents: 799, currency: 'usd', billing_interval: 'month', monthly_seconds: 72000, sort_order: 1, is_default: false },
+    { key: 'pro', name: 'Pro', tagline: 'For heavy recording', price_cents: 1499, currency: 'usd', billing_interval: 'month', monthly_seconds: 180000, sort_order: 2, is_default: false },
+  ];
+  window.__qaBilling = [];
+  async function billingApi(init) {
+    const K = knobs();
+    let body = {}; try { body = JSON.parse(init.body || '{}'); } catch {}
+    window.__qaBilling.push(body.action);
+    if (K.signedOut || sessionStorage.getItem('__signedOut')) return json({ error: 'unauthorized', message: 'Sign in to continue.' }, 401);
+    const plan = PLANS.find((p) => p.key === (K.plan || 'free'));
+    const used = Number(K.usedSeconds || 0), remaining = Math.max(plan.monthly_seconds - used, 0);
+    const end = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)).toISOString();
+    const st = { plan: plan.key, planName: plan.name, status: plan.key === 'free' ? 'free' : 'active', monthlySeconds: plan.monthly_seconds, usedSeconds: used, remainingSeconds: remaining,
+      periodStart: new Date().toISOString(), periodEnd: end, periodKind: plan.key === 'free' ? 'calendar_month' : 'billing', cancelAtPeriodEnd: !!K.cancelAtPeriodEnd,
+      hasBillingAccount: plan.key !== 'free', paymentProblem: !!K.paymentProblem, meteringStarted: !!K.enforced, enforced: !!K.enforced, upgradesAvailable: !!K.upgrades, testMode: false };
+    if (body.action === 'status') return json(st);
+    if (body.action === 'authorize') {
+      const next = PLANS.find((p) => p.billing_interval && p.monthly_seconds > plan.monthly_seconds);
+      const base = { plan: plan.key, remainingSeconds: remaining, monthlySeconds: plan.monthly_seconds, periodEnd: end, upgradeTo: next?.key || null, upgradesAvailable: !!K.upgrades && !!next };
+      if (!K.enforced || body.durationSeconds <= remaining + 1) return json({ ok: true, enforced: !!K.enforced, ...base });
+      return json({ ok: false, enforced: true, reason: remaining < 1 ? 'limit_reached' : 'too_long', requestedSeconds: body.durationSeconds, ...base });
+    }
+    if (body.action === 'checkout' || body.action === 'portal') return json({ error: 'payments_unavailable', message: "Paid plans aren't available yet. Nothing was charged." }, 503);
+    return json({ error: 'bad_request', message: 'Unknown action.' }, 400);
+  }
+
   window.fetch = async (input, init = {}) => {
     const url = new URL(typeof input === 'string' || input instanceof URL ? String(input) : input.url, location.href);
+    // billing API: answered here, so the harness never reaches the billing server (or Stripe, or production)
+    if (url.origin === location.origin && url.pathname === '/api/billing') return billingApi(init);
     if (url.origin === location.origin && url.pathname.startsWith('/api/')) {
       const headers = new Headers(init.headers || {});
       headers.set('x-dev-harness', '1');
@@ -71,6 +102,7 @@
     if (p === '/auth/v1/recover') return json({});
     if (p === '/auth/v1/resend') { window.__qaResends = (window.__qaResends || 0) + 1; return K.failResend ? json({ code: 500, error_code: 'unexpected_failure', msg: 'Error sending confirmation email' }, 500) : json({}); }
     if (p === '/rest/v1/profiles') return out([{ display_name: 'Test User', avatar_url: null }]);
+    if (p === '/rest/v1/billing_plans') return out(PLANS);
     // ---- transcriptions ----
     if (p === '/rest/v1/transcriptions') {
       if (method === 'GET') {
@@ -82,6 +114,7 @@
       if (method === 'POST') {
         if (K.saveDelayMs) await sleep(K.saveDelayMs);
         if (K.failSave) return json({ message: 'QA: insert failed' }, 500);
+        if (K.quotaSave) return json({ code: 'P0001', message: 'quota_exceeded', hint: 'This transcription is longer than the time left on your plan this month.' }, 400);
         const row = { id: crypto.randomUUID(), user_id: USER.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), content_version: 1, is_favorite: false, last_opened_at: null, ...body };
         db.rows.push(row); persist(); await mirror(row);
         return out([{ id: row.id }]);
