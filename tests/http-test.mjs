@@ -1,6 +1,6 @@
 // server/http.js request parsing: size limit and malformed bodies, whether or not the platform pre-parsed the body.
 import assert from 'node:assert/strict';
-const { readJson } = await import(new URL('../server/http.js', import.meta.url).href);
+const { readJson, deploymentOrigin } = await import(new URL('../server/http.js', import.meta.url).href);
 let pass = 0;
 const ok = (c, m) => { assert.ok(c, m); pass++; console.log('ok -', m); };
 const rejects = async (req, status) => { try { await readJson(req); return false; } catch (e) { return e.status === status; } };
@@ -13,4 +13,7 @@ ok(await rejects({ body: 'x'.repeat(20_000) }, 413), 'string body over 16 KB →
 const s = stream('{"b":3}'); ok((await readJson(s)).b === 3, 'streamed body parsed');
 ok(await rejects(stream('{bad'), 400), 'malformed streamed body → 400');
 ok(await rejects(stream('x'.repeat(20_000)), 413), 'streamed body over 16 KB → 413');
+ok(deploymentOrigin({ VERCEL_ENV: 'preview', VERCEL_BRANCH_URL: 'app-git-qa.vercel.app', VERCEL_URL: 'app-abc123.vercel.app' }) === 'https://app-git-qa.vercel.app', 'Preview: the server names its branch address (from Vercel env)');
+ok(deploymentOrigin({ VERCEL_ENV: 'production', VERCEL_PROJECT_PRODUCTION_URL: 'app.vercel.app', VERCEL_BRANCH_URL: 'x' }) === 'https://app.vercel.app', 'Production: the production address');
+ok(deploymentOrigin({}) === null, 'local: no origin header');
 console.log(`\n${pass} checks passed`);

@@ -42,12 +42,19 @@ export function estimateMicrousd(feature, promptTokens) {
   const out = EXPECTED_OUTPUT_TOKENS[kind] ?? 3000;
   return Math.round(Math.max(0, promptTokens) * 0.1 + out * 0.5);
 }
-const promptTokensOf = (segments) => Math.min(estimateTokens(segments.map(modelLine).join('\n')), PART_TOKENS);
+// what one action sends: analyses read the whole transcript (in parts when long); Ask sends at most one part
+const promptTokensOf = (segments, { whole = false } = {}) => {
+  const t = estimateTokens(segments.map(modelLine).join('\n'));
+  return whole ? Math.min(t, MAX_TRANSCRIPT_TOKENS) : Math.min(t, PART_TOKENS);
+};
 async function reserveAi(db, meter, promptTokens) {
   if (typeof db.reserveAi !== 'function') return null;
   const slot = await db.reserveAi(meter.feature, estimateMicrousd(meter.feature, promptTokens));
   if (slot && slot.allowed === false) {
     meter.refused(slot.reason);
+    if (slot.reason === 'unavailable') {
+      throw new AIError("SparkScribe's AI is briefly unavailable. Nothing was used; try again in a minute.", { status: 503, code: 'ai_unavailable' });
+    }
     if (slot.reason === 'hourly') {
       const mins = Math.max(1, Math.ceil((slot.retry_after_s || 600) / 60));
       throw new AIError(`You've used SparkScribe's AI a lot in the last hour. Try again in about ${mins} minute${mins === 1 ? '' : 's'}.`, { status: 429, code: 'rate_limited' });
@@ -240,7 +247,7 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
     if (existing.status === 'ready' && existing.source_version === version && !force) return fromStorage(existing);
     if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < ARTIFACT_TAKEOVER_MS) return fromStorage(existing);
   }
-  await reserveAi(db, meter, promptTokensOf(segments));
+  await reserveAi(db, meter, promptTokensOf(segments, { whole: true }));
   // remembered before the row is claimed: a failed update falls back to the previous result and its version
   const previous = existing?.content ? existing.source_version : null;
   const claimed = await db.startArtifact(existing, { transcriptionId, kind, settings: normalized, settingsKey: key, version });
@@ -318,7 +325,7 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
       return fromStorage(existing); // someone else is already generating it
     }
   }
-  await reserveAi(db, meter, promptTokensOf(segments));
+  await reserveAi(db, meter, promptTokensOf(segments, { whole: true }));
   // remembered before the row is claimed: a failed update keeps the previous result and its version (as artifacts do)
   const previous = existing?.content ? existing.source_version : null;
   const claimed = await db.startInsight(existing, { transcriptionId, kind, recordingType: type, version });

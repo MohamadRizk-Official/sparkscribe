@@ -20,6 +20,12 @@ const count = async (uid) => (await db.query('select count(*)::int n from public
 // ---- off by default: nothing is refused, but every action is recorded ----
 const r0 = await reserve(a);
 ok(r0.allowed === true && r0.enforced === false && r0.plan === 'free', 'switched off by default: allowed, not enforced, plan resolved (free)');
+{ // even switched off, direct calls can't flood the ledger: a 1,000/hour ceiling no real use reaches
+  const flood = await P.createUser('flood@example.com');
+  await db.query(`insert into public.ai_usage (user_id, feature) select $1, 'x' from generate_series(1, 1000)`, [flood]);
+  const f = await reserve(flood);
+  ok(f.allowed === false && f.limit === 1000, 'while off, the 1,000-per-hour safety ceiling still applies');
+}
 for (let i = 0; i < 30; i++) await reserve(a);
 ok((await count(a)) === 31, 'while off, actions are still recorded in the ledger (31)');
 
@@ -85,6 +91,23 @@ await db.query(`update public.billing_settings set enforce_ai_limits = false, en
 const asOrigin = (uid, origin) => P.asUser(uid, async (q) => { await q.query(`select set_config('request.headers', $1, false)`, [JSON.stringify({ origin })]); try { return (await q.query(`select public.ai_reserve('ask', 0) r`)).rows[0].r; } finally { await q.query(`select set_config('request.headers', '', false)`); } });
 ok((await asOrigin(a, 'https://prod.example')).allowed === true, 'enforcement off for other origins (production unaffected)');
 ok((await asOrigin(a, 'https://preview.example')).allowed === false, 'enforced only for the listed Preview origin');
+
+// the server names its deployment in x-sparkscribe-origin (server/http.js deploymentOrigin), which a browser can't set
+const asServerFrom = (uid, origin) => P.asUser(uid, async (q) => { await q.query(`select set_config('request.headers', $1, false)`, [JSON.stringify({ 'x-sparkscribe-origin': origin })]); try { return (await q.query(`select public.ai_reserve('ask', 0) r`)).rows[0].r; } finally { await q.query(`select set_config('request.headers', '', false)`); } });
+ok((await asServerFrom(a, 'https://preview.example')).allowed === false && (await asServerFrom(a, 'https://prod.example')).allowed === true, "the server's own deployment header selects origin-scoped enforcement");
+
+// ---- a plan without its own limits row gets the Free limits, and missing limits refuse when enforced ----
+await db.query(`update public.billing_settings set enforce_ai_limits = true, enforce_origins = '{}'`);
+await db.query(`insert into public.billing_plans (key, name, tagline, price_cents, monthly_seconds, sort_order) values ('team', 'Team', 'x', 2999, 360000, 9)`);
+const team = await P.createUser('team@example.com');
+await db.query(`insert into public.subscriptions (user_id, plan, status, livemode, current_period_start, current_period_end) values ($1, 'team', 'active', false, now() - interval '1 day', now() + interval '29 days')`, [team]);
+const t1 = await reserve(team);
+ok(t1.allowed && t1.plan === 'team' && t1.hour_limit === 20, 'a plan with no limits row is held to the Free limits (not unlimited)');
+await db.query(`delete from public.ai_plan_limits where plan = 'free'`);
+const t2 = await reserve(team);
+ok(t2.allowed === false && t2.reason === 'unavailable', 'enforced with no limits defined at all → refused, not unmetered');
+await db.query(`update public.billing_settings set enforce_ai_limits = false`);
+ok((await reserve(team)).allowed === true, '…and with enforcement off it still only records');
 
 // ---- account deletion removes the ledger ----
 await db.query('delete from auth.users where id = $1', [b]);

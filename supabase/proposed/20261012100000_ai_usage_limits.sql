@@ -58,7 +58,10 @@ declare
 begin
   select * into bs from public.billing_settings where id;
   if bs.enforce_ai_limits then return true; end if;
-  begin origin := coalesce(current_setting('request.headers', true)::json ->> 'origin', '');
+  -- AI calls come from the server, which names its own deployment in x-sparkscribe-origin (from Vercel's env, not
+  -- from the browser); a browser's Origin is the fallback. This only ever adds enforcement for listed origins.
+  begin origin := coalesce(current_setting('request.headers', true)::json ->> 'x-sparkscribe-origin',
+                           current_setting('request.headers', true)::json ->> 'origin', '');
   exception when others then origin := ''; end;
   return origin <> '' and origin = any (bs.enforce_origins);
 end;
@@ -83,10 +86,20 @@ begin
   perform pg_advisory_xact_lock(hashtextextended('sparkscribe:ai:' || uid::text, 0));
   select * into e from private.entitlement(uid);
   select * into lim from public.ai_plan_limits where plan = e.plan;
+  -- a plan without its own row (e.g. one added later) gets the Free limits, never none
+  if lim.plan is null then select * into lim from public.ai_plan_limits where plan = 'free'; end if;
   select count(*) into hour_count from public.ai_usage where user_id = uid and created_at > now() - interval '1 hour';
   select coalesce(sum(coalesce(cost_microusd, estimate_microusd)), 0) into spent from public.ai_usage
    where user_id = uid and created_at >= e.period_start and created_at < e.period_end and status <> 'failed';
-  if enforced and lim.plan is not null then
+  -- always on, enforced or not: a ceiling no real use comes near, so direct calls can't flood the ledger
+  if hour_count >= 1000 then
+    return json_build_object('allowed', false, 'reason', 'hourly', 'plan', e.plan, 'limit', 1000, 'retry_after_s', 3600);
+  end if;
+  -- enforced but the limits can't be determined: refuse rather than run unmetered
+  if enforced and (lim.plan is null or e.period_start is null or e.period_end is null) then
+    return json_build_object('allowed', false, 'reason', 'unavailable');
+  end if;
+  if enforced then
     if hour_count >= lim.actions_per_hour then
       return json_build_object('allowed', false, 'reason', 'hourly', 'plan', e.plan, 'limit', lim.actions_per_hour,
         'retry_after_s', greatest(1, ceil(extract(epoch from (

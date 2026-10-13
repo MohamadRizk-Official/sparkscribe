@@ -113,16 +113,34 @@ export function supabaseStore(sb) {
     // AI usage ledger (supabase/proposed/*_ai_usage_limits.sql). Before that migration is applied the functions
     // don't exist: every request is allowed, exactly as before. Any other database error also allows the request
     // (an accounting problem must not take the AI features down); it is logged without data.
+    // The usage check before every model call (supabase/proposed/*_ai_usage_limits.sql). Only one failure lets the
+    // call through unmetered: the function not existing yet (migration not applied) while AI_LIMITS_REQUIRED is not
+    // set — the rollout fallback. Once the migration is applied, AI_LIMITS_REQUIRED=1 turns that off too. Every other
+    // failure (network, timeout, database error, an unexpected reply) refuses the call: a broken check must never
+    // mean unlimited AI.
     async reserveAi(feature, estimateMicrousd) {
-      const { data, error } = await sb.rpc('ai_reserve', { p_feature: String(feature).slice(0, 80), p_estimate_microusd: estimateMicrousd | 0 });
+      let data, error;
+      try {
+        ({ data, error } = await sb.rpc('ai_reserve', { p_feature: String(feature).slice(0, 80), p_estimate_microusd: estimateMicrousd | 0 }));
+      } catch (e) { error = { code: e?.name || 'exception' }; }
       if (error) {
-        if (!['PGRST202', '42883'].includes(error.code)) console.error('[ai-usage] reserve failed:', error.code || 'error');
-        return { allowed: true, id: null };
+        const notInstalled = ['PGRST202', '42883'].includes(error.code);
+        if (notInstalled && process.env.AI_LIMITS_REQUIRED !== '1') return { allowed: true, id: null, unmetered: true };
+        console.error('[ai-usage] reserve failed, refusing:', error.code || 'error');
+        return { allowed: false, reason: 'unavailable' };
+      }
+      if (!data || typeof data !== 'object' || typeof data.allowed !== 'boolean') {
+        console.error('[ai-usage] reserve returned an unexpected reply, refusing');
+        return { allowed: false, reason: 'unavailable' };
       }
       return data;
     },
     async settleAi(id, ok, { input, output, costMicrousd }) {
       const secret = process.env.AI_DB_SECRET || process.env.BILLING_DB_SECRET;
+      if (id && !secret && process.env.AI_LIMITS_REQUIRED === '1' && !globalThis.__aiSecretWarned) {
+        globalThis.__aiSecretWarned = true; // costs then stay at their estimates: still limited, but not exact
+        console.error('[ai-usage] AI_LIMITS_REQUIRED=1 but no AI_DB_SECRET/BILLING_DB_SECRET: real costs are not recorded');
+      }
       if (!id || !secret) return;
       const { error } = await sb.rpc('ai_settle', { p_secret: secret, p_id: id, p_ok: !!ok, p_input_tokens: input | 0, p_output_tokens: output | 0, p_cost_microusd: costMicrousd | 0 });
       if (error) console.error('[ai-usage] settle failed:', error.code || 'error');
