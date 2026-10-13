@@ -6,7 +6,7 @@ Nothing merged, deployed to production, or applied to the production database. P
 
 ## 1. What would change in production
 
-- **Code:** a fast-forward of `main` by 40 commits (39 code/test commits + this report). No `api/` route changes, no applied-migration changes.
+- **Code:** a fast-forward of `main` (`git log 95bf377..qa/v1-release`: code, tests and these QA reports). No `api/` route changes, no applied-migration changes.
   - The v1 speaker engine is the approved file (`src/engine/diarize.js` blob 7ce03f9).
   - The research archive under `accuracy/` is never bundled.
   - The release includes the earlier-approved `release/v1-speakers` product work (home v2 / light mode, activation pass,
