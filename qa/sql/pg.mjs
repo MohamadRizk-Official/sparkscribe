@@ -40,7 +40,9 @@ grant execute on all functions in schema auth to anon, authenticated, service_ro
 export function migrationFiles({ proposed = false } = {}) {
   const dir = (d) => readdirSync(resolve(ROOT, d)).filter((f) => f.endsWith('.sql')).map((f) => ({ name: f, sql: () => readFileSync(resolve(ROOT, d, f), 'utf8') }));
   const own = [...dir('supabase/migrations'), ...(proposed ? dir('supabase/proposed') : [])];
-  const billing = BILLING.map((f) => ({ name: f, sql: () => execFileSync('git', ['show', `${BILLING_BRANCH}:supabase/migrations/${f}`], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }) }));
+  // the billing migrations live in supabase/migrations once phase-6-billing is merged; before that, read them from the branch
+  const billing = BILLING.filter((f) => !own.some((m) => m.name === f))
+    .map((f) => ({ name: f, sql: () => execFileSync('git', ['show', `${BILLING_BRANCH}:supabase/migrations/${f}`], { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }) }));
   return [...own, ...billing].sort((a, b) => a.name.localeCompare(b.name));
 }
 

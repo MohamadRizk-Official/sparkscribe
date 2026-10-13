@@ -23,6 +23,7 @@
     "@supabase/supabase-js": "^2.117.3",
     "docx": "9.9.0",
     "jspdf": "4.2.1",
+    "stripe": "22.6.2",
     "three": "^0.186.1"
   }
 }

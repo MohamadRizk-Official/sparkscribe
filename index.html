@@ -73,6 +73,7 @@
               <div class="dz-sub">Audio or video · hours long is fine</div>
             </div>
           </label>
+          <p class="usage-line mono" id="usageLine" hidden></p>
 
           <fieldset class="mode-picker">
             <legend>Transcription mode</legend>
@@ -324,6 +325,8 @@
           <button class="pb-chip mono on" id="followBtn" type="button" title="Auto-scroll to the current line">Follow</button>
         </div>
       </section>
+
+      <section class="panel gate hidden" id="gatePanel" aria-live="polite"></section>
 
       <section class="panel error hidden" id="errorPanel">
         <h2>Something went wrong</h2>

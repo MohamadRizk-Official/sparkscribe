@@ -6,7 +6,7 @@ import { THEME_BOOT } from './src/lib/theme.js';
 // Server-only settings the /api functions read from process.env. Locally they come from .env.local;
 // on Vercel from the project's Environment Variables. They are NOT in envPrefix, so they never reach the
 // browser bundle.
-const SERVER_ENV = ['ANTHROPIC_API_KEY', 'AI_PROVIDER', 'AI_USAGE_LOG', 'AI_MODEL', 'AI_MODEL_ASK', 'AI_MODEL_SUMMARY', 'AI_MODEL_INSIGHTS', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'];
+const SERVER_ENV = ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_PLUS_PRICE_ID', 'STRIPE_PRO_PRICE_ID', 'STRIPE_PORTAL_CONFIGURATION_ID', 'BILLING_DB_SECRET', 'APP_URL', 'ANTHROPIC_API_KEY', 'AI_PROVIDER', 'AI_USAGE_LOG', 'AI_MODEL', 'AI_MODEL_ASK', 'AI_MODEL_SUMMARY', 'AI_MODEL_INSIGHTS', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'];
 
 // Pages of the multi-page app. Vercel serves them at clean URLs (vercel.json "cleanUrls"),
 // e.g. /library -> library.html; the dev-server plugin below does the same locally.
@@ -17,8 +17,10 @@ const pages = {
   library: 'library.html',
   transcript: 'transcript.html',
   settings: 'settings.html',
+  pricing: 'pricing.html',
+  account: 'account.html',
 };
-const cleanRoutes = new Set(['/auth', '/auth/callback', '/library', '/transcript', '/settings']);
+const cleanRoutes = new Set(['/auth', '/auth/callback', '/library', '/transcript', '/settings', '/pricing', '/account']);
 
 export default defineConfig(({ mode }) => ({
   // The Supabase settings live in Vercel as NEXT_PUBLIC_* (public, browser-safe values).
