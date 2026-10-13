@@ -119,6 +119,11 @@ export function supabaseStore(sb) {
     // failure (network, timeout, database error, an unexpected reply) refuses the call: a broken check must never
     // mean unlimited AI.
     async reserveAi(feature, estimateMicrousd) {
+      // Emergency switch for operators (rollback plan): skips the check entirely, loudly. Never set by default.
+      if (process.env.AI_LIMITS_DISABLED === '1') {
+        if (!globalThis.__aiDisabledWarned) { globalThis.__aiDisabledWarned = true; console.error('[ai-usage] AI_LIMITS_DISABLED=1: usage checks are OFF'); }
+        return { allowed: true, id: null, unmetered: true };
+      }
       let data, error;
       try {
         ({ data, error } = await sb.rpc('ai_reserve', { p_feature: String(feature).slice(0, 80), p_estimate_microusd: estimateMicrousd | 0 }));

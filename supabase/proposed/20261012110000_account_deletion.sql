@@ -17,9 +17,10 @@
 --   * billing_events rows (no FK; Stripe event log needed for accounting/disputes; pseudonymous user id only);
 --   * one row in private.account_deletions (user id, time, Stripe customer id if any) so the server can delete the
 --     Stripe customer later. No email, no content.
--- Not undoable: there is no soft-delete. Supabase's daily backups keep the data until they rotate out (see report).
+-- Not undoable: there is no soft-delete. On Supabase's Free plan there are no restorable backups, so it is final; on a
+-- paid plan, daily backups (and point-in-time recovery, if enabled) hold the data until they rotate out.
 
-create table private.account_deletions (
+create table if not exists private.account_deletions (
   user_id            uuid primary key,          -- no FK: the user is gone
   deleted_at         timestamptz not null default now(),
   stripe_customer_id text,

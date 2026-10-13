@@ -83,6 +83,10 @@ try {
     const r = await storeWith(rpc).reserveAi('ask', 100);
     ok(r.allowed === false && r.reason === 'unavailable', `fails closed on ${name} (even with the rollout fallback on)`);
   }
+  process.env.AI_LIMITS_DISABLED = '1';
+  let called = false;
+  ok((await storeWith(() => { called = true; return { data: null, error: { code: '57014' } }; }).reserveAi('ask', 1)).allowed === true && !called, 'operator emergency switch AI_LIMITS_DISABLED=1 skips the check (explicit, logged)');
+  delete process.env.AI_LIMITS_DISABLED;
   const pass = { allowed: true, id: 9, enforced: true }, deny = { allowed: false, reason: 'hourly', retry_after_s: 60 };
   ok((await storeWith(() => ({ data: pass, error: null })).reserveAi('ask', 1)) === pass && (await storeWith(() => ({ data: deny, error: null })).reserveAi('ask', 1)) === deny, 'normal replies pass through unchanged');
 } finally { console.error = quiet; }
