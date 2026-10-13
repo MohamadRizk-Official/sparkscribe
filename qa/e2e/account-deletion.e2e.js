@@ -50,6 +50,13 @@ export async function run() {
       assert(/paid plan .*Cancel it first/.test(msg), `message: ${msg}`);
       eq(dbRows().length, rowsAtStart, 'library intact');
     }],
+    ['flag on before the migration: says deleting is not switched on, nothing deleted', async () => {
+      knobs({ deleteMissing: true });
+      const msg = await attempt('right-password');
+      knobs({ deleteMissing: false });
+      assert(/isn.t switched on yet\. Nothing was deleted/.test(msg), `message: ${msg}`);
+      eq(dbRows().length, rowsAtStart, 'library intact');
+    }],
     ['a server failure says nothing was removed', async () => {
       knobs({ failDelete: true });
       const msg = await attempt('right-password');

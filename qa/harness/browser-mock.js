@@ -120,6 +120,7 @@
     // ---- RPCs (simplified versions of the SQL functions, same result shapes) ----
     if (p === '/rest/v1/rpc/delete_my_account') { // same guards and result shape as the proposed SQL function
       if (K.failDelete) return json({ code: 'XX000', message: 'QA: delete failed' }, 500);
+      if (K.deleteMissing) return json({ code: 'PGRST202', message: 'Could not find the function public.delete_my_account(p_confirm) in the schema cache' }, 404);
       if (body?.p_confirm !== 'DELETE') return json({ code: '22023', message: 'type DELETE to confirm' }, 400);
       if (K.deleteReason) return json({ deleted: false, reason: K.deleteReason });
       if (Date.now() - Number(sessionStorage.getItem('__reauthAt') || 0) > 600_000) return json({ deleted: false, reason: 'reauth' });
