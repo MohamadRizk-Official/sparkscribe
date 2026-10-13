@@ -51,6 +51,21 @@ const CASES = [
     eq(dbRows().length, rows, 'nothing saved');
     assert(!localStorage.getItem(KEY), 'dropped');
   }],
+  ['anonymous transcript over the account’s monthly time: refused by the database, explained, text downloadable, still parked', () => { park(); window.__qaKnobs({ quotaSave: true }); }, '/?save=pending', async (rows) => {
+    const c = await waitFor(card, { what: 'pending card' });
+    const blobs = []; const orig = URL.createObjectURL; URL.createObjectURL = (b) => { blobs.push(b); return orig.call(URL, b); };
+    const click = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { blobs.name = this.download; };
+    try {
+      c.querySelector('[data-act=save]').click();
+      await waitFor(() => /longer than the transcription time left/.test(card()?.textContent || ''), { what: 'quota message' });
+      assert(!/quota_exceeded|Retry/.test(card().textContent), 'no raw error or useless Retry');
+      card().querySelector('[data-act=download]').click();
+      await sleep(100);
+      assert(blobs.length === 1 && /secret words/.test(await blobs[0].text()) && blobs.name === 'Private chat.txt', 'the text downloads');
+      eq(dbRows().length, rows, 'nothing saved');
+      assert(localStorage.getItem(KEY), 'still parked');
+    } finally { URL.createObjectURL = orig; HTMLAnchorElement.prototype.click = click; window.__qaKnobs({ quotaSave: false }); localStorage.removeItem(KEY); }
+  }],
   ['signing out forgets a parked transcript', () => park(), '/settings', async () => {
     const { signOut } = await import('/src/lib/account.js');
     await signOut();

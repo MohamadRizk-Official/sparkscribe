@@ -1407,6 +1407,21 @@ async function resumePendingSave(confirmed = false) {
       clearPending();
       location.replace(`/transcript?id=${encodeURIComponent(id)}`);
     } catch (err) {
+      if (/quota_exceeded/.test(err?.message || '')) {
+        // the database refused it: this account's monthly transcription time can't hold it. Retrying won't help,
+        // so offer the text itself; it stays parked here (for the rest of the hour) in case they free up time.
+        note.innerHTML = `<span class="save-icon bad">${WARN}</span><span class="pending-text">“${esc(pending.title)}” is longer than the transcription time left on your plan this month, so it wasn't saved. You can still keep the text.</span>
+          <span class="pending-actions"><button class="btn btn-ghost btn-sm" type="button" data-act="discard">Discard</button><button class="btn btn-primary btn-sm" type="button" data-act="download">Download text</button></span>`;
+        note.querySelector('[data-act=download]').addEventListener('click', () => {
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([pending.text || ''], { type: 'text/plain;charset=utf-8' }));
+          a.download = `${String(pending.title || 'transcript').replace(/[^\w\- ]+/g, '').trim() || 'transcript'}.txt`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        });
+        note.querySelector('[data-act=discard]').addEventListener('click', () => { clearPending(); note.remove(); toast('Discarded. Nothing was saved.'); });
+        return;
+      }
       note.innerHTML = `<span class="save-icon bad">${WARN}</span><span>Couldn't save “${esc(pending.title)}”: ${esc(err.message || err)}</span><button class="btn btn-ghost btn-sm" type="button">Retry</button>`;
       note.querySelector('button').addEventListener('click', () => { note.remove(); resumePendingSave(true); });
     }
