@@ -1,5 +1,7 @@
 # SparkScribe — launch-readiness report (2026-10-13)
 
+> Superseded for current status by `PRELAUNCH-REPORT.md` (2026-10-13, branch `prelaunch/dev`).
+
 **Baseline:** release candidate `qa/v1-release` (Preview `sparkscribe-git-qa-v1-release-moerizz.vercel.app`). Production
 is still `main` @ 95bf377. Nothing has been merged, deployed, migrated or reconfigured in production. The v1 speaker engine
 is unchanged (`src/engine/diarize.js` 7ce03f9).
