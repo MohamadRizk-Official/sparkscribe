@@ -39,7 +39,9 @@ begin
 
   select max((e ->> 'timestamp')::double precision) into last_auth
     from jsonb_array_elements(case when jsonb_typeof(auth.jwt() -> 'amr') = 'array' then auth.jwt() -> 'amr' else '[]'::jsonb end) e
-   where (e ->> 'timestamp') ~ '^[0-9]+(\.[0-9]+)?$';
+   where (e ->> 'timestamp') ~ '^[0-9]+(\.[0-9]+)?$'
+     -- only an actual sign-in proves the person is here; a token refresh, sign-up or email change does not
+     and (e ->> 'method') in ('password', 'otp', 'magiclink', 'oauth', 'totp', 'phone', 'sso/saml', 'web3', 'webauthn', 'recovery');
   if last_auth is null or last_auth < extract(epoch from now()) - 600 then
     return json_build_object('deleted', false, 'reason', 'reauth');
   end if;

@@ -62,6 +62,8 @@ ok((await del(a, {})).reason === 'reauth', 'a token without sign-in method times
 ok((await del(a, stale())).reason === 'reauth', 'a sign-in 20 minutes ago is too old: re-enter password');
 ok((await del(a, { amr: [{ method: 'password', timestamp: 'soon' }] })).reason === 'reauth', 'a malformed amr timestamp is refused, not an error');
 ok((await del(a, { amr: 'x' })).reason === 'reauth', 'a non-array amr is refused, not an error');
+ok((await del(a, { amr: [{ method: 'token_refresh', timestamp: now() - 5 }, { method: 'password', timestamp: now() - 3 * 3600 }] })).reason === 'reauth', 'a recent token refresh does not count as signing in (old password sign-in → re-enter password)');
+ok((await del(a, { amr: [{ method: 'signup', timestamp: now() - 5 }] })).reason === 'reauth', 'neither does a sign-up or other non-sign-in event');
 ok(JSON.stringify(await footprint(a)) === JSON.stringify(before), 'refused attempts changed nothing');
 
 // ---- a paid subscription that would keep charging blocks deletion; a canceled-at-period-end one doesn't ----
