@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { BRAND_HTML, MARK_HTML, BRAND_FONT_LINK, LEGAL_HTML } from './src/lib/brand-markup.js';
 import { THEME_BOOT } from './src/lib/theme.js';
 
@@ -41,6 +42,18 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [
+    {
+      // Public sign-up must not launch with unfinished policies: a PRODUCTION build (Vercel production, or
+      // REQUIRE_FINAL_LEGAL=1 locally) fails while /privacy or /terms is still a draft. Previews build normally.
+      // Final pages come from `node scripts/build-legal.mjs --final`, which refuses while review notes remain.
+      name: 'legal-final-guard',
+      apply: 'build',
+      buildStart() {
+        if (process.env.VERCEL_ENV !== 'production' && process.env.REQUIRE_FINAL_LEGAL !== '1') return;
+        const drafts = ['privacy.html', 'terms.html'].filter((f) => /legal-banner|legal-flag/.test(readFileSync(resolve(import.meta.dirname, f), 'utf8')));
+        if (drafts.length) this.error(`Production build stopped: ${drafts.join(' and ')} ${drafts.length > 1 ? 'are' : 'is'} still a draft. Finish the text in docs/launch, then run "node scripts/build-legal.mjs --final".`);
+      },
+    },
     {
       // One brand for every page: <!-- sparkscribe:brand --> (header logo + wordmark) and
       // <!-- sparkscribe:mark --> (the mark alone) come from src/lib/brand-markup.js, plus the wordmark's font,

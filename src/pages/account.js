@@ -53,6 +53,7 @@ function render() {
   const manage = s.hasBillingAccount
     ? `<button class="btn ${paid ? 'btn-primary' : 'btn-ghost'}" type="button" data-act="portal"${busy ? ' disabled' : ''}>${busy === 'portal' ? 'Opening…' : 'Manage Billing'}</button>` : '';
 
+  if (s.upgradesAvailable || s.hasBillingAccount) $('acctFoot').textContent = 'Payments are handled by Stripe · SparkScribe never sees your card · audio is never uploaded';
   $('account').innerHTML = `
     ${warn}
     <div class="panel acct-card">

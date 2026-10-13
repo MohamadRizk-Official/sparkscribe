@@ -1,9 +1,29 @@
-# Authentication email delivery — diagnosis and exact setup (sparkscribe.ai)
+# Authentication email delivery — diagnosis and exact setup
 
 Status: **prepared; needs your accounts.** Nothing has been changed in Supabase, DNS, Microsoft 365 or any email
-provider. **[CONFIRM] Your domain is `sparkscribe.ai`.** I inferred this from public DNS: it uses GoDaddy nameservers,
-Microsoft 365 mail and DMARC. `sparkscribe.app` belongs to someone else (Amazon SES in Tokyo); `sparkscribe.com` is
-registered elsewhere.
+provider. Everything below is written for **`sparkscribe.ai` as the candidate domain, which is not yet confirmed**. If your
+domain is different, replace it throughout; the templates contain no domain, and the checker takes any domain.
+
+## 0. Confirm the domain before any DNS change (you, about 5 minutes)
+
+What public records show for `sparkscribe.ai` (read-only, 2026-10-13):
+
+| Source | Finding |
+|---|---|
+| Registry (RDAP) | registered **2025-04-29** at **GoDaddy.com, LLC**, expires **2027-04-29**; owner hidden by "Domains By Proxy" (normal GoDaddy privacy); registrar locks on |
+| DNS | GoDaddy nameservers; Microsoft 365 mail (MX); a Microsoft tenant verification record `MS=ms41644051`; two Google site-verification records; DMARC `p=reject` |
+
+Public data can't prove who owns it. To confirm:
+1. Sign in to **GoDaddy** → My Products: `sparkscribe.ai` is listed under your account, with auto-renew on (it expires
+   2027-04-29).
+2. Microsoft 365 admin center → Settings → Domains: `sparkscribe.ai` shows as **Verified** (that's the `MS=` record).
+3. Only then make the DNS changes below.
+
+Check before and after any change (read-only; prints exactly what's missing):
+
+    node scripts/check-email-dns.mjs sparkscribe.ai
+
+Today it reports: Microsoft 365 SPF missing, Microsoft 365 DKIM missing, and all three Resend records missing (exit code 1).
 
 ## 1. Why external users can't receive SparkScribe's emails today
 

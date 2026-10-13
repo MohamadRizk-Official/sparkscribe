@@ -72,7 +72,7 @@ const page = (title, description, body) => `<!doctype html>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#04050d" />
     <meta name="robots" content="noindex" />
-    <title>${title} (draft) — SparkScribe</title>
+    <title>${title}${FINAL ? '' : ' (draft)'} — SparkScribe</title>
     <meta name="description" content="${description}" />
     <link rel="icon" href="/favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -87,7 +87,7 @@ const page = (title, description, body) => `<!doctype html>
       <div class="topbar-right"><div id="accountSlot"></div></div>
     </header>
     <main class="app legal-page">
-      <div class="legal-banner" role="note"><strong>Draft, not yet in effect.</strong> This document is being prepared for SparkScribe's launch and is under review. Highlighted notes mark details still to be confirmed or reviewed.</div>
+      ${FINAL ? '' : `<div class="legal-banner" role="note"><strong>Draft, not yet in effect.</strong> This document is being prepared for SparkScribe's launch and is under review. Highlighted notes mark details still to be confirmed or reviewed.</div>`}
       <article class="panel legal-doc">
 ${body}
       </article>
@@ -98,8 +98,21 @@ ${body}
 </html>
 `;
 
+// --final: the reviewed, published version. Refuses while any [CONFIRM] / [LEGAL REVIEW] note or placeholder remains,
+// and drops the draft banner. Without it, pages are built as drafts (and production builds refuse them).
+const FINAL = process.argv.includes('--final');
 const src = (f) => readFileSync(resolve(ROOT, 'docs/launch', f), 'utf8').replace(/\r/g, '')
   .replace(/^> \*\*Draft for review[\s\S]*?\n\n/m, ''); // the reviewer note at the top becomes the page banner
+if (FINAL) {
+  const open = [];
+  for (const f of ['04-privacy-policy-DRAFT.md', '05-terms-of-service-DRAFT.md']) {
+    const t = src(f);
+    const notes = (t.match(/\[(CONFIRM|LEGAL REVIEW)[^\]]*\]/g) || []).length;
+    const blanks = (t.match(/\[(DATE|LLC NAME[^\]]*|POSTAL ADDRESS|ADDRESS|COUNTRY\/STATE|STATE\/COUNTRY|VENUE|LEGAL ENTITY NAME[^\]]*)\]/g) || []).length;
+    if (notes || blanks) open.push(`${f}: ${notes} review note(s), ${blanks} placeholder(s)`);
+  }
+  if (open.length) { console.error(`Not final yet:\n  ${open.join('\n  ')}`); process.exit(1); }
+}
 writeFileSync(resolve(ROOT, 'privacy.html'), page('Privacy Policy', 'How SparkScribe handles your data.', toHtml(src('04-privacy-policy-DRAFT.md'))));
 writeFileSync(resolve(ROOT, 'terms.html'), page('Terms of Service', 'The terms for using SparkScribe.', toHtml(src('05-terms-of-service-DRAFT.md'))));
 console.log('wrote privacy.html, terms.html');

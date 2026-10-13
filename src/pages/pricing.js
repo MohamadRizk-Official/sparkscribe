@@ -96,6 +96,8 @@ async function main() {
     try { status = await getBillingStatus(); } catch { status = null; }
     if (status?.testMode) notice('<b>Test mode.</b> Stripe test payments only: no real card is charged.', 'test');
   }
+  // the footer mirrors the same state: Stripe is only mentioned once plans can actually be bought
+  if (PAID_PLANS && (!session || status?.upgradesAvailable)) $('billFoot').textContent = 'Monthly plans · secure payments by Stripe';
   if (!PAID_PLANS || (session && !status?.upgradesAvailable)) notice('<b>Paid plans are coming soon.</b> Everything SparkScribe does is available on the Free plan today. Nothing on this page can charge you.');
   render(plans);
   // back from signing in after choosing a plan: continue to checkout

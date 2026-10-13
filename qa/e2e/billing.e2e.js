@@ -16,6 +16,8 @@ export async function pricing() {
       assert(/Paid plans are coming soon/.test(text($('.bill-notice') || document.body)), 'notice explains it');
       assert(/\$7\.99/.test(text(cards[1])) && /\$14\.99/.test(text(cards[2])), 'prices still shown from the plan table');
       eq(checkoutCalls(), 0, 'checkout/portal requests');
+      assert(/coming soon/i.test(text($('#billFoot'))) && !/Stripe/.test(text($('#billFoot'))), `footer doesn't advertise payments (${text($('#billFoot'))})`);
+      assert(/save to your library/.test($('.faq-list').textContent), 'FAQ: only saved recordings count');
     }],
     ['pricing ?plan=plus after sign-in does not auto-start checkout', async () => {
       history.replaceState(null, '', '/pricing?plan=plus');
@@ -36,6 +38,7 @@ export async function account() {
       assert($('.meter') && /min/.test(text($('.meter'))), 'usage meter');
       eq($$('[data-up], [data-act="portal"]').length, 0, 'upgrade / manage billing buttons');
       assert($('a[href="/pricing"]'), 'Compare plans link');
+      assert(!/Stripe/.test(text($('#acctFoot'))), `footer doesn't mention payments (${text($('#acctFoot'))})`);
     }],
   ]);
 }
