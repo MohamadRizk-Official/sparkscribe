@@ -65,3 +65,18 @@ export function measure(kind, content, kase = {}) {
   if (kind === 'quiz') m.skills = Object.entries(items.reduce((o, it) => ((o[it.skill || it.type] = (o[it.skill || it.type] || 0) + 1), o), {})).map(([k, v]) => `${k} ${v}`).join(', ');
   return m;
 }
+
+// Coverage against an independently written reference list ({ concepts: [{ id, tier, name, groups }] }): which
+// reference concepts at least one item tests. Never the engine's own concept list.
+export function referenceCoverage(kind, content, reference) {
+  const flat = (t) => String(t || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f'’ʿʾ`]/g, '');
+  const texts = itemsOf(kind, content).map((it) => flat(`${it.q} ${it.a} ${it.x} ${it.opts.join(' ')}`));
+  const hit = (c) => c.groups.some((g) => texts.some((t) => g.every((w) => t.includes(flat(w)))));
+  const covered = reference.concepts.filter(hit).map((c) => c.id);
+  const tier1 = reference.concepts.filter((c) => c.tier === 1);
+  return {
+    refCovered: covered.length, refTotal: reference.concepts.length,
+    tier1Covered: tier1.filter((c) => covered.includes(c.id)).length, tier1Total: tier1.length,
+    refIds: covered, refMissed: reference.concepts.filter((c) => !covered.includes(c.id)).map((c) => c.id),
+  };
+}

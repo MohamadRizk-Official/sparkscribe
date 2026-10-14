@@ -34,7 +34,9 @@ export const TOOL_INFO = {
   followup_email: { label: 'Follow-up Email', desc: 'You say what the email should be about; SparkScribe fills in the details from the recording.', loading: 'Drafting the email', draft: true },
   reply_draft: { label: 'Reply Draft', desc: 'You say what the reply should be about; SparkScribe fills in the details from the recording.', loading: 'Drafting a reply', draft: true },
   interview_qa: { label: 'Interview Q&A', desc: 'Turn the conversation into a clean Q&A, with quotes taken word for word from the transcript.', loading: 'Organizing questions and answers' },
-  episode_notes: { label: 'Episode Notes', desc: 'Write shareable episode notes: summary, chapter outline, takeaways and quotes.', loading: 'Writing episode notes' },
+  episode_notes: { label: 'Episode Notes', desc: 'Write shareable episode notes: summary, chapter outline, takeaways and quotes. (Export also offers episode notes built from Summary and Notes, with no AI.)', loading: 'Writing episode notes' },
+  // one Create entry for both drafts: it asks which one, then opens the follow-up email or the reply tool
+  draft: { label: 'Draft', desc: 'An email or a reply that uses what was said. You say what it should do.', loading: '' },
   // created before definitions and exam points moved to Notes; still shown in Export if they exist
   definitions: { label: 'Key Definitions', desc: '', loading: 'Collecting definitions' },
   exam_points: { label: 'Possible Exam Points', desc: '', loading: 'Looking for exam information' },
@@ -43,15 +45,18 @@ export const TOOL_INFO = {
 // What each recording type offers in Create. Extracted information (actions, decisions, dates, definitions,
 // exam information, quotes…) is in Notes, not here.
 const CATALOG = {
-  lecture: ['quiz', 'flashcards', 'study_guide'],
+  lecture: ['flashcards', 'quiz', 'study_guide'],
   meeting: ['meeting_recap', 'action_plan', 'followup_email'],
   interview: ['interview_qa'],
   podcast: ['episode_notes'],
-  general: ['action_plan', 'quiz'],
+  general: ['flashcards', 'action_plan'],
   voice_message: ['reply_draft', 'action_plan'],
 };
 // shown next to the recommended tools: a related tab that isn't a Create tool
-const RELATED_TAB = { interview: 'summary', podcast: 'summary' };
+const RELATED_TAB = { interview: 'summary', podcast: 'summary', general: 'summary' };
+// the two draft tools are one "Draft" card in Create; each keeps its own results and settings
+const DRAFT_KINDS = new Set(['followup_email', 'reply_draft']);
+const cardKind = (k) => (DRAFT_KINDS.has(k) ? 'draft' : k);
 
 // The Create landing: one short line, an icon and a color per tool
 const TOOL_CARD = {
@@ -64,16 +69,17 @@ const TOOL_CARD = {
   reply_draft: { line: 'Draft a response using the recording', c: 'pink', ic: '<path d="M10 8 4 13l6 5"/><path d="M4 13h10a6 6 0 0 1 6 6"/>' },
   interview_qa: { line: 'Questions and answers, with transcript quotes', c: 'violet', ic: '<path d="M4 5h12v9H8l-4 3.5z"/><path d="M16 9h4v9.5L16.5 16H10v-2"/>' },
   episode_notes: { line: 'Summary, chapters and takeaways', c: 'cyan', ic: '<circle cx="12" cy="11" r="3"/><path d="M6.5 16.5a7.5 7.5 0 1 1 11 0M12 14v7"/>' },
+  draft: { line: 'An email or a reply, using the recording', c: 'pink', ic: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>' },
 };
 const EXPORT_IC = '<path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/>';
 const SUMMARY_IC = '<path d="M5 6h14M5 11h14M5 16h9"/>';
 export const toolsFor = (type) => ({ tools: CATALOG[type] || CATALOG.general });
-// Every tool works on any recording; the type only decides which are suggested first. The rest are always
-// one click away under "More tools" (a voice note can still get a quiz).
+// Every tool works on any recording; the type only decides which are suggested first. All tools are always one
+// click away, grouped by what they are for (a voice note can still get a quiz).
 const TOOL_GROUPS = [
-  ['Study', ['quiz', 'flashcards', 'study_guide']],
-  ['Work', ['meeting_recap', 'action_plan', 'followup_email', 'reply_draft']],
-  ['Media', ['interview_qa', 'episode_notes']],
+  ['Study', 'Learn and remember', ['study_guide', 'flashcards', 'quiz']],
+  ['Work', 'Act on what was said', ['meeting_recap', 'action_plan', 'draft']],
+  ['Specialized', 'For particular kinds of recording', ['interview_qa', 'episode_notes']],
 ];
 
 // tools whose result depends mostly on what the user wants: they open a short setup dialog first
@@ -102,6 +108,7 @@ export function artifactBlocks(kind, c, timeOf) {
       section('What the lecturer emphasised', c.emphasis, (x) => li(`${x.text} (“${x.evidence}”)`, x.refs));
       section('Explicit exam information', c.exam_info, (x) => li(`${x.text} (“${x.evidence}”)`, x.refs));
       section('Worth reviewing', c.review, (x) => li(x.text, x.refs));
+      section('Check yourself', c.self_check, (x) => li(`${x.question} — ${x.answer}`, x.refs));
       break;
     case 'flashcards':
       (c.cards || []).forEach((k, i) => {
@@ -109,6 +116,7 @@ export function artifactBlocks(kind, c, timeOf) {
         B.push({ t: 'p', text: `Q: ${k.front}` });
         B.push({ t: 'p', text: `A: ${k.back}`, time: timeOf(k.refs) });
         if (k.explanation) B.push({ t: 'p', text: `Why: ${k.explanation}` });
+        if (k.caution) B.push({ t: 'p', text: `Note: ${k.caution}` });
       });
       break;
     case 'quiz':
@@ -275,6 +283,10 @@ export function createToolsUI(api) {
   }
 
   function status(kind) {
+    if (kind === 'draft') {
+      const made = [...DRAFT_KINDS].some((k) => api.artifactsOf(k).some((x) => x.content));
+      return made ? ['ok', 'Drafts saved'] : ['', 'You say what it’s for'];
+    }
     const a = latest(kind) || api.artifact(kind, '');
     if (api.artifactsOf(kind).some((x) => api.busy(kind, x.settingsKey)) || api.busy(kind, keyOf(kind, selOf(kind))) || a?.status === 'generating') return ['busy', 'Creating…'];
     if (a?.status === 'failed' && !a.content) return ['bad', 'Failed'];
@@ -300,8 +312,7 @@ export function createToolsUI(api) {
   }
   function renderList() {
     const t = api.type();
-    const suggested = toolsFor(t).tools;
-    const rest = TOOL_GROUPS.flatMap(([, kinds]) => kinds).filter((k) => !suggested.includes(k));
+    const suggested = [...new Set(toolsFor(t).tools.map(cardKind))];
     const related = RELATED_TAB[t];
     const typeName = t === 'general' ? 'recording' : (RECORDING_TYPE_LABEL[t] || 'recording').toLowerCase();
     return `<div class="create">
@@ -318,9 +329,13 @@ export function createToolsUI(api) {
             <span class="ctool-foot"><span class="ctool-state">Summary tab</span><span class="ctool-go" aria-hidden="true">${svg('<path d="M5 12h13m0 0-5-5m5 5-5 5"/>')}</span></span>
           </button>` : ''}</div>
       </section>
-      <section class="create-sec" aria-labelledby="crMore">
-        <h3 class="create-h" id="crMore">More tools</h3>
-        <div class="create-grid more">${rest.map((k) => toolCard(k, false)).join('')}
+      <section class="create-sec" aria-labelledby="crAll">
+        <h3 class="create-h" id="crAll">All tools</h3>
+        ${TOOL_GROUPS.map(([name, line, kinds]) => `<div class="create-group" role="group" aria-label="${esc(name)}">
+          <p class="create-group-h"><b>${esc(name)}</b> <span>${esc(line)}</span></p>
+          <div class="create-grid more">${kinds.map((k) => toolCard(k, false)).join('')}</div>
+        </div>`).join('')}
+        <div class="create-grid more create-export">
           <button type="button" class="ctool c-plain" data-tool="export">
             <span class="ctool-ic" aria-hidden="true">${svg(EXPORT_IC)}</span>
             <span class="ctool-body"><span class="ctool-name">Export</span><span class="ctool-line">PDF, Word, Markdown, text or subtitles</span></span>
@@ -337,6 +352,18 @@ export function createToolsUI(api) {
     const spec = TOOL_SETTINGS[kind];
     if (!spec || SETUP_DIALOG.has(kind)) return '';
     return `<div class="tool-settings">${Object.entries(spec).map(([name, sp]) => `<div class="tool-set"><span class="ins-label">${esc(sp.label)}</span><div class="seg-toggle" role="group" aria-label="${esc(sp.label)}">${Object.entries(sp.options).map(([v, l]) => `<button type="button" data-set="${name}" data-val="${v}" class="${sel[name] === v ? 'on' : ''}" aria-pressed="${sel[name] === v}">${esc(l)}</button>`).join('')}</div></div>`).join('')}</div>`;
+  }
+
+  // How much of the recording a study result covers (engine 3). A size too small for every main topic says so.
+  function coverageNote(kind, a) {
+    const cv = a?.content?.coverage;
+    if (!cv || !cv.topics) return '';
+    const more = kind === 'quiz' ? 'Long' : 'More';
+    if (cv.topics_covered < cv.topics) {
+      const missing = (cv.missing_topics || []).slice(0, 4).map((x) => `“${esc(x)}”`).join(', ');
+      return `<div class="ins-msg coverage-note warn"><span>Covers ${cv.topics_covered} of the ${cv.topics} main topics of this recording.${missing ? ` Not included: ${missing}.` : ''}${kind === 'study_guide' ? '' : ` Choose <b>${more}</b> for a fuller set.`}</span></div>`;
+    }
+    return `<p class="ins-sub coverage-note">Covers all ${cv.topics} main topic${cv.topics === 1 ? '' : 's'} of this recording${cv.core ? ` and ${cv.core_covered} of its ${cv.core} key ideas` : ''}.</p>`;
   }
 
   // the earlier version of flashcards / a quiz: kept, readable, and one click from an improved one
@@ -361,6 +388,7 @@ export function createToolsUI(api) {
     let html = `<div class="panel ins-card tool-view">
       <div class="tool-head"><button type="button" class="btn btn-ghost btn-sm" data-act="tools">← All tools</button><h3>${esc(info.label)}</h3></div>`;
     html += settingsHtml(kind, sel);
+    if (dialogTool) html += `<p class="ins-sub draft-switch">${kind === 'reply_draft' ? 'Drafting a reply.' : 'Drafting a follow-up email.'} <button type="button" class="tool-note-link" data-act="draft-other">${kind === 'reply_draft' ? 'Draft an email instead' : 'Draft a reply instead'}</button></p>`;
     if (dialogTool && a?.content) {
       html += `<div class="tool-setup-sum"><span>${a.settings?.instructions ? `You asked: “${esc(a.settings.instructions)}”` : 'Drafted from the recording only'}</span><button class="btn btn-ghost btn-sm" type="button" data-act="setup">New draft…</button></div>`;
     }
@@ -371,6 +399,7 @@ export function createToolsUI(api) {
     if (err && !busy) html += api.errorBox(err, 'regen', a?.content ? "The update didn't work; your previous version is still below." : "This couldn't be created.");
     if (a?.content) {
       if (info.draft) html += `<div class="ins-msg"><span><b>Draft.</b> Facts come from the recording${a.settings?.instructions ? ', plus what you asked for' : ''}. Check it before you send it; SparkScribe never sends anything for you.</span></div>`;
+      html += coverageNote(kind, a);
       html += `<div class="tool-body" data-kind="${kind}">${body(kind, a, byId)}</div>`;
       html += `<div class="tool-actions">
         <button class="btn btn-ghost btn-sm" type="button" data-act="copy">Copy</button>
@@ -380,11 +409,47 @@ export function createToolsUI(api) {
         <button class="btn btn-ghost btn-sm tool-del" type="button" data-act="delete">Delete ${esc(info.label)}</button>
       </div>`;
     } else if (!busy && !err) {
+      const lone = kind === 'interview_qa' ? loneSpeakerShare() : 0;
+      if (lone) html += `<div class="ins-msg"><span>This recording is mostly one speaker (${lone}% of the words), so it may have few real question-and-answer exchanges. Questions from the audience are listed in Notes.</span><button type="button" class="tool-note-link" data-goto="notes">Open Notes</button></div>`;
       const other = !dialogTool && api.artifactsOf(kind).some((x) => x.content);
       html += `<div class="ins-intro-row"><p>${esc(info.desc)}${desc ? ` <span class="ins-sub">(${esc(desc)})</span>` : ''}${other ? ' <span class="ins-sub">You have a version with other settings: switch back to see it.</span>' : ''}</p>
         <button class="btn btn-primary" type="button" data-act="${dialogTool ? 'setup' : 'create'}">${dialogTool ? `${kind === 'reply_draft' ? 'Draft a reply' : 'Draft an email'}…` : `Create ${esc(info.label)}`}</button></div>${api.privacyLine}`;
     }
     return html + '</div>';
+  }
+
+  // Draft: which kind? (a follow-up email after a meeting, or a reply to a message); each keeps its own drafts
+  function openDraftChooser() {
+    const t = api.type();
+    const first = t === 'voice_message' ? 'reply_draft' : 'followup_email';
+    const opt = (kind, title, line) => `<button type="button" class="draft-pick${kind === first ? ' first' : ''}" data-kind="${kind}"><b>${esc(title)}</b><span>${esc(line)}</span>${latest(kind) ? '<span class="ins-sub">You have drafts of this kind</span>' : ''}</button>`;
+    const { dlg, dismiss } = api.makeDialog('setup-dlg draft-dlg', `<div class="dlg-form">
+        <h3>What do you want to draft?</h3>
+        <div class="draft-picks">${[['followup_email', 'A follow-up email', 'After a meeting or call: recap, requests, next steps'], ['reply_draft', 'A reply', 'To a voice message or a conversation']].sort((x) => (x[0] === first ? -1 : 1)).map((x) => opt(...x)).join('')}</div>
+        <div class="confirm-actions"><button class="btn btn-ghost" type="button" data-act="cancel">Cancel</button></div>
+      </div>`);
+    dlg.querySelector('[data-act=cancel]').addEventListener('click', dismiss);
+    dlg.querySelectorAll('.draft-pick').forEach((b) => b.addEventListener('click', () => {
+      dismiss();
+      ui.tool = b.dataset.kind;
+      delete ui.sel[ui.tool];
+      api.refresh();
+      if (!latest(ui.tool)) openSetup(ui.tool);
+    }));
+    dlg.querySelector('.draft-pick.first')?.focus();
+  }
+
+  // share of words (%) of the main speaker when one speaker says nearly everything; else 0
+  function loneSpeakerShare() {
+    const words = new Map();
+    let total = 0;
+    for (const s of api.segById().values()) {
+      const n = String(s.text || '').split(/\s+/).filter(Boolean).length;
+      total += n;
+      if (s.speaker !== 'Unknown') words.set(s.speaker, (words.get(s.speaker) || 0) + n);
+    }
+    const top = Math.max(0, ...words.values());
+    return total && top / total >= 0.8 ? Math.round((top / total) * 100) : 0;
   }
 
   // Reply / email: the user writes what the draft should be about before anything is generated
@@ -445,7 +510,8 @@ export function createToolsUI(api) {
           ${list('Important relationships', c.relationships, (x) => `<li><span>${esc(x.text)}</span></li>`)}
           ${list('What the lecturer emphasised', c.emphasis, (x) => `<li><span>${esc(x.text)}</span>${ev(x.evidence)}${chips(x.refs)}</li>`)}
           ${list('Explicit exam information', c.exam_info, (x) => `<li><span>${esc(x.text)}</span>${ev(x.evidence)}${chips(x.refs)}</li>`, 'Only where the lecturer mentioned an exam, test, quiz or assignment.')}
-          ${list('Worth reviewing', c.review, (x) => `<li><span>${esc(x.text)}</span></li>`, 'Seems important — not tied to an exam in the recording.')}`;
+          ${list('Worth reviewing', c.review, (x) => `<li><span>${esc(x.text)}</span></li>`, 'Seems important — not tied to an exam in the recording.')}
+          ${c.self_check?.length ? `<section class="tool-sec"><h4>Check yourself</h4><ul class="ins-points self-check">${c.self_check.map((x) => `<li><details><summary>${esc(x.question)}</summary><p>${esc(x.answer)}</p>${chips(x.refs)}</details></li>`).join('')}</ul></section>` : ''}`;
       case 'definitions':
         return c.definitions?.length ? list('Key definitions', c.definitions, (x) => `<li><span><b>${esc(x.term)}</b>: ${esc(x.definition)}</span>${ev(x.evidence)}${chips(x.refs)}</li>`) : '<p class="ins-none">No terms were explicitly defined in this recording.</p>';
       case 'exam_points':
@@ -511,6 +577,7 @@ export function createToolsUI(api) {
         <span class="fc-text">${esc(d.flipped ? card.back : card.front)}</span>
         <span class="fc-hint">${d.flipped ? 'Tap to see the question' : 'Tap to reveal the answer'}</span>
       </button>
+      ${card.caution ? `<p class="item-caution" role="note">${esc(card.caution)}</p>` : ''}
       ${d.flipped && card.explanation ? `<details class="fc-more"><summary>Explain why</summary><p>${esc(card.explanation)}</p></details>` : ''}
       <div class="fc-src">${d.flipped && src ? `Explained at ${api.chips(card.refs, byId)}` : '&nbsp;'}</div>
       <div class="deck-nav">
@@ -562,7 +629,7 @@ export function createToolsUI(api) {
         <h3 class="study-title" id="quizTitle">Practice Quiz</h3>
         <p class="study-sub">Test yourself on this recording.</p>
         <div class="setup-grid">${ctl('size')}${ctl('difficulty')}${ctl('types')}</div>
-        ${legacy ? legacyNote('quiz', improved) : ''}
+        ${legacy ? legacyNote('quiz', improved) : coverageNote('quiz', a)}
         ${stale && !busy ? '<div class="ins-msg warn"><span>The transcript changed after these questions were written.</span><button class="btn btn-ghost btn-sm" type="button" data-act="regen">Update</button></div>' : ''}
         ${err && !busy ? api.errorBox(err, 'regen', n ? "New questions couldn't be written; your current quiz still works." : "The quiz couldn't be created.") : ''}
         ${busy ? api.loading(TOOL_INFO.quiz.loading) : `<button class="btn btn-primary study-start" type="button" data-act="start"${empty ? ' disabled' : ''}>Start Quiz <span aria-hidden="true">→</span></button>`}
@@ -621,6 +688,7 @@ export function createToolsUI(api) {
       <section class="study-card q-card">
         <p class="q-kind">${esc(kindLabel)}${run.kind === 'missed' ? ' · from your missed questions' : ''}</p>
         <h3 class="q-text" id="qText" tabindex="-1">${esc(q.question)}</h3>
+        ${q.caution ? `<p class="item-caution" role="note">${esc(q.caution)}</p>` : ''}
         ${answers}
         ${fb}
       </section>
@@ -723,6 +791,7 @@ export function createToolsUI(api) {
     }));
     p.querySelectorAll('[data-tool]').forEach((b) => b.addEventListener('click', () => {
       if (b.dataset.tool === 'export') return api.openExport();
+      if (b.dataset.tool === 'draft') return openDraftChooser();
       ui.tool = b.dataset.tool;
       delete ui.sel[ui.tool]; // start from the latest result's settings
       if (ui.tool === 'quiz') resumeSignal(current('quiz').a);
@@ -735,6 +804,12 @@ export function createToolsUI(api) {
     if (!kind) return;
     p.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => { selOf(kind)[b.dataset.set] = b.dataset.val; api.refresh(); }));
     p.querySelectorAll('[data-act="setup"]').forEach((b) => b.addEventListener('click', () => openSetup(kind)));
+    p.querySelector('[data-act="draft-other"]')?.addEventListener('click', () => {
+      ui.tool = kind === 'reply_draft' ? 'followup_email' : 'reply_draft';
+      delete ui.sel[ui.tool];
+      api.refresh();
+      if (!latest(ui.tool)) openSetup(ui.tool);
+    });
     const info = TOOL_INFO[kind];
     const settings = { ...selOf(kind) };
     const { key, a } = current(kind);

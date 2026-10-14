@@ -14,12 +14,12 @@ import { str, nullableStr, refs, evidence, obj, list } from './prompts.js';
 
 export const STUDY_ENGINE = 2;
 
-const enumOf = (values, description) => ({ type: 'string', enum: values, ...(description && { description }) });
+export const enumOf = (values, description) => ({ type: 'string', enum: values, ...(description && { description }) });
 export const CONCEPT_KINDS = ['definition', 'distinction', 'cause_effect', 'principle', 'argument', 'process', 'example', 'fact'];
 export const STANCES = ['own', 'attributed', 'criticized', 'hypothetical', 'quotation', 'report'];
 export const QUIZ_SKILLS = ['understanding', 'reasoning', 'application', 'distinction', 'relationship', 'cause_effect', 'misconception', 'recall'];
 
-const concept = obj({
+export const CONCEPT = obj({
   id: str('Short id: c1, c2, …'),
   name: str('The concept in a few words, as a student would name it'),
   kind: enumOf(CONCEPT_KINDS),
@@ -46,21 +46,21 @@ const MAP_RULES = `STEP 1 — KNOWLEDGE MAP (field "concepts"). Read the whole r
 - clarity: "unreliable" when the transcript there is garbled or ambiguous (automatic transcription makes mistakes).
 - evidence: exact words copied from one cited line. refs: the lines where the idea is EXPLAINED, not merely where a keyword first appears.`;
 
-const STYLE_RULES = `Writing rules for every question and answer:
+export const STYLE_RULES = `Writing rules for every question and answer:
 - Self-contained: a student reading it later, without the recording, knows exactly what is asked. Name the subject explicitly; no vague pronouns ("he", "it", "this") and no "the thing discussed".
 - Test understanding of an important idea, not the wording of a sentence. Do not turn a sentence into a question just because it exists.
 - Clean wording: never copy transcription errors or spoken filler into a question; don't quote the speaker unless the exact words matter.
 - Attribution: when participants disagree or make different proposals, say who held which view (with their code). When an idea belongs to a school, scholar, text or group, say so ("In the Keynesian view presented in the lecture, …", "According to the empiricist position the lecturer describes, …"). Never present an attributed or criticized position as a universal truth or as the speaker's own view. For a criticized view, ask about the criticism or the reason given against it.
 - Every claim must be supported by the recording. Do not add facts, reasons or examples the speakers did not give.`;
 
-function speakerNote({ dominant }) {
+export function speakerNote({ dominant }) {
   return dominant
     ? `\nSpeakers: ${dominant ? `{{${dominant}}} gives almost all of the content.` : ''} Refer to them as "the lecturer" (or "the speaker"), and focus on the ideas: never write "According to {{${dominant}}}" or "What did {{${dominant}}} say…". Name another speaker only when their contribution differs (a question, an objection, a disagreement), using their code in double braces, e.g. {{S2}}.`
     : '\nSpeakers: refer to a speaker only when it matters for meaning (who argued what, a disagreement), using their code in double braces, e.g. {{S2}}; otherwise focus on the ideas.';
 }
 
 // ---------------- Flashcards ----------------
-const FLASHCARD = obj({
+export const FLASHCARD = obj({
   concept: str('id of the concept this card tests'),
   front: str('The question'),
   back: str('The answer: the actual knowledge, self-contained'),
@@ -68,16 +68,16 @@ const FLASHCARD = obj({
   refs,
 });
 export const FLASHCARDS_SCHEMA = obj({
-  concepts: list(concept, 'The knowledge map, in the order taught'),
+  concepts: list(CONCEPT, 'The knowledge map, in the order taught'),
   cards: list(FLASHCARD, 'The flashcards, in the order taught'),
 });
 
-const FOCUS = {
+export const FOCUS = {
   essentials: 'FOCUS: essentials. Only core concepts; keep the deck short.',
   balanced: 'FOCUS: balanced. Core concepts first, then the supporting ideas needed to understand them.',
   deep: 'FOCUS: deep understanding. Prefer why / how / compare / apply questions on core and supporting concepts: reasons, mechanisms, distinctions, consequences, and applying a principle to a case the recording itself describes.',
 };
-const EXPLAIN = {
+export const EXPLAIN = {
   helpful: 'explanation: only when it adds understanding (a mechanism, an argument, why a distinction matters, the reasoning the speaker gave). Simple definitions and facts get null.',
   every: 'explanation: give one for every card where the recording offers any reasoning or context; null only when it offers none.',
   brief: 'Keep answers as short as complete answers can be. explanation: null except for complex arguments or mechanisms.',
@@ -104,7 +104,7 @@ Examples of the standard (other subjects, for illustration only):
 }
 
 // ---------------- Practice Quiz ----------------
-const QUESTION = obj({
+export const QUESTION = obj({
   concept: str('id of the concept this question tests'),
   type: enumOf(['multiple_choice', 'short_answer', 'true_false']),
   skill: enumOf(QUIZ_SKILLS, 'What the question tests'),
@@ -116,11 +116,11 @@ const QUESTION = obj({
   refs,
 });
 export const QUIZ_SCHEMA = obj({
-  concepts: list(concept, 'The knowledge map, in the order taught'),
+  concepts: list(CONCEPT, 'The knowledge map, in the order taught'),
   questions: list(QUESTION),
 });
 
-const QUIZ_TYPES = {
+export const QUIZ_TYPES = {
   mixed: 'Mostly multiple_choice, plus a few short_answer (answers of a few words). Use true_false only for a meaningful distinction or a common misconception the recording corrects — never to restate a sentence — and at most two.',
   multiple_choice: 'Only multiple_choice questions.',
   true_false: 'Only true_false questions. Each must test a meaningful distinction or a misconception (e.g. swapping two schools\' positions, reversing a cause and effect), never a sentence restated; a false statement must be clearly contradicted by the recording, not merely absent from it.',
@@ -310,7 +310,7 @@ export function validateFlashcards(c, segments, { count, dominant, rawConceptIds
     if (front !== rawFront) bump(quality, 'speaker_reference_fixed');
     perConcept.set(con.id, n + 1);
     seen.push(w);
-    out.push({ concept: con.id, front, back, explanation, refs: k.refs });
+    out.push({ concept: con.id, front, back, explanation, refs: k.refs, ...(k.caution && { caution: k.caution }) });
   }
   const over = Math.max(0, out.length - count);
   if (over) quality.over_limit = over;
@@ -342,7 +342,7 @@ export function validateQuiz(c, segments, { count, settings, dominant, rawConcep
     if (con.clarity === 'unreliable') { drop('unreliable_source', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
     if (wanted && q.type !== wanted) { drop('wrong_type', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
     if (vagueStart(question)) { drop('vague', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
-    const item = { concept: con.id, type: q.type, skill: QUIZ_SKILLS.includes(q.skill) ? q.skill : 'recall', question, answer, options: [], accept: [], explanation: q.explanation ? lecturerWord(String(q.explanation).trim(), dominant) : null, evidence: con.evidence, refs: q.refs };
+    const item = { concept: con.id, type: q.type, skill: QUIZ_SKILLS.includes(q.skill) ? q.skill : 'recall', question, answer, options: [], accept: [], explanation: q.explanation ? lecturerWord(String(q.explanation).trim(), dominant) : null, evidence: con.evidence, refs: q.refs, ...(q.caution && { caution: q.caution }) };
     if (q.type === 'multiple_choice') {
       const opts = [...new Map((q.options || []).map((o) => String(o).trim()).filter(Boolean).map((o) => [norm(o), o])).values()];
       const correct = opts.filter((o) => norm(o) === norm(answer));

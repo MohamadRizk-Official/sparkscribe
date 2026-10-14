@@ -51,6 +51,14 @@ ok(!R.sameBasis(base, R.transcriptBasis(now({ 1: 'Speaker 2' }))), 'a paragraph 
 ok(!R.sameBasis(base, R.transcriptBasis(lecture.map((s, i) => (i === 1 ? { ...s, text: 'The first school holds Z.' } : s)))), 'changed words: out of date');
 ok(!R.sameBasis(undefined, base), 'no fingerprint (older results): decided by version as before');
 
+// Ask answers: codes from the original labels, rebuilt from the transcript at any time
+const asked = seg([['Speaker 1', 'a'], ['Speaker 2', 'b'], ['Speaker 1', 'c']]).map((s) => ({ ...s, orig: s.speaker }));
+ok(R.origCodes(asked).get('Speaker 2') === 'S2', 'Ask codes follow the original labels in order of first appearance');
+const renamedAsk = asked.map((s) => (s.orig === 'Speaker 1' ? { ...s, speaker: 'Professor Ahmad' } : s));
+ok(R.renderAskSpeakers('{{S1}} answered {{S2}}.', renamedAsk) === 'Professor Ahmad answered Speaker 2.', 'an Ask answer shows the current names after a rename');
+ok(R.origCodes(renamedAsk).get('Speaker 1') === 'S1', 'renames never change the codes (they follow the original labels)');
+ok(R.renderAskSpeakers('As {{S2}} said, {{S', asked) === 'As Speaker 2 said, ', 'an unfinished code at the end of a streaming answer is hidden');
+
 // ---------- quality checks ----------
 ok(S.isCircular('What distinguishes mitosis from meiosis?', 'Mitosis is different from meiosis.'), 'circular: "Mitosis is different from meiosis"');
 ok(S.isCircular('Why should people evaluate what is said?', 'What was said.'), 'circular: "What was said"');

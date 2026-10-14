@@ -120,6 +120,75 @@ const maybeFail = () => {
   if (process.env.AI_MOCK_FAIL === '1') throw Object.assign(new Error('Mock provider failure'), { status: 502 });
 };
 
+// Study engine 3 steps. The section step finds the same five concepts as engine 2's mock (one good, one a school's
+// view, one trivia, one garbled, one with invented evidence); the writer returns good and bad items for the chosen
+// concepts, so every check still runs.
+function studyEngine3(base, step, text) {
+  const tag = (t) => (text.match(new RegExp(`<${t}>([\\s\\S]*?)</${t}>`)) || [, ''])[1];
+  if (base === 'studymap' && step === 'section') {
+    const lines = parseLines(tag('section'));
+    const L = (i) => lines[Math.min(i, lines.length - 1)] || { id: 0, text: '' };
+    const ev = (l) => firstSentence(l.text);
+    if (!lines.length) return { topics: [], concepts: [] };
+    const c = (id, name, kind, importance, stance, held_by, l, clarity = 'clear', evidence = ev(l)) => ({ id, topic: 'Mock topic', name, kind, importance, stance, held_by, summary: ev(l), reasoning: null, clarity, exam_words: null, evidence, refs: [l.id] });
+    return {
+      topics: [{ title: 'Mock topic', start_ref: L(0).id, educational: true }],
+      concepts: [
+        c('c1', 'Main idea', 'principle', 'core', 'own', null, L(0)),
+        c('c2', 'Second idea', 'definition', 'supporting', 'attributed', 'Mock School', L(1)),
+        c('c3', 'Trivia', 'fact', 'minor', 'report', null, L(0)),
+        c('c4', 'Garbled bit', 'fact', 'core', 'own', null, L(1), 'unreliable'),
+        c('c5', 'Invented', 'fact', 'core', 'own', null, L(0), 'clear', 'words nobody ever said in this recording'),
+      ],
+    };
+  }
+  if (base === 'studymap' && step === 'merge') {
+    const keys = [...tag('entries').matchAll(/^(s\d+\.c\d+) \| [^|]*\| (\w+)/gm)];
+    return { topics: [{ title: 'Mock topic', importance: 'major' }], concepts: keys.map((m) => ({ keys: [m[1]], name: m[1], importance: m[2], topic: 'Mock topic' })) };
+  }
+  if (step === 'compose') {
+    const ids = [...tag('map').matchAll(/"id": "(c\d+)"/g)].map((m) => m[1]);
+    const tids = [...tag('map').matchAll(/"id": "(t\d+)"/g)].map((m) => m[1]);
+    return { overview: '[Mock] What the recording teaches.', topic_summaries: tids.map((t) => ({ topic: t, summary: '[Mock] Topic summary.' })), self_check: ids.slice(0, 1).map((id) => ({ concept: id, question: 'Why does the main idea matter here?', answer: '[Mock] Because the recording explains it.' })) };
+  }
+  if (step === 'write') {
+    const concepts = JSON.parse(tag('concepts') || '[]');
+    const lines = parseLines(tag('transcript'));
+    const ev = (i) => firstSentence((lines[Math.min(i, lines.length - 1)] || { text: '' }).text);
+    const own = concepts.find((k) => k.stance === 'own'), att = concepts.find((k) => k.stance === 'attributed');
+    const w = words(ev(0))[0] || 'this';
+    if (base === 'flashcards') {
+      const cards = [];
+      if (own) cards.push(
+        { concept: own.id, front: `According to {{S1}}, why does the recording stress ${w}?`, back: ev(0), explanation: `Because ${ev(1)}`, refs: [] },
+        { concept: own.id, front: `Why does the recording stress ${w}?`, back: ev(0), explanation: null, refs: [] },
+        { concept: own.id, front: 'What did he say about it?', back: ev(0), explanation: null, refs: [] },
+        { concept: own.id, front: 'What distinguishes the first idea from the second?', back: 'The first idea is different from the second', explanation: null, refs: [] });
+      if (att) cards.push(
+        { concept: att.id, front: 'In the Mock School view, what is the second idea?', back: ev(1), explanation: ev(1), refs: [] },
+        { concept: att.id, front: 'What does the second idea describe?', back: 'Heads that like water and tails that avoid it', explanation: null, refs: [] });
+      return { cards };
+    }
+    const questions = [];
+    if (own) questions.push(
+      { concept: own.id, type: 'multiple_choice', skill: 'understanding', question: `According to {{S1}}, which statement best explains ${w}?`, options: [ev(0), ev(1), ev(2), ev(0).split(' ').reverse().join(' ')], answer: ev(0), accept: [], explanation: `The recording explains it this way: ${ev(1)}`, refs: [] },
+      { concept: own.id, type: 'true_false', skill: 'recall', question: 'The recording has a first line.', options: ['True', 'False'], answer: 'true', accept: [], explanation: null, refs: [] },
+      { concept: own.id, type: 'multiple_choice', skill: 'reasoning', question: 'Which option is obviously the longest one here?', options: ['This correct option is very much longer than every one of the other options listed', 'Short', 'Brief', 'Tiny'], answer: 'This correct option is very much longer than every one of the other options listed', accept: [], explanation: null, refs: [] });
+    if (att) questions.push(
+      { concept: att.id, type: 'true_false', skill: 'misconception', question: 'In the Mock School view, the second idea is the opposite of the first.', options: ['True', 'False'], answer: 'false', accept: [], explanation: 'The Mock School view presents it as a definition, not as an opposite of the first idea.', refs: [] },
+      { concept: att.id, type: 'multiple_choice', skill: 'recall', question: 'In the Mock School view, which of these applies?', options: ['One', 'Two', 'All of the above', 'Three'], answer: 'One', accept: [], explanation: null, refs: [] },
+      { concept: att.id, type: 'short_answer', skill: 'recall', question: `What does the Mock School call the idea about ${w}?`, options: [], answer: words(ev(1))[0] || 'x', accept: [], explanation: null, refs: [] });
+    return { questions };
+  }
+  if (step === 'verify') {
+    const n = [...text.matchAll(/<item index="(\d+)">/g)].length;
+    // AI_MOCK_VERIFY=drop0: the check rejects the first item; =fix0: it rewrites its answer
+    const mode = process.env.AI_MOCK_VERIFY || '';
+    return { checks: Array.from({ length: n }, (_, i) => ({ index: i, matches: true, supported: !(mode === 'drop0' && i === 0), explanation_supported: true, attribution_ok: true, distractors_ok: true, uncertain_terms: [], drop: false, fixed_question: null, fixed_answer: mode === 'fix0' && i === 0 ? '[Mock] A corrected answer that matches the question.' : null, fixed_explanation: null, fixed_options: [] })) };
+  }
+  return {};
+}
+
 export function mockProvider() {
   return {
     name: 'mock',
@@ -137,7 +206,8 @@ export function mockProvider() {
       }
       let json;
       const [base, step] = String(task).split(':');
-      if (step === 'fill') {
+      if (base === 'studymap' || ['write', 'verify', 'compose'].includes(step)) json = studyEngine3(base, step, text);
+      else if (step === 'fill') {
         // coverage pass: items for exactly the concepts it was asked about
         const ids = new Set([...((text.match(/<concepts>([\s\S]*?)<\/concepts>/) || [, '[]'])[1].matchAll(/"id": "([^"]+)"/g))].map((m) => m[1]));
         const all = structured(base, parseLines(text));

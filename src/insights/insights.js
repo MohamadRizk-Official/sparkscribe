@@ -11,7 +11,7 @@ import { watchNames, renameInText } from '../lib/speaker-names.js';
 import { cleanText } from '../lib/clean.js';
 import { supabase } from '../lib/supabase.js';
 import { normalizeToolSettings, describeSettings, ENGINE2_TOOLS, isEngine2Key } from '../lib/tool-settings.js';
-import { resolveContent, transcriptBasis, sameBasis } from '../lib/speaker-refs.js';
+import { resolveContent, transcriptBasis, sameBasis, renderAskSpeakers } from '../lib/speaker-refs.js';
 import { makeDialog } from '../library/dialogs.js';
 import { mascotSignal } from '../mascot/bus.js';
 import { fmtClock, splitCitations, RECORDING_TYPES, RECORDING_TYPE_LABEL, normalizeRecordingType, isNotFound, refersToPlayback } from '../lib/segments.js';
@@ -123,8 +123,23 @@ const STARTERS = {
  *   typeSlot() → element for the compact recording-type control (in the page header)
  */
 export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
+  // Summary / Notes results refer to speakers by code ({{S1}}): they are read back with each speaker's current name
+  // (lib/speaker-refs.js). The stored result is never changed.
+  const resolvedIns = new WeakMap();
+  const showIns = (i) => {
+    if (!i?.content?.speakers) return i;
+    const segs = ctx.getSegments();
+    const sig = segs.map((s) => s.speaker).join('\n');
+    let m = resolvedIns.get(i.content);
+    if (!m || m.sig !== sig) resolvedIns.set(i.content, (m = { sig, content: resolveContent(i.content, segs) }));
+    return { ...i, content: m.content };
+  };
+  class InsightMap extends Map {
+    get(k) { return showIns(super.get(k)); }
+    *values() { for (const v of super.values()) yield showIns(v); }
+  }
   const st = {
-    tab: 'transcript', loaded: false, loadingState: false, contentVersion: null, insights: new Map(), questions: [],
+    tab: 'transcript', loaded: false, loadingState: false, contentVersion: null, insights: new InsightMap(), questions: [],
     busy: new Map(), errors: new Map(), stateError: null, notConfigured: false, ask: null, autoDone: false,
     artifacts: new Map(), // Create tab outputs, keyed "kind|settingsKey"
   };
@@ -204,7 +219,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     try {
       const s = await fetchState(id);
       st.contentVersion = s.contentVersion;
-      st.insights = new Map(s.insights.map((i) => [key(i.kind, i.recordingType), i]));
+      st.insights = new InsightMap(s.insights.map((i) => [key(i.kind, i.recordingType), i]));
       st.questions = s.questions;
       st.artifacts = new Map((s.artifacts || []).map((a) => [akey(a.kind, a.settingsKey), a]));
       st.loaded = true;
@@ -364,7 +379,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     return `<div class="ins-msg bad">${ICON.warn}<span>${esc(lead + detail)} Try again.</span><button class="btn btn-ghost btn-sm" type="button" data-act="${retryAct}">Try again</button></div>`;
   }
   function staleBox(i, act) {
-    if (st.contentVersion == null || i.sourceVersion >= st.contentVersion) return '';
+    if (!isStale(i)) return '';
     return `<div class="ins-msg warn">${ICON.refresh}<span>The transcript changed after this was generated (for example, a speaker was renamed), so it may be out of date.</span><button class="btn btn-ghost btn-sm" type="button" data-act="${act}">Update</button></div>`;
   }
 
@@ -562,7 +577,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     const busy = parts.some(busyOf);
     const errKinds = parts.filter((k) => !busyOf(k) && errOf(k));
     const missing = parts.filter((k) => !ready(k) && !busyOf(k));
-    const stale = [ins && 'insights', nt && 'notes'].filter((k) => k && st.contentVersion != null && ready(k).sourceVersion < st.contentVersion);
+    const stale = [ins && 'insights', nt && 'notes'].filter((k) => k && isStale(ready(k)));
     let html = '<div class="panel ins-card notes-card">';
     if (busy) html += loading('Organizing your notes');
     if (errKinds.length) html += errorBox(errOf(errKinds[0]), 'notes-retry', "Part of your notes couldn't be created.");
@@ -607,9 +622,9 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   function answerHtml(q, byId) {
     // older answers may be the generic "not found" sentence; newer ones say what wasn't mentioned
     if (isNotFound(q.answer) || !q.answer) return `<div class="ask-a nf"><p>${esc(q.answer || "I couldn't find that in this recording.")}</p></div>`;
-    if (!q.found) return `<div class="ask-a">${rich(q.answer, byId)}</div>`;
+    if (!q.found) return `<div class="ask-a">${rich(renderAskSpeakers(q.answer, ctx.getSegments()), byId)}</div>`;
     const unsupported = !(q.refs || []).length;
-    return `<div class="ask-a">${rich(q.answer, byId)}${unsupported ? '<p class="ask-warn">No supporting passage was cited. Check the transcript before relying on this.</p>' : ''}${q.sourceVersion != null && st.contentVersion != null && q.sourceVersion < st.contentVersion ? '<p class="ask-warn">Answered before the transcript was last changed.</p>' : ''}</div>`;
+    return `<div class="ask-a">${rich(renderAskSpeakers(q.answer, ctx.getSegments()), byId)}${unsupported ? '<p class="ask-warn">No supporting passage was cited. Check the transcript before relying on this.</p>' : ''}${q.sourceVersion != null && st.contentVersion != null && q.sourceVersion < st.contentVersion ? '<p class="ask-warn">Answered before the transcript was last changed.</p>' : ''}</div>`;
   }
   function renderAsk() {
     const p = panels.ask;
@@ -624,7 +639,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     const thread = st.questions.map((q) => `<div class="ask-turn"><div class="ask-q">${esc(q.question)}</div>${answerHtml(q, byId)}</div>`).join('');
     const live = pending ? `<div class="ask-turn"><div class="ask-q">${esc(pending.question)}</div>${
       pending.error ? `<div class="ask-a">${errorBox(pending.error, 'ask-retry', "The answer couldn't be generated.")}</div>`
-      : pending.text ? `<div class="ask-a streaming">${rich(pending.text, byId)}</div>`
+      : pending.text ? `<div class="ask-a streaming">${rich(renderAskSpeakers(pending.text, ctx.getSegments()), byId)}</div>`
       : `<div class="ask-a thinking" role="status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${pending.status === 'searching' ? 'Finding the moments that answer this…' : 'Writing the answer…'}</span></div>`}</div>` : '';
     const empty = !(thread || live);
     p.innerHTML = `<div class="panel ins-card ask-card${empty ? ' is-empty' : ''}">
@@ -763,6 +778,18 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
         return STRUCTURED_FIRST.has(t) ? [...structured, ...topics] : [...topics, ...structured];
       } },
     ];
+    // shareable episode notes put together from the Summary and Notes already made (no AI): summary, chapter
+    // outline, takeaways, and quotes word for word from the transcript
+    if (ov && ['podcast', 'interview', 'general'].includes(t)) {
+      const takeaways = ins?.content?.key_takeaways?.length ? ins.content.key_takeaways : ov.content.key_points || [];
+      const quotes = ins?.content?.notable_quotes || [];
+      sources.push({ id: 'episode_notes_export', group: 'From this recording', label: 'Episode notes', ready: true, note: 'from Summary and Notes', blocks: () => [
+        { t: 'h', text: 'Episode summary' }, { t: 'p', text: ov.content.short_summary },
+        ...(ov.content.chapters?.length ? [{ t: 'h', text: 'Chapter outline' }, ...ov.content.chapters.map((c) => ({ t: 'li', text: `${c.title} — ${c.summary}`, time: timeOf([c.start_ref]) }))] : []),
+        ...(takeaways.length ? [{ t: 'h', text: 'Key takeaways' }, ...takeaways.map((k) => ({ t: 'li', text: k.text, time: timeOf(k.refs) }))] : []),
+        ...(quotes.length ? [{ t: 'h', text: 'Quotes (from the automatic transcript)' }, ...quotes.map((q) => ({ t: 'quote', text: `“${q.quote}”${q.speaker ? ` — ${q.speaker}` : ''}`, time: timeOf(q.refs) }))] : []),
+      ] });
+    }
     for (const kind of toolsFor(t).tools) {
       const found = [...st.artifacts.values()].filter((a) => a.kind === kind && a.content);
       if (!found.length && signedIn) sources.push({ id: `tool:${kind}:`, group: 'Created', label: TOOL_INFO[kind].label, ready: false });

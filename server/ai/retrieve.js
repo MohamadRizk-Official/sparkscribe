@@ -116,12 +116,12 @@ export function selectContext(segments, { question, keywords = [], at = null, pr
 }
 
 // Lines for the prompt, with "…" where the excerpts skip part of the recording.
-export function formatExcerpts(segments, ids) {
+export function formatExcerpts(segments, ids, line = modelLine) {
   const out = [];
   let prev = null;
   for (const id of ids) {
     if (prev != null && id !== prev + 1) out.push('…');
-    out.push(modelLine(segments[id]));
+    out.push(line(segments[id]));
     prev = id;
   }
   return out.join('\n');

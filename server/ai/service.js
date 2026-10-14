@@ -22,10 +22,11 @@ import { GRADE_SYSTEM, GRADE_SCHEMA, gradeInstructions, ANALYST_SYSTEM, ASK_SYST
 import { groundStructured, groundChapters, groundAnswer } from './grounding.js';
 import { TOOLS, ARTIFACT_KINDS, normalizeSettings, cardCount, questionCount, examBacked } from './tools.js';
 import { FILL_SCHEMA, fillInstructions, uncoveredConcepts, inheritRefs } from './study.js';
+import { studyItems, studyGuide } from './studyrun.js';
 import { INSTRUCTIONS_MISSING } from '../../src/lib/tool-settings.js';
 import { selectContext, needsRetrieval, formatExcerpts } from './retrieve.js';
 import { segmentsFromRow, modelLine, estimateTokens, normalizeRecordingType, RECORDING_TYPES, isNotFound, refersToPlayback, isFollowUp, fmtClock } from '../../src/lib/segments.js';
-import { speakerTable, dominantSpeaker, codedLine, tokenizeSpeakers, transcriptBasis, sameBasis, renderSpeakers } from '../../src/lib/speaker-refs.js';
+import { speakerTable, dominantSpeaker, codedLine, tokenizeSpeakers, transcriptBasis, sameBasis, renderSpeakers, origCodes, origResolver } from '../../src/lib/speaker-refs.js';
 
 const PART_TOKENS = 80_000;
 // A request that started a generation and then died (function timeout, closed tab) leaves the row "generating".
@@ -158,26 +159,26 @@ async function analyze({ task, schema, instructions, row, segments, meter, speak
   return { json: r.json, model: r.model, usage };
 }
 
-async function generateOverview(row, segments, _type, meter) {
+async function generateOverview(row, segments, _type, meter, speakers) {
   const minutes = (row.duration_seconds || segments.at(-1)?.end || 0) / 60;
   const withChapters = minutes >= CHAPTER_MIN_MINUTES && segments.length >= 6;
-  const r = await analyze({ task: 'overview', schema: OVERVIEW_SCHEMA, instructions: overviewInstructions({ minutes, withChapters }), row, segments, meter });
+  const r = await analyze({ task: 'overview', schema: OVERVIEW_SCHEMA, instructions: overviewInstructions({ minutes, withChapters }), row, segments, meter, speakers });
   const { content, dropped } = groundStructured({ short_summary: r.json.short_summary, key_points: r.json.key_points }, segments);
   const rawChapters = withChapters ? (r.json.chapters || []).length : 0;
   content.chapters = withChapters ? groundChapters(r.json.chapters, segments) : [];
   return { ...r, content, dropped: dropped + Math.max(0, rawChapters - content.chapters.length) };
 }
 
-async function generateDetailedSummary(row, segments, type, meter) {
-  const r = await analyze({ task: 'detailed_summary', schema: DETAILED_SCHEMA, instructions: detailedInstructions(type), row, segments, meter });
+async function generateDetailedSummary(row, segments, type, meter, speakers) {
+  const r = await analyze({ task: 'detailed_summary', schema: DETAILED_SCHEMA, instructions: detailedInstructions(type), row, segments, meter, speakers });
   const { content, dropped } = groundStructured(r.json, segments);
   content.sections = content.sections.filter((s) => s.points.length);
   return { ...r, content, dropped };
 }
 
-async function generateInsights(row, segments, type, meter) {
+async function generateInsights(row, segments, type, meter, speakers) {
   const spec = INSIGHT_SPECS[type] || INSIGHT_SPECS.general;
-  const r = await analyze({ task: `insights:${type}`, schema: spec.schema, instructions: spec.instructions, row, segments, meter });
+  const r = await analyze({ task: `insights:${type}`, schema: spec.schema, instructions: spec.instructions, row, segments, meter, speakers });
   const { content, dropped } = groundStructured(r.json, segments);
   let moved = 0;
   if (type === 'lecture' && Array.isArray(content.exam_points)) {
@@ -192,8 +193,8 @@ async function generateInsights(row, segments, type, meter) {
   return { ...r, content, dropped: dropped + moved };
 }
 
-async function generateNotes(row, segments, type, meter) {
-  const r = await analyze({ task: 'notes', schema: NOTES_SCHEMA, instructions: notesInstructions(type), row, segments, meter });
+async function generateNotes(row, segments, type, meter, speakers) {
+  const r = await analyze({ task: 'notes', schema: NOTES_SCHEMA, instructions: notesInstructions(type), row, segments, meter, speakers });
   const { content, dropped } = groundStructured(r.json, segments);
   const ids = new Set(segments.map((s) => s.id));
   content.sections = content.sections
@@ -286,31 +287,50 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
       codeOf: speakers.codeOf,
       dominant: dominantSpeaker(speakers.shares),
     };
-    const instructions = tool.instructions(ctx) + (tool.focusNote?.[normalized.focus] || '');
-    const r = await analyze({
-      task: tool.task, schema: tool.schema, instructions, row, segments, meter, speakers,
-      mergeNote: tool.engine ? ' Concept ids from different parts may clash: give every concept a unique id and update the items that point to it.' : '',
-    });
-    tool.beforeGrounding?.(r.json);
-    if (tool.itemsKey) ctx.rawConceptIds = new Set((r.json?.concepts || []).map((k) => String(k?.id)));
-    const g = groundStructured(r.json, segments);
-    g.content = tokenizeSpeakers(g.content, speakers.codeOf);
-    const firstPass = tool.itemsKey ? structuredClone(g.content[tool.itemsKey] || []) : null;
-    let extra = tool.validate(g.content, segments, ctx) || 0;
-    // coverage pass (study engine 2): core concepts still without an item get one more, small call
-    if (tool.itemsKey) {
-      // untested concepts while the ceiling allows: core first, then supporting (never minor or unreliable)
-      const room = ctx.count - g.content[tool.itemsKey].length;
-      const missing = uncoveredConcepts(g.content.concepts, g.content[tool.itemsKey], { supporting: true }).slice(0, Math.max(0, room));
-      // only while time is left: api/tools may run 300 s in all (vercel.json), the main call up to 170 s
-      if (missing.length && g.content[tool.itemsKey].length < ctx.count && Date.now() - started < 150_000) {
-        const filled = await fillCoverage({ kind, tool, missing, row, segments, speakers, ctx, meter, usage: r.usage });
-        if (filled.length) {
-          // the whole set is checked again, so duplicates and limits apply across both passes
-          g.content[tool.itemsKey] = [...firstPass, ...filled];
-          delete g.content.quality;
-          extra = tool.validate(g.content, segments, ctx) || 0;
-          g.content.quality.filled = g.content[tool.itemsKey].filter((x) => missing.some((m) => String(m.id) === x.concept)).length;
+    let g, r, extra = 0;
+    if (tool.engine === 3) {
+      // study engine 3 (studyrun.js): several smaller calls, metered one by one, results summed here
+      r = { usage: { input: 0, output: 0 }, model: null };
+      const call = async ({ task, schema, body, instructions }) => {
+        const ai = getProvider();
+        const x = await meter.call(task, () => ai.complete({
+          task, ...taskConfig(task), system: ANALYST_SYSTEM, schema,
+          messages: [{ role: 'user', content: [{ type: 'text', text: `${codedHeader(row, segments, speakers)}${body ? `\n${body}` : ''}` }, { type: 'text', text: instructions }] }],
+        }));
+        r.usage.input += x.usage.input; r.usage.output += x.usage.output; r.model = x.model;
+        return x;
+      };
+      const args = { kind, tool, db, transcriptionId, segments, speakers, basis, ctx, call, started };
+      const out = kind === 'study_guide' ? await studyGuide(args) : await studyItems(args);
+      g = { content: out.content, dropped: 0 };
+      extra = Object.entries(out.content.quality || {}).filter(([k]) => !['kept', 'selected', 'sections', 'map_reused', 'ideas', 'filled', 'core_uncovered', 'explanation_removed', 'speaker_reference_fixed', 'cautions', 'unseen_names', 'verify_fixed', 'unmapped'].includes(k)).reduce((n, [, v]) => n + (Number(v) || 0), 0);
+    } else {
+      const instructions = tool.instructions(ctx) + (tool.focusNote?.[normalized.focus] || '');
+      r = await analyze({
+        task: tool.task, schema: tool.schema, instructions, row, segments, meter, speakers,
+        mergeNote: tool.engine ? ' Concept ids from different parts may clash: give every concept a unique id and update the items that point to it.' : '',
+      });
+      tool.beforeGrounding?.(r.json);
+      if (tool.itemsKey) ctx.rawConceptIds = new Set((r.json?.concepts || []).map((k) => String(k?.id)));
+      g = groundStructured(r.json, segments);
+      g.content = tokenizeSpeakers(g.content, speakers.codeOf);
+      const firstPass = tool.itemsKey ? structuredClone(g.content[tool.itemsKey] || []) : null;
+      extra = tool.validate(g.content, segments, ctx) || 0;
+      // coverage pass (study engine 2): core concepts still without an item get one more, small call
+      if (tool.itemsKey) {
+        // untested concepts while the ceiling allows: core first, then supporting (never minor or unreliable)
+        const room = ctx.count - g.content[tool.itemsKey].length;
+        const missing = uncoveredConcepts(g.content.concepts, g.content[tool.itemsKey], { supporting: true }).slice(0, Math.max(0, room));
+        // only while time is left: api/tools may run 300 s in all (vercel.json), the main call up to 170 s
+        if (missing.length && g.content[tool.itemsKey].length < ctx.count && Date.now() - started < 150_000) {
+          const filled = await fillCoverage({ kind, tool, missing, row, segments, speakers, ctx, meter, usage: r.usage });
+          if (filled.length) {
+            // the whole set is checked again, so duplicates and limits apply across both passes
+            g.content[tool.itemsKey] = [...firstPass, ...filled];
+            delete g.content.quality;
+            extra = tool.validate(g.content, segments, ctx) || 0;
+            g.content.quality.filled = g.content[tool.itemsKey].filter((x) => missing.some((m) => String(m.id) === x.concept)).length;
+          }
         }
       }
     }
@@ -397,8 +417,10 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
   const fromStorage = async (insight) => { await meter.finish({ cached: true }); return { insight: publicInsight(insight), cached: true }; };
 
   const existing = await db.getInsight(transcriptionId, kind, type);
+  // as for Create results: current for this version, or for a later one that only renamed speakers
+  const basis = transcriptBasis(segments);
   if (existing) {
-    const fresh = existing.source_version === version;
+    const fresh = existing.source_version === version || sameBasis(existing.content?.basis, basis);
     if (existing.status === 'ready' && fresh && !force) return fromStorage(existing);
     if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < INSIGHT_TAKEOVER_MS) {
       return fromStorage(existing); // someone else is already generating it
@@ -411,7 +433,10 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
   if (!claimed) return fromStorage(await db.getInsight(transcriptionId, kind, type));
 
   try {
-    const r = await GENERATORS[kind](row, segments, type, meter);
+    // speakers as codes ({{S1}}), shown with their current names (lib/speaker-refs.js)
+    const speakers = speakerTable(segments);
+    const r = await GENERATORS[kind](row, segments, type, meter, speakers);
+    r.content = { ...tokenizeSpeakers(r.content, speakers.codeOf), speakers: speakers.table, basis };
     const saved = await db.finishInsight(claimed.id, { content: r.content, model: r.model, usage: r.usage });
     // "passed" = every item the model returned pointed at real lines (nothing had to be dropped)
     await meter.finish({ groundingPassed: r.dropped === 0, droppedItems: r.dropped });
@@ -500,13 +525,20 @@ export async function askTranscript(db, { transcriptionId, question, at = null, 
     ? `<outline note="orientation only — cite transcript lines, not this outline">\n${overview.short_summary}\n${(overview.chapters || []).map((c) => `- ${c.title} (from line ${c.start_ref})`).join('\n')}\n</outline>\n`
     : '';
   const scope = ctx.mode === 'full' ? 'The complete transcript' : 'Excerpts of the transcript selected as relevant to the question ("…" marks skipped parts)';
+  // speakers by code, numbered from their original labels (kept through renames), so the stored answer can show
+  // current names later without a table (lib/speaker-refs.js, origCodes)
+  const askCodes = origCodes(segments);
+  const nowName = origResolver(segments);
+  const askLine = (s) => `[${s.id}] ${fmtClock(s.start)} ${askCodes.get(s.orig || s.speaker) || 'Unknown'}: ${s.text}`;
+  const mins = Math.round((row.duration_seconds || segments.at(-1)?.end || 0) / 60);
+  const askHeader = `Recording length: about ${mins} minute${mins === 1 ? '' : 's'}. Speakers, shown in the transcript by code: ${[...askCodes.values()].map((c) => `${c} = "${nowName(c)}"`).join(', ') || 'unknown'}. When your answer refers to a speaker, write their code in double braces, e.g. {{S1}}; the app shows the current name there.`;
   const position = deictic ? `\nThe user is currently at ${Math.floor(at / 60)}:${String(Math.floor(at % 60)).padStart(2, '0')} in the recording; "this part" refers to the lines around that time.` : '';
 
   const messages = [];
   for (const h of history) messages.push({ role: 'user', content: `<question>\n${h.question}\n</question>` }, { role: 'assistant', content: h.answer });
   messages.push({
     role: 'user',
-    content: `${transcriptHeader(row, segments)}\n${outline}<excerpts>\n${scope}:\n${formatExcerpts(segments, ctx.ids)}\n</excerpts>${position}\n\n<question>\n${question}\n</question>`,
+    content: `${askHeader}\n${outline}<excerpts>\n${scope}:\n${formatExcerpts(segments, ctx.ids, askLine)}\n</excerpts>${position}\n\n<question>\n${question}\n</question>`,
   });
 
   emit({ type: 'status', status: 'answering' });
@@ -519,6 +551,9 @@ export async function askTranscript(db, { transcriptionId, question, at = null, 
   }
   usageIn += r.usage.input; usageOut += r.usage.output;
   const g = groundAnswer(r.text, ctx.ids);
+  // speakers as codes in the stored answer; "Speaker 2" written out by the model becomes its code too
+  const labelCodes = new Map([...askCodes].map(([, code]) => [nowName(code), code]));
+  g.answer = tokenizeSpeakers({ a: g.answer }, labelCodes).a;
   // "passed" = no citation of a line the model wasn't given, and a found answer cites at least one line
   await meter.finish({ groundingPassed: g.invalidCitations === 0 && !g.unsupported, droppedItems: g.invalidCitations });
   const saved = await db.saveQuestion({

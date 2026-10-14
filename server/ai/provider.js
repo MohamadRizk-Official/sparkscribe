@@ -23,6 +23,8 @@ const TASKS = {
   // and takes longer: up to ~2 minutes for a 90-minute lecture (api/tools may run 300 s; a coverage pass may follow)
   flashcards: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000, timeoutMs: 170_000 },
   quiz: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000, timeoutMs: 170_000 },
+  // study engine 3: one call per section of the recording (in parallel), then merging the sections' maps
+  studymap: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 16000, timeoutMs: 120_000 },
   definitions: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 8000 },
   exam_points: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 8000 },
   meeting_recap: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000 },

@@ -5,6 +5,7 @@
 // they had to drop, so the usage log shows how often the model needed correcting.
 import { str, nullableStr, refs, evidence, obj, list, point, decision, actionItem, dateItem, quote, DECISION_RULE, ACTION_RULE } from './prompts.js';
 import { normalizeToolSettings, quizQuestionCount } from '../../src/lib/tool-settings.js';
+import { STUDY_ENGINE_3 } from './studymap.js';
 import { STUDY_ENGINE, FLASHCARDS_SCHEMA, QUIZ_SCHEMA, flashcardInstructions, quizInstructions, inheritRefs, validateFlashcards, validateQuiz } from './study.js';
 
 const int = (description) => ({ type: 'integer', ...(description && { description }) });
@@ -80,8 +81,10 @@ const GROUNDED = 'Everything must come from this recording only. Do not add text
 
 // ---------- the tools ----------
 export const TOOLS = {
+  // study engine 3 (studyrun.js): built from the shared study map
   study_guide: {
     task: 'study_guide',
+    engine: STUDY_ENGINE_3,
     schema: obj({
       overview: str('2–4 sentences: what this lecture covered'),
       topics: list(topic, 'Major topics in the order taught'),
@@ -126,10 +129,11 @@ Return empty lists for sections the lecture doesn't support.`,
     after: (c, segments) => { c.topics = fixStarts(c.topics, segments); },
   },
 
-  // Study engine 2 (server/ai/study.js): a knowledge map first, then cards / questions only from what matters
+  // Study engine 3 (server/ai/studymap.js, studyrun.js): section-by-section study map, then items chosen to cover it;
+  // the checks in study.js (engine 2) still run on every item
   flashcards: {
     task: 'flashcards',
-    engine: STUDY_ENGINE,
+    engine: STUDY_ENGINE_3,
     schema: FLASHCARDS_SCHEMA,
     instructions: flashcardInstructions,
     itemsKey: 'cards',
@@ -139,7 +143,7 @@ Return empty lists for sections the lecture doesn't support.`,
 
   quiz: {
     task: 'quiz',
-    engine: STUDY_ENGINE,
+    engine: STUDY_ENGINE_3,
     schema: QUIZ_SCHEMA,
     instructions: quizInstructions,
     itemsKey: 'questions',

@@ -1209,7 +1209,7 @@ const insights = mountInsights({
     isSignedIn: () => Boolean(isConfigured && session),
     signIn: (mode) => signInToSave(mode),
     saving: () => ['saving', 'pending', 'syncing'].includes(save.status),
-    getSegments: () => (state?.lines || []).map((l, i) => ({ id: i, start: l.start, end: l.end, speaker: spk(l.speaker).name, text: l.text })),
+    getSegments: () => (state?.lines || []).map((l, i) => ({ id: i, start: l.start, end: l.end, speaker: spk(l.speaker).name, orig: spk(l.speaker).orig || spk(l.speaker).name, text: l.text })),
     seek: (t) => seek(t, true),
     playbackTime: () => (els.player.getAttribute('src') ? els.player.currentTime || 0 : null),
     getRecordingType: () => state?.recordingType || null,

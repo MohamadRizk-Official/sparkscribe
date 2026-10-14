@@ -2,7 +2,10 @@
 // current one, with the real model, then objective measures (metrics.mjs) for each result.
 //
 //   node qa/ai-eval/run.mjs [--engines old,new] [--tools flashcards,quiz] [--cases id,…]
-//                           [--private path/to/segments.json] [--out dir] [--old-commit 96a1ebc]
+//                           [--private path/to/segments.json] [--reference path/to/reference.json] [--repeat N]
+//                           [--out dir] [--old-commit 96a1ebc]
+// --reference: an independently written list of the recording's important concepts (metrics.referenceCoverage);
+// --repeat: run each case N times (stability: does the engine find the same concepts every time?).
 //
 // Uses ANTHROPIC_API_KEY (from the environment or .env.local; never printed). Costs a few cents per full run.
 // Results go to qa/out/ai-eval (git-ignored). A --private recording (a real transcript) is read from outside the
@@ -12,7 +15,7 @@ import { execSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CASES, segmentsOf } from './fixtures.mjs';
-import { measure } from './metrics.mjs';
+import { measure, referenceCoverage } from './metrics.mjs';
 import { memoryStore } from '../../tests/memory-store.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -23,6 +26,8 @@ const only = arg('cases', '') ? arg('cases').split(',') : null;
 const privatePath = arg('private', '');
 const out = resolve(arg('out', resolve(ROOT, 'qa/out/ai-eval')));
 const oldCommit = arg('old-commit', '96a1ebc');
+const reference = arg('reference', '') ? JSON.parse(readFileSync(arg('reference'), 'utf8')) : null;
+const repeat = Number(arg('repeat', '1')) || 1;
 mkdirSync(out, { recursive: true });
 
 if (!process.env.ANTHROPIC_API_KEY) {
@@ -60,23 +65,28 @@ if (privatePath) {
 const rows = [];
 for (const c of cases) {
   for (const engine of engines) {
-    for (const kind of tools) {
+    for (let n = 1; n <= repeat; n++) {
+      // one store per run: the tools of a run share it (so the quiz reuses the flashcards' study map, as in the app)
       const db = memoryStore();
       const T = '44444444-4444-4444-8444-444444444444';
       db.seed({ id: T, title: c.title, duration_seconds: Math.round(c.minutes * 60), transcript_text: 'x', segments: c.segments, recording_type: c.type });
-      usage = [];
-      const t0 = Date.now();
-      let content = null, error = null;
-      try { content = (await svcOf[engine].generateArtifact(db, { transcriptionId: T, kind })).artifact.content; } catch (e) { error = e.message; }
-      const ms = Date.now() - t0;
-      const calls = usage.filter((u) => !u.cached);
-      const cost = calls.reduce((s, u) => s + (u.actualCostUsd ?? u.estimatedCostUsd ?? 0), 0);
-      const tokens = { input: calls.reduce((s, u) => s + (u.inputTokens || 0), 0), output: calls.reduce((s, u) => s + (u.outputTokens || 0), 0) };
-      const m = content ? measure(kind, content, c) : {};
-      const row = { case: c.id, engine, kind, error, seconds: Math.round(ms / 100) / 10, costUsd: Math.round(cost * 1e6) / 1e6, ...tokens, ...m, quality: content?.quality || null };
-      rows.push(row);
-      writeFileSync(resolve(out, `${c.id}.${engine}.${kind}.json`), JSON.stringify({ row, content }, null, 1));
-      log(`${c.id.padEnd(22)} ${engine} ${kind.padEnd(10)} ${error ? `ERROR ${error}` : `${String(m.n).padStart(2)} items · ${row.seconds}s · $${row.costUsd.toFixed(4)}`}`);
+      for (const kind of tools) {
+        usage = [];
+        const t0 = Date.now();
+        let content = null, error = null;
+        try { content = (await svcOf[engine].generateArtifact(db, { transcriptionId: T, kind })).artifact.content; } catch (e) { error = e.message; }
+        const ms = Date.now() - t0;
+        const calls = usage.filter((u) => !u.cached);
+        const cost = calls.reduce((s, u) => s + (u.actualCostUsd ?? u.estimatedCostUsd ?? 0), 0);
+        const tokens = { input: calls.reduce((s, u) => s + (u.inputTokens || 0), 0), output: calls.reduce((s, u) => s + (u.outputTokens || 0), 0) };
+        const m = content ? measure(kind, content, c) : {};
+        const ref = content && reference && c.private && kind !== 'study_guide' ? referenceCoverage(kind, content, reference) : {};
+        const row = { case: c.id, engine, kind, run: n, error, seconds: Math.round(ms / 100) / 10, costUsd: Math.round(cost * 1e6) / 1e6, ...tokens, ...m, ...ref, quality: content?.quality || null };
+        rows.push(row);
+        const tag = repeat > 1 ? `.r${n}` : '';
+        writeFileSync(resolve(out, `${c.id}.${engine}.${kind}${tag}.json`), JSON.stringify({ row, content }, null, 1));
+        log(`${c.id.padEnd(22)} ${engine} ${kind.padEnd(10)}${repeat > 1 ? ` r${n}` : ''} ${error ? `ERROR ${error}` : `${String(m.n).padStart(2)} items · ${row.seconds}s · $${row.costUsd.toFixed(4)}${ref.tier1Total ? ` · tier-1 ${ref.tier1Covered}/${ref.tier1Total} · all ${ref.refCovered}/${ref.refTotal}` : ''}`}`);
+      }
     }
   }
 }

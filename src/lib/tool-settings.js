@@ -39,9 +39,9 @@ export const MAX_INSTRUCTIONS = 500;
 
 const KEY_NAME = { size: 'size', difficulty: 'diff', types: 'types', focus: 'focus', explain: 'expl' };
 
-// Flashcards and quizzes made by study engine 2 (server/ai/study.js) are stored under their own key ("g2…"), so
-// making an improved version never overwrites one made earlier, or the quiz scores saved with it.
-export const ENGINE2_TOOLS = new Set(['flashcards', 'quiz']);
+// Flashcards, quizzes and study guides from the improved study engines (2 and 3) are stored under their own key
+// ("g2…"), so making an improved version never overwrites one made earlier, or the quiz scores saved with it.
+export const ENGINE2_TOOLS = new Set(['flashcards', 'quiz', 'study_guide']);
 const ENGINE_KEY = 'g2';
 export const isEngine2Key = (key) => String(key || '').split(';')[0] === ENGINE_KEY;
 // "g2;size=more" -> "size=more": the key an earlier result with the same choices was stored under

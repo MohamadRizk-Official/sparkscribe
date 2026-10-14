@@ -51,7 +51,7 @@ export async function run() {
       await waitFor(() => btn(/Earlier version/), { timeout: 15000, what: 'improved deck with an Earlier version button' });
       assert(!/Made with the earlier version/.test(text()), 'the improved deck is shown');
       const rows = (await stored()).filter((a) => a.kind === 'flashcards');
-      assert(rows.some((a) => a.settings_key === '' && a.content.cards[0].front.includes('Speaker 1')) && rows.some((a) => a.settings_key === 'g2' && a.content.engine === 2), 'both versions are stored');
+      assert(rows.some((a) => a.settings_key === '' && a.content.cards[0].front.includes('Speaker 1')) && rows.some((a) => a.settings_key === 'g2' && a.content.engine >= 2), 'both versions are stored');
       btn(/Earlier version/).click();
       await waitFor(() => /What did Speaker 1 say about the price/.test(text()), { what: 'earlier deck shown again' });
       btn(/Back to the improved version/).click();

@@ -20,12 +20,11 @@ export async function run() {
       assert(!/Ungrounded point/.test(panelText()), 'the mock\'s ungrounded key point was dropped by grounding');
     }],
     ['D13: a failed "Update" of an out-of-date summary is visible, and the old summary stays', async () => {
-      // make the summary out of date: change the transcript (rename via the menu)
+      // make the summary out of date: a real change (a paragraph given to another speaker; a plain rename no
+      // longer makes results out of date)
       $$('#transcript .grp')[0].querySelector('button.who').click();
-      const b = await waitFor(() => [...($('.menu')?.querySelectorAll('button') || [])].find((x) => /^Rename .* everywhere/.test(x.textContent)), { what: 'rename item' });
+      const b = await waitFor(() => [...($('.menu')?.querySelectorAll('button[role="menuitem"]') || [])].find((x) => /^Speaker \d$/.test(x.textContent.trim())), { what: 'reassign item' });
       b.click();
-      const dlg = await waitFor(() => document.querySelector('dialog[open]'), { what: 'dialog' });
-      dlg.querySelector('input').value = 'Updated Name'; dlg.querySelector('form').requestSubmit();
       await waitFor(() => /saved/.test(toastText()), { what: 'saved' });
       tab('Summary');
       const upd = await waitFor(() => [...$$('#insightsHost button')].find((x) => /Update/.test(x.textContent)), { what: 'stale Update button' });

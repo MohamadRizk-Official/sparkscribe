@@ -2407,6 +2407,21 @@ select:focus-visible { border-color: var(--k-67e8f9); box-shadow: 0 0 0 4px var(
 .ctool:hover .ctool-go, .ctool:focus-visible .ctool-go { opacity: 1; transform: none; }
 .ctool:focus-visible { outline: 3px solid var(--k-67e8f9); outline-offset: 3px; }
 .create-foot { margin: 0 2px; font-size: 14px; color: var(--muted); }
+.create-group { display: grid; gap: 10px; }
+.create-group + .create-group { margin-top: 6px; }
+.create-group-h { margin: 0 2px; font-size: 14px; color: var(--muted); }
+.create-group-h b { color: var(--ink-2); font-weight: 600; margin-right: 6px; }
+.create-export { margin-top: 6px; }
+.draft-picks { display: grid; gap: 10px; }
+.draft-pick { display: grid; gap: 4px; text-align: left; padding: 14px 16px; border-radius: 14px; border: 1px solid var(--line); background: var(--k-060812-50); color: var(--ink); font: inherit; cursor: pointer; }
+.draft-pick span { font-size: 13.5px; color: var(--muted); }
+.draft-pick:hover, .draft-pick:focus-visible { border-color: var(--violet); outline: none; }
+.draft-switch { margin: 0 0 4px; }
+.draft-switch .tool-note-link { display: inline; margin: 0 0 0 4px; padding: 0; }
+.coverage-note { margin: 0; }
+.item-caution { margin: 0; max-width: 560px; font-size: 13px; line-height: 1.5; color: var(--ink-2); padding: 7px 10px; border-radius: 10px; border: 1px solid var(--k-fbbf24-30); background: var(--k-fbbf24-06); }
+.self-check details summary { cursor: pointer; font-weight: 500; color: var(--ink); }
+.self-check details p { margin: 6px 0 4px; color: var(--ink-2); }
 .create-foot .tool-note-link { display: inline; margin: 0 0 0 4px; padding: 0; }
 
 /* ---------- Summary: an editorial page, not one big box ---------- */

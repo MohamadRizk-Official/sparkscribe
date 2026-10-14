@@ -160,3 +160,39 @@ export function transcriptBasis(segments) {
   };
 }
 export const sameBasis = (a, b) => !!a && !!b && a.n === b.n && a.text === b.text && a.parts === b.parts;
+
+// ---- Ask answers ----
+// An Ask answer is stored as plain text, with no room for a speaker table. Its codes therefore follow each line's
+// ORIGINAL speaker label (segments keep it as `orig` through every rename, merge or reassignment), numbered in order
+// of first appearance — so the same codes can be rebuilt from the transcript at any time.
+export function origCodes(segments) {
+  const codeOf = new Map();
+  let n = 0;
+  for (const s of segments || []) {
+    const o = String(s.orig || s.speaker || UNKNOWN);
+    if (o !== UNKNOWN && !codeOf.has(o)) codeOf.set(o, `S${++n}`);
+  }
+  return codeOf;
+}
+// code -> the name most of that original speaker's lines carry now
+export function origResolver(segments) {
+  const codeOf = origCodes(segments);
+  const counts = new Map();
+  for (const s of segments || []) {
+    const o = String(s.orig || s.speaker || UNKNOWN);
+    const m = counts.get(o) || new Map();
+    m.set(s.speaker, (m.get(s.speaker) || 0) + 1);
+    counts.set(o, m);
+  }
+  const byCode = new Map();
+  for (const [o, code] of codeOf) {
+    const known = [...(counts.get(o) || [])].filter(([sp]) => sp !== UNKNOWN).sort((a, b) => b[1] - a[1]);
+    byCode.set(code, known.length ? known[0][0] : 'an unidentified speaker');
+  }
+  return (code) => byCode.get(code) || 'a speaker';
+}
+// text with {{S1}} codes -> current names; an unfinished code at the end of streaming text is hidden
+export const renderAskSpeakers = (text, segments) => {
+  const resolve = origResolver(segments);
+  return String(text || '').replace(TOKEN_RE, (m, code) => resolve(code)).replace(/\{\{[^}]*$/, '');
+};

@@ -66,8 +66,10 @@ pass++;
 db.seed({ id: T, segments: seg.map((x) => (x.sp === 'Speaker 3' ? { ...x, sp: 'Hadi' } : x)) });
 const st = await svc.getState(db, T);
 ok(st.contentVersion === 2 && st.insights.find((i) => i.kind === 'overview').sourceVersion === 1, 'state reports outdated result (version 1 < 2)');
+ok((await svc.generate(db, { transcriptionId: T, kind: 'overview' })).cached === true, 'a rename alone keeps the summary current (no new generation; names are shown from speaker codes)');
+db.seed({ id: T, segments: seg.map((x, i) => (x.sp === 'Speaker 3' ? { ...x, sp: 'Hadi' } : x)).map((x, i) => (i === 0 ? { ...x, t: `${x.t} (corrected)` } : x)) });
 const c = await svc.generate(db, { transcriptionId: T, kind: 'overview' });
-ok(!c.cached && c.insight.sourceVersion === 2, 'outdated overview regenerated for new version');
+ok(!c.cached && c.insight.sourceVersion === 3 && c.insight.content.speakers && c.insight.content.basis, 'changed words: the summary is regenerated, with speaker codes and a fingerprint');
 
 // ask: grounded, citations filtered, not-found, cached repeat
 const ev = [];
