@@ -1754,6 +1754,13 @@ dialog.sheet p.dlg-dim, .dlg-dim { color: var(--dim); font-size: 13px; margin: 0
 .fc-text { align-self: center; font-size: 19px; line-height: 1.5; font-weight: 500; overflow-wrap: anywhere; }
 .fc-hint { font-size: 12px; color: var(--dim); }
 .fc-src { min-height: 24px; font-size: 13px; color: var(--muted); }
+.fc-more { width: 100%; max-width: 560px; border: 1px solid var(--line); border-radius: 12px; background: var(--k-060812-50); }
+.fc-more summary { cursor: pointer; padding: 9px 12px; font-size: 13.5px; font-weight: 500; color: var(--ink-2); border-radius: 12px; }
+.fc-more summary:hover { color: var(--ink); }
+.fc-more summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.fc-more p { margin: 0; padding: 0 12px 11px; font-size: 14px; line-height: 1.6; color: var(--ink-2); }
+.ins-msg.legacy-note { justify-content: space-between; }
+.ins-msg.legacy-note span { flex: 1 1 260px; }
 .deck-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .deck-tools { display: flex; gap: 8px; }
 

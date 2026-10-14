@@ -41,20 +41,38 @@ function structured(task, lines) {
       emphasis: [], exam_info: [{ text: 'Not really an exam point', evidence: ev(L(0)), refs: [L(0).id] }], review: [],
     };
   }
-  if (task === 'flashcards') {
-    return { cards: [
-      { front: `What did the speaker say about ${words(L(0).text)[0] || 'this'}?`, back: ev(L(0)), evidence: ev(L(0)), refs: [L(0).id] },
-      { front: `What did the speaker say about ${words(L(0).text)[0] || 'this'}?`, back: ev(L(0)), evidence: ev(L(0)), refs: [L(0).id] },
-      { front: 'What topic was discussed?', back: 'Stuff', evidence: ev(L(1)), refs: [L(1).id] },
-      { front: 'A card with invented evidence?', back: 'No', evidence: 'nobody ever said this sentence', refs: [L(1).id] },
-    ] };
-  }
-  if (task === 'quiz') {
-    return { questions: [
-      { type: 'multiple_choice', question: `Which statement matches the recording?`, options: [ev(L(0)), 'Option B', 'Option C', 'Option D'], answer: ev(L(0)), accept: [], explanation: 'Said at the start.', evidence: ev(L(0)), refs: [L(0).id] },
-      { type: 'true_false', question: 'The recording has a first line?', options: ['True', 'False'], answer: 'true', accept: [], explanation: 'It does.', evidence: ev(L(0)), refs: [L(0).id] },
-      { type: 'multiple_choice', question: 'Malformed: answer not among the options?', options: ['A', 'B', 'C', 'D'], answer: 'E', accept: [], explanation: '', evidence: ev(L(0)), refs: [L(0).id] },
-      { type: 'short_answer', question: 'What is the first word of the recording?', options: [], answer: words(L(0).text)[0] || 'x', accept: [], explanation: '', evidence: ev(L(0)), refs: [L(0).id] },
+  // study engine 2: a knowledge map, then items; plus every kind of weak item the checks must reject
+  if (task === 'flashcards' || task === 'quiz') {
+    const concepts = [
+      { id: 'c1', name: 'Main idea', kind: 'principle', importance: 'core', stance: 'own', held_by: null, summary: ev(L(0)), reasoning: null, clarity: 'clear', evidence: ev(L(0)), refs: [L(0).id] },
+      { id: 'c2', name: 'Second idea', kind: 'definition', importance: 'supporting', stance: 'attributed', held_by: 'Mock School', summary: ev(L(1)), reasoning: ev(L(1)), clarity: 'clear', evidence: ev(L(1)), refs: [L(1).id] },
+      { id: 'c3', name: 'Trivia', kind: 'fact', importance: 'minor', stance: 'report', held_by: null, summary: 'a count', reasoning: null, clarity: 'clear', evidence: ev(L(0)), refs: [L(0).id] },
+      { id: 'c4', name: 'Garbled bit', kind: 'fact', importance: 'core', stance: 'own', held_by: null, summary: '?', reasoning: null, clarity: 'unreliable', evidence: ev(L(1)), refs: [L(1).id] },
+      { id: 'c5', name: 'Invented', kind: 'fact', importance: 'core', stance: 'own', held_by: null, summary: 'x', reasoning: null, clarity: 'clear', evidence: 'words nobody ever said in this recording', refs: [L(0).id] },
+    ];
+    const w = words(L(0).text)[0] || 'this';
+    if (task === 'flashcards') {
+      return { concepts, cards: [
+        { concept: 'c1', front: `According to {{S1}}, why does the recording stress ${w}?`, back: ev(L(0)), explanation: `Because ${ev(L(1))}`, refs: [L(0).id] },
+        { concept: 'c1', front: `Why does the recording stress ${w}?`, back: ev(L(0)), explanation: null, refs: [L(0).id] },          // duplicate
+        { concept: 'c2', front: 'In the Mock School view, what is the second idea?', back: ev(L(1)), explanation: ev(L(1)), refs: [] },  // explanation restates; refs inherited
+        { concept: 'c2', front: 'What does the second idea describe?', back: 'Heads that like water and tails that avoid it', explanation: null, refs: [L(1).id] }, // attribution lost
+        { concept: 'c1', front: 'What did he say about it?', back: ev(L(0)), explanation: null, refs: [L(0).id] },                      // vague
+        { concept: 'c3', front: 'How many things were counted in the recording?', back: 'Twenty five', explanation: null, refs: [L(0).id] }, // minor
+        { concept: 'c4', front: 'What does the garbled passage mean exactly?', back: 'Something unclear', explanation: null, refs: [L(1).id] }, // unreliable
+        { concept: 'c5', front: 'What invented thing was never really said?', back: 'Nothing at all', explanation: null, refs: [L(0).id] },  // concept not grounded
+        { concept: 'c1', front: 'What distinguishes the first idea from the second?', back: 'The first idea is different from the second', explanation: null, refs: [L(0).id] }, // circular
+      ] };
+    }
+    return { concepts, questions: [
+      { concept: 'c1', type: 'multiple_choice', skill: 'understanding', question: `According to {{S1}}, which statement best explains ${w}?`, options: [ev(L(0)), ev(L(1)), ev(L(2)), `${ev(L(0)).split(' ').reverse().join(' ')}`], answer: ev(L(0)), accept: [], explanation: `The recording explains it this way: ${ev(L(1))}`, refs: [L(0).id] },
+      { concept: 'c1', type: 'true_false', skill: 'recall', question: 'The recording has a first line.', options: ['True', 'False'], answer: 'true', accept: [], explanation: null, refs: [L(0).id] }, // trivial true/false
+      { concept: 'c2', type: 'true_false', skill: 'misconception', question: 'In the Mock School view, the second idea is the opposite of the first.', options: ['True', 'False'], answer: 'false', accept: [], explanation: 'The Mock School view presents it as a definition, not as an opposite of the first idea.', refs: [L(1).id] },
+      { concept: 'c1', type: 'multiple_choice', skill: 'reasoning', question: 'Malformed: answer not among the options?', options: ['A', 'B', 'C', 'D'], answer: 'E', accept: [], explanation: null, refs: [L(0).id] },
+      { concept: 'c1', type: 'multiple_choice', skill: 'reasoning', question: 'Which option is obviously the longest one here?', options: ['This correct option is very much longer than every one of the other options listed', 'Short', 'Brief', 'Tiny'], answer: 'This correct option is very much longer than every one of the other options listed', accept: [], explanation: null, refs: [L(0).id] },
+      { concept: 'c2', type: 'multiple_choice', skill: 'recall', question: 'In the Mock School view, which of these applies?', options: ['One', 'Two', 'All of the above', 'Three'], answer: 'One', accept: [], explanation: null, refs: [L(1).id] },
+      { concept: 'c3', type: 'short_answer', skill: 'recall', question: 'How many items were counted?', options: [], answer: '25', accept: [], explanation: null, refs: [L(0).id] },
+      { concept: 'c2', type: 'short_answer', skill: 'recall', question: `What does the Mock School call the idea about ${w}?`, options: [], answer: words(L(1).text)[0] || 'x', accept: [], explanation: null, refs: [] },
     ] };
   }
   if (task === 'definitions') return { definitions: [{ term: 'Mock term', definition: ev(L(1)), evidence: ev(L(1)), refs: [L(1).id] }] };
@@ -117,7 +135,22 @@ export function mockProvider() {
             : { verdict: 'incorrect', feedback: '[Mock] Not what the recording says.', corrected: null };
         return { text: JSON.stringify(json), json, model: 'mock', usage: { input: Math.ceil(text.length / 3.2), output: 30 } };
       }
-      const json = structured(task, parseLines(text));
+      let json;
+      const [base, step] = String(task).split(':');
+      if (step === 'fill') {
+        // coverage pass: items for exactly the concepts it was asked about
+        const ids = new Set([...((text.match(/<concepts>([\s\S]*?)<\/concepts>/) || [, '[]'])[1].matchAll(/"id": "([^"]+)"/g))].map((m) => m[1]));
+        const all = structured(base, parseLines(text));
+        const key = base === 'quiz' ? 'questions' : 'cards';
+        json = { [key]: all[key].filter((x) => ids.has(x.concept)) };
+      } else {
+        json = structured(task, parseLines(text));
+        // AI_MOCK_UNCOVERED=1: the first pass leaves out the core concept c1 (exercises the coverage pass)
+        if (process.env.AI_MOCK_UNCOVERED === '1' && (task === 'flashcards' || task === 'quiz')) {
+          const key = task === 'quiz' ? 'questions' : 'cards';
+          json[key] = json[key].filter((x) => x.concept !== 'c1');
+        }
+      }
       return { text: JSON.stringify(json), json, model: 'mock', usage: { input: Math.ceil(text.length / 3.2), output: 200 } };
     },
     async stream({ messages }, onDelta) {

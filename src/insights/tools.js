@@ -5,7 +5,7 @@
 // outputs are stored and reopened for free. Interactive parts (flashcards, quiz) run entirely in the browser.
 import { fmtClock, RECORDING_TYPE_LABEL } from '../lib/segments.js';
 import { mascotSignal } from '../mascot/bus.js';
-import { TOOL_SETTINGS, MAX_INSTRUCTIONS, INSTRUCTIONS_MISSING, normalizeToolSettings, describeSettings, quizQuestionCount } from '../lib/tool-settings.js';
+import { TOOL_SETTINGS, MAX_INSTRUCTIONS, INSTRUCTIONS_MISSING, normalizeToolSettings, describeSettings, quizQuestionCount, ENGINE2_TOOLS, isEngine2Key, legacyKeyOf } from '../lib/tool-settings.js';
 import { newRun, currentItem, answeredCount, correctCount, answer as gradeAnswer, record as recordAnswer, overrideCorrect, advance, summary } from './quiz-engine.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,7 +33,7 @@ export const TOOL_INFO = {
   action_plan: { label: 'Action Plan', desc: 'What still needs to happen after this recording, with who and by when.', loading: 'Building the action plan' },
   followup_email: { label: 'Follow-up Email', desc: 'You say what the email should be about; SparkScribe fills in the details from the recording.', loading: 'Drafting the email', draft: true },
   reply_draft: { label: 'Reply Draft', desc: 'You say what the reply should be about; SparkScribe fills in the details from the recording.', loading: 'Drafting a reply', draft: true },
-  interview_qa: { label: 'Interview Q&A', desc: 'Turn the conversation into a clean Q&A with verbatim quotes.', loading: 'Organizing questions and answers' },
+  interview_qa: { label: 'Interview Q&A', desc: 'Turn the conversation into a clean Q&A, with quotes taken word for word from the transcript.', loading: 'Organizing questions and answers' },
   episode_notes: { label: 'Episode Notes', desc: 'Write shareable episode notes: summary, chapter outline, takeaways and quotes.', loading: 'Writing episode notes' },
   // created before definitions and exam points moved to Notes; still shown in Export if they exist
   definitions: { label: 'Key Definitions', desc: '', loading: 'Collecting definitions' },
@@ -62,7 +62,7 @@ const TOOL_CARD = {
   action_plan: { line: 'Turn requests into clear next steps', c: 'blue', ic: '<path d="m4 7 2 2 3.5-3.5M4 15l2 2 3.5-3.5M13 8h7M13 16h7"/>' },
   followup_email: { line: 'Draft a follow-up from the meeting', c: 'pink', ic: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>' },
   reply_draft: { line: 'Draft a response using the recording', c: 'pink', ic: '<path d="M10 8 4 13l6 5"/><path d="M4 13h10a6 6 0 0 1 6 6"/>' },
-  interview_qa: { line: 'Questions and answers, with exact quotes', c: 'violet', ic: '<path d="M4 5h12v9H8l-4 3.5z"/><path d="M16 9h4v9.5L16.5 16H10v-2"/>' },
+  interview_qa: { line: 'Questions and answers, with transcript quotes', c: 'violet', ic: '<path d="M4 5h12v9H8l-4 3.5z"/><path d="M16 9h4v9.5L16.5 16H10v-2"/>' },
   episode_notes: { line: 'Summary, chapters and takeaways', c: 'cyan', ic: '<circle cx="12" cy="11" r="3"/><path d="M6.5 16.5a7.5 7.5 0 1 1 11 0M12 14v7"/>' },
 };
 const EXPORT_IC = '<path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/>';
@@ -104,7 +104,12 @@ export function artifactBlocks(kind, c, timeOf) {
       section('Worth reviewing', c.review, (x) => li(x.text, x.refs));
       break;
     case 'flashcards':
-      (c.cards || []).forEach((k, i) => { h(`Card ${i + 1}`); B.push({ t: 'p', text: `Q: ${k.front}` }); B.push({ t: 'p', text: `A: ${k.back}`, time: timeOf(k.refs) }); });
+      (c.cards || []).forEach((k, i) => {
+        h(`Card ${i + 1}`);
+        B.push({ t: 'p', text: `Q: ${k.front}` });
+        B.push({ t: 'p', text: `A: ${k.back}`, time: timeOf(k.refs) });
+        if (k.explanation) B.push({ t: 'p', text: `Why: ${k.explanation}` });
+      });
       break;
     case 'quiz':
       (c.questions || []).forEach((q, i) => {
@@ -244,7 +249,8 @@ export const shortAnswerCorrect = (given, q) => !!localGrade(given, q);
  */
 export function createToolsUI(api) {
   // sel: the settings the user is looking at for each tool (defaults to those of the latest result)
-  const ui = { tool: null, sel: {}, deck: new Map(), quiz: new Map(), autoStart: null, focus: null, quizKey: null };
+  // legacyView[kind]: the learner chose to look at the earlier version (made before study engine 2)
+  const ui = { tool: null, sel: {}, deck: new Map(), quiz: new Map(), autoStart: null, focus: null, quizKey: null, legacyView: {} };
   const keyOf = (kind, settings) => normalizeToolSettings(kind, settings).key;
   const latest = (kind) => api.artifactsOf(kind).filter((a) => a.content || a.status === 'generating')
     .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))[0] || null;
@@ -254,6 +260,15 @@ export function createToolsUI(api) {
   function current(kind) {
     const key = keyOf(kind, selOf(kind));
     const a = api.artifact(kind, key);
+    // Flashcards / quizzes: an earlier version with the same choices (made before study engine 2) is kept as it
+    // was. It's shown until an improved one exists, or whenever the learner asks to see it again.
+    if (ENGINE2_TOOLS.has(kind)) {
+      const old = api.artifact(kind, legacyKeyOf(key));
+      const prev = old?.content ? old : null;
+      const waiting = api.busy(kind, key) || a?.status === 'generating' || api.error(kind, key);
+      if (prev && (ui.legacyView[kind] || (!a?.content && !waiting))) return { key, a: prev, legacy: true, improved: a?.content ? a : null };
+      return { key, a, prev };
+    }
     if (a || !SETUP_DIALOG.has(kind) || api.busy(kind, key) || api.error(kind, key)) return { key, a };
     const l = latest(kind);
     return l ? { key: l.settingsKey, a: l } : { key, a: null };
@@ -263,7 +278,8 @@ export function createToolsUI(api) {
     const a = latest(kind) || api.artifact(kind, '');
     if (api.artifactsOf(kind).some((x) => api.busy(kind, x.settingsKey)) || api.busy(kind, keyOf(kind, selOf(kind))) || a?.status === 'generating') return ['busy', 'Creating…'];
     if (a?.status === 'failed' && !a.content) return ['bad', 'Failed'];
-    if (a?.content && api.contentVersion() != null && a.sourceVersion < api.contentVersion()) return ['warn', 'Out of date'];
+    if (api.isStale(a)) return ['warn', 'Out of date'];
+    if (a?.content && ENGINE2_TOOLS.has(kind) && !isEngine2Key(a.settingsKey)) return ['ok', 'Improved version available'];
     if (a?.content) {
       if (kind === 'quiz' && a.progress?.last_score != null) return ['ok', `Last score ${a.progress.last_score}/${a.progress.total}`];
       if (kind === 'quiz') return ['ok', `${a.content.questions?.length || 0} questions ready`];
@@ -323,14 +339,22 @@ export function createToolsUI(api) {
     return `<div class="tool-settings">${Object.entries(spec).map(([name, sp]) => `<div class="tool-set"><span class="ins-label">${esc(sp.label)}</span><div class="seg-toggle" role="group" aria-label="${esc(sp.label)}">${Object.entries(sp.options).map(([v, l]) => `<button type="button" data-set="${name}" data-val="${v}" class="${sel[name] === v ? 'on' : ''}" aria-pressed="${sel[name] === v}">${esc(l)}</button>`).join('')}</div></div>`).join('')}</div>`;
   }
 
+  // the earlier version of flashcards / a quiz: kept, readable, and one click from an improved one
+  function legacyNote(kind, improved) {
+    const what = kind === 'quiz' ? 'questions' : 'cards';
+    return improved
+      ? `<div class="ins-msg legacy-note"><span><b>Earlier version.</b> Kept as it was, made before SparkScribe's improved ${what}.</span><button class="btn btn-ghost btn-sm" type="button" data-act="show-new">Back to the improved version</button></div>`
+      : `<div class="ins-msg legacy-note"><span><b>Made with the earlier version.</b> SparkScribe now writes ${what} that test the important ideas, with explanations where they help. This version stays available.</span><button class="btn btn-primary btn-sm" type="button" data-act="create">Create improved version</button></div>`;
+  }
+
   function renderTool() {
     const kind = ui.tool;
     const info = TOOL_INFO[kind];
     const sel = selOf(kind);
-    const { key, a } = current(kind);
-    const busy = api.busy(kind, key) || a?.status === 'generating';
-    const err = api.error(kind, key) || (a?.status === 'failed' ? { message: a.error } : null);
-    const stale = a?.content && api.contentVersion() != null && a.sourceVersion < api.contentVersion();
+    const { key, a, legacy, improved, prev } = current(kind);
+    const busy = !legacy && (api.busy(kind, key) || a?.status === 'generating');
+    const err = !legacy && (api.error(kind, key) || (a?.status === 'failed' ? { message: a.error } : null));
+    const stale = !legacy && api.isStale(a);
     const byId = api.segById();
     const dialogTool = SETUP_DIALOG.has(kind);
     const desc = describeSettings(kind, a?.settings || sel);
@@ -341,6 +365,7 @@ export function createToolsUI(api) {
       html += `<div class="tool-setup-sum"><span>${a.settings?.instructions ? `You asked: “${esc(a.settings.instructions)}”` : 'Drafted from the recording only'}</span><button class="btn btn-ghost btn-sm" type="button" data-act="setup">New draft…</button></div>`;
     }
     // drafts are redone through the request box (an old draft may not have a request yet)
+    if (legacy) html += legacyNote(kind, improved);
     if (stale && !busy) html += `<div class="ins-msg warn"><span>Out of date: the transcript changed after this was created.</span><button class="btn btn-ghost btn-sm" type="button" data-act="${dialogTool ? 'setup' : 'regen'}">Update</button></div>`;
     if (busy) html += api.loading(info.loading);
     if (err && !busy) html += api.errorBox(err, 'regen', a?.content ? "The update didn't work; your previous version is still below." : "This couldn't be created.");
@@ -350,7 +375,8 @@ export function createToolsUI(api) {
       html += `<div class="tool-actions">
         <button class="btn btn-ghost btn-sm" type="button" data-act="copy">Copy</button>
         <button class="btn btn-ghost btn-sm" type="button" data-act="export">Export…</button>
-        ${!stale && !busy && !dialogTool ? '<button class="btn btn-ghost btn-sm" type="button" data-act="regen-confirm">Regenerate</button>' : ''}
+        ${!stale && !busy && !dialogTool && !legacy ? '<button class="btn btn-ghost btn-sm" type="button" data-act="regen-confirm">Regenerate</button>' : ''}
+        ${prev && !legacy ? '<button class="btn btn-ghost btn-sm" type="button" data-act="show-legacy">Earlier version</button>' : ''}
         <button class="btn btn-ghost btn-sm tool-del" type="button" data-act="delete">Delete ${esc(info.label)}</button>
       </div>`;
     } else if (!busy && !err) {
@@ -407,7 +433,7 @@ export function createToolsUI(api) {
       const s = t.start_ref != null ? byId.get(t.start_ref) : null;
       return `<li>${s ? `<button type="button" class="chapter" data-seek="${s.start}" data-ref="${s.id}"><span class="ch-time">${fmtClock(s.start)}</span>` : '<div class="chapter static"><span class="ch-time">—</span>'}<span class="ch-body"><span class="ch-title">${esc(t.title)}</span><span class="ch-sum">${esc(t.summary)}</span></span>${s ? '</button>' : '</div>'}</li>`;
     }).join('')}</ol></section>` : '');
-    const quotes = (items) => list('Important quotes', items, (x) => `<li class="ins-item quote"><blockquote>“${esc(x.quote)}”</blockquote><span class="q-by">${esc(x.speaker)}</span>${chips(x.refs)}</li>`, 'Word for word from the transcript.');
+    const quotes = (items) => list('Important quotes', items, (x) => `<li class="ins-item quote"><blockquote>“${esc(x.quote)}”</blockquote><span class="q-by">${esc(x.speaker)}</span>${chips(x.refs)}</li>`, 'Word for word from the automatic transcript, which can contain recognition mistakes. Check the audio before quoting someone.');
     switch (kind) {
       case 'study_guide':
         return `${c.overview ? `<p class="tool-lead">${esc(c.overview)}</p>` : ''}
@@ -485,7 +511,8 @@ export function createToolsUI(api) {
         <span class="fc-text">${esc(d.flipped ? card.back : card.front)}</span>
         <span class="fc-hint">${d.flipped ? 'Tap to see the question' : 'Tap to reveal the answer'}</span>
       </button>
-      <div class="fc-src">${d.flipped && src ? `Said at ${api.chips(card.refs, byId)}` : '&nbsp;'}</div>
+      ${d.flipped && card.explanation ? `<details class="fc-more"><summary>Explain why</summary><p>${esc(card.explanation)}</p></details>` : ''}
+      <div class="fc-src">${d.flipped && src ? `Explained at ${api.chips(card.refs, byId)}` : '&nbsp;'}</div>
       <div class="deck-nav">
         <button class="btn btn-ghost" type="button" data-act="prev" ${d.i === 0 ? 'disabled' : ''} aria-label="Previous card">← Prev</button>
         <button class="btn btn-ghost" type="button" data-act="flip">${d.flipped ? 'Question' : 'Answer'}</button>
@@ -519,7 +546,7 @@ export function createToolsUI(api) {
     </div>`;
   }
 
-  function quizSetupHtml({ sel, a, busy, err, stale }) {
+  function quizSetupHtml({ sel, a, busy, err, stale, legacy, improved, prev }) {
     const spec = TOOL_SETTINGS.quiz;
     const minutes = (api.duration?.() || 0) / 60;
     const label = (name, v) => (name === 'size' ? String(quizQuestionCount(minutes, v)) : spec[name].options[v]);
@@ -535,6 +562,7 @@ export function createToolsUI(api) {
         <h3 class="study-title" id="quizTitle">Practice Quiz</h3>
         <p class="study-sub">Test yourself on this recording.</p>
         <div class="setup-grid">${ctl('size')}${ctl('difficulty')}${ctl('types')}</div>
+        ${legacy ? legacyNote('quiz', improved) : ''}
         ${stale && !busy ? '<div class="ins-msg warn"><span>The transcript changed after these questions were written.</span><button class="btn btn-ghost btn-sm" type="button" data-act="regen">Update</button></div>' : ''}
         ${err && !busy ? api.errorBox(err, 'regen', n ? "New questions couldn't be written; your current quiz still works." : "The quiz couldn't be created.") : ''}
         ${busy ? api.loading(TOOL_INFO.quiz.loading) : `<button class="btn btn-primary study-start" type="button" data-act="start"${empty ? ' disabled' : ''}>Start Quiz <span aria-hidden="true">→</span></button>`}
@@ -544,7 +572,8 @@ export function createToolsUI(api) {
       ${a?.content ? `<div class="study-tools">
         <button class="btn btn-ghost btn-sm" type="button" data-act="copy">Copy</button>
         <button class="btn btn-ghost btn-sm" type="button" data-act="export">Export…</button>
-        ${!stale && !busy ? '<button class="btn btn-ghost btn-sm" type="button" data-act="regen-confirm">New questions</button>' : ''}
+        ${!stale && !busy && !legacy ? '<button class="btn btn-ghost btn-sm" type="button" data-act="regen-confirm">New questions</button>' : ''}
+        ${prev && !legacy ? '<button class="btn btn-ghost btn-sm" type="button" data-act="show-legacy">Earlier quiz</button>' : ''}
         <button class="btn btn-ghost btn-sm tool-del" type="button" data-act="delete">Delete quiz</button></div>` : ''}
     </div>`;
   }
@@ -662,10 +691,10 @@ export function createToolsUI(api) {
   function renderQuiz() {
     const kind = 'quiz';
     const sel = selOf(kind);
-    const { key, a } = current(kind);
-    const busy = api.busy(kind, key) || a?.status === 'generating';
-    const err = api.error(kind, key) || (a?.status === 'failed' ? { message: a.error } : null);
-    const stale = a?.content && api.contentVersion() != null && a.sourceVersion < api.contentVersion();
+    const { key, a, legacy, improved, prev } = current(kind);
+    const busy = !legacy && (api.busy(kind, key) || a?.status === 'generating');
+    const err = !legacy && (api.error(kind, key) || (a?.status === 'failed' ? { message: a.error } : null));
+    const stale = !legacy && api.isStale(a);
     // "Start Quiz" asked for questions that had to be written first: begin as soon as they're here
     if (ui.autoStart === key && a?.content?.questions?.length && quizView(a).phase === 'setup') { ui.autoStart = null; startRun(a, newRun(a.content.questions)); }
     const v = a?.content?.questions?.length ? quizView(a) : null;
@@ -673,7 +702,7 @@ export function createToolsUI(api) {
     if (v?.phase === 'play') return quizPlayHtml(a, v, byId);
     if (v?.phase === 'result') return quizResultHtml(a, v, byId);
     if (v?.phase === 'review') return quizReviewHtml(a, v, byId);
-    return quizSetupHtml({ sel, a, busy, err, stale });
+    return quizSetupHtml({ sel, a, busy, err, stale, legacy, improved, prev });
   }
   function startRun(a, run) {
     const v = quizView(a);
@@ -710,7 +739,9 @@ export function createToolsUI(api) {
     const settings = { ...selOf(kind) };
     const { key, a } = current(kind);
     p.querySelector('[data-act="tools"]')?.addEventListener('click', () => { ui.tool = null; api.refresh(); });
-    p.querySelector('[data-act="create"]')?.addEventListener('click', () => api.generate(kind, settings, false));
+    p.querySelector('[data-act="create"]')?.addEventListener('click', () => { ui.legacyView[kind] = false; api.generate(kind, settings, false); });
+    p.querySelector('[data-act="show-legacy"]')?.addEventListener('click', () => { ui.legacyView[kind] = true; api.refresh(); });
+    p.querySelector('[data-act="show-new"]')?.addEventListener('click', () => { ui.legacyView[kind] = false; api.refresh(); });
     p.querySelectorAll('[data-act="regen"]').forEach((b) => b.addEventListener('click', () => api.generate(kind, settings, true)));
     p.querySelector('[data-act="regen-confirm"]')?.addEventListener('click', async () => {
       if (await api.confirm(`Regenerate ${info.label}?`, 'This replaces the current version with a newly generated one.', 'Regenerate')) api.generate(kind, settings, true);
@@ -776,8 +807,12 @@ export function createToolsUI(api) {
       api.generate(kind, settings, false);
     });
     on('[data-act="regen"]', () => api.generate(kind, settings, true));
+    on('[data-act="create"]', () => { ui.legacyView[kind] = false; api.generate(kind, settings, false); });
+    on('[data-act="show-legacy"]', () => { ui.legacyView[kind] = true; rerender('setup'); });
+    on('[data-act="show-new"]', () => { ui.legacyView[kind] = false; rerender('setup'); });
     on('[data-act="regen-confirm"]', async () => {
-      if (await api.confirm('Write new questions?', 'This replaces this quiz with newly generated questions from the recording.', 'Write new questions')) api.generate(kind, settings, true);
+      const score = a?.progress?.last_score != null ? ` Your last score (${Number(a.progress.last_score) || 0}/${Number(a.progress.total) || 0}) will be cleared.` : '';
+      if (await api.confirm('Write new questions?', `This replaces this quiz with newly generated questions from the recording.${score}`, 'Write new questions')) api.generate(kind, settings, true);
     });
     on('[data-act="copy"]', () => api.copy(blocksToText(artifactBlocks(kind, a.content, api.timeOf)), info.label));
     on('[data-act="export"]', () => api.openExport(`tool:${kind}:${key}`));
@@ -885,8 +920,10 @@ export function createToolsUI(api) {
         panel.addEventListener('keydown', (e) => ui.quizKey?.(e));
       }
       ui.quizKey = null;
-      if (ui.tool === 'quiz') { panel.innerHTML = renderQuiz(); bindQuiz(panel); return; }
+      const coded = () => { if (ui.tool && current(ui.tool).a?.content?.speakers) panel.firstElementChild?.setAttribute('data-keep-names', ''); };
+      if (ui.tool === 'quiz') { panel.innerHTML = renderQuiz(); coded(); bindQuiz(panel); return; }
       panel.innerHTML = ui.tool ? renderTool() : renderList();
+      coded();
       bind(panel);
     },
     reset() { ui.tool = null; },

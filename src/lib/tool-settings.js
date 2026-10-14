@@ -1,11 +1,14 @@
 // Settings for Create-tab tools, shared by the browser and the server so both compute the same cache key.
 // A key names one stored result: the same recording + tool + key is generated once and then reused.
-// Default settings have the empty key, so results saved before settings existed keep matching.
+// Default settings have the empty key, so results saved before settings existed keep matching (flashcards and
+// quizzes from study engine 2 always start with "g2", see below).
 // Pure functions only.
 
 export const TOOL_SETTINGS = {
   flashcards: {
     size: { label: 'How many', def: 'standard', options: { fewer: 'Fewer', standard: 'Recommended', more: 'More' } },
+    focus: { label: 'Focus', def: 'balanced', options: { essentials: 'Essentials', balanced: 'Balanced', deep: 'Deep understanding' } },
+    explain: { label: 'Explanations', def: 'helpful', options: { helpful: 'When helpful', every: 'Every card', brief: 'Brief answers' } },
   },
   // the quiz setup shows Length as the actual number of questions (quizQuestionCount below)
   quiz: {
@@ -34,7 +37,15 @@ export const INSTRUCTIONS_MISSING = {
 };
 export const MAX_INSTRUCTIONS = 500;
 
-const KEY_NAME = { size: 'size', difficulty: 'diff', types: 'types', focus: 'focus' };
+const KEY_NAME = { size: 'size', difficulty: 'diff', types: 'types', focus: 'focus', explain: 'expl' };
+
+// Flashcards and quizzes made by study engine 2 (server/ai/study.js) are stored under their own key ("g2…"), so
+// making an improved version never overwrites one made earlier, or the quiz scores saved with it.
+export const ENGINE2_TOOLS = new Set(['flashcards', 'quiz']);
+const ENGINE_KEY = 'g2';
+export const isEngine2Key = (key) => String(key || '').split(';')[0] === ENGINE_KEY;
+// "g2;size=more" -> "size=more": the key an earlier result with the same choices was stored under
+export const legacyKeyOf = (key) => (isEngine2Key(key) ? String(key).split(';').slice(1).join(';') : key);
 
 // FNV-1a, 32 bit: a short stable fingerprint of the user's instructions for the cache key
 function fingerprint(text) {
@@ -58,6 +69,7 @@ export function normalizeToolSettings(kind, raw = {}) {
     settings.instructions = text;
     if (text) parts.push(`i=${fingerprint(text)}`);
   }
+  if (ENGINE2_TOOLS.has(kind)) parts.unshift(ENGINE_KEY);
   return { settings, key: parts.join(';') };
 }
 

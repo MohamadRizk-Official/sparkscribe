@@ -10,7 +10,8 @@ import { openExportDialog } from './export.js';
 import { watchNames, renameInText } from '../lib/speaker-names.js';
 import { cleanText } from '../lib/clean.js';
 import { supabase } from '../lib/supabase.js';
-import { normalizeToolSettings, describeSettings } from '../lib/tool-settings.js';
+import { normalizeToolSettings, describeSettings, ENGINE2_TOOLS, isEngine2Key } from '../lib/tool-settings.js';
+import { resolveContent, transcriptBasis, sameBasis } from '../lib/speaker-refs.js';
 import { makeDialog } from '../library/dialogs.js';
 import { mascotSignal } from '../mascot/bus.js';
 import { fmtClock, splitCitations, RECORDING_TYPES, RECORDING_TYPE_LABEL, normalizeRecordingType, isNotFound, refersToPlayback } from '../lib/segments.js';
@@ -300,6 +301,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   }
   async function saveProgress(a, progress) {
     a.progress = progress; // shown right away; saving is best effort (it is only the latest score)
+    for (const x of st.artifacts.values()) if (x.id === a.id) x.progress = progress; // `a` may be the on-screen copy
     await supabase.from('transcription_artifacts').update({ progress }).eq('id', a.id).then(() => {}, () => {});
   }
 
@@ -678,11 +680,27 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
 
   // ---------- Create tab ----------
   const timeOf = (refs) => { const s = segById().get((refs || [])[0]); return s ? s.start : null; };
+  // Create results refer to speakers by code ({{S1}}): shown with each speaker's CURRENT name (lib/speaker-refs.js).
+  // The stored result is never changed; only what's on screen / exported.
+  const resolved = new WeakMap();
+  function shown(a) {
+    if (!a?.content?.speakers) return a;
+    const segs = ctx.getSegments();
+    const sig = segs.map((s) => s.speaker).join('\n');
+    let m = resolved.get(a.content);
+    if (!m || m.sig !== sig) resolved.set(a.content, (m = { sig, content: resolveContent(a.content, segs) }));
+    return { ...a, content: m.content };
+  }
+  // "Out of date" means the words, or who said which part, changed after it was made. A result with a
+  // fingerprint stays current through plain speaker renames (older results: by version, as before).
+  const isStale = (x) => !!x?.content && st.contentVersion != null && x.sourceVersion < st.contentVersion
+    && !sameBasis(x.content.basis, transcriptBasis(ctx.getSegments()));
   const tools = createToolsUI({
     type,
     contentVersion: () => st.contentVersion,
-    artifact: (kind, k = '') => st.artifacts.get(akey(kind, k)),
-    artifactsOf: (kind) => [...st.artifacts.values()].filter((a) => a.kind === kind),
+    artifact: (kind, k = '') => shown(st.artifacts.get(akey(kind, k))),
+    artifactsOf: (kind) => [...st.artifacts.values()].filter((a) => a.kind === kind).map(shown),
+    isStale,
     busy: (kind, k = '') => st.busy.has(`tool:${akey(kind, k)}`),
     error: (kind, k = '') => st.errors.get(`tool:${akey(kind, k)}`),
     generate: generateTool,
@@ -713,7 +731,9 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     const segs = ctx.getSegments();
     const t = type();
     const ready = (i) => i?.status === 'ready' && i.content ? i : null;
-    const outdated = (x) => (st.contentVersion != null && x.sourceVersion < st.contentVersion ? '(out of date)' : '');
+    const outdated = (x) => (isStale(x) ? '(out of date)' : '');
+    // flashcards / quizzes from before study engine 2 are kept and exported as the earlier version
+    const earlier = (a) => (ENGINE2_TOOLS.has(a.kind) && !isEngine2Key(a.settingsKey) ? ' (earlier version)' : '');
     const transcriptBlocks = (clean) => {
       const out = [];
       for (const s of segs) {
@@ -748,19 +768,19 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
       if (!found.length && signedIn) sources.push({ id: `tool:${kind}:`, group: 'Created', label: TOOL_INFO[kind].label, ready: false });
       for (const a of found) {
         const extra = describeSettings(kind, a.settings);
-        sources.push({ id: `tool:${kind}:${a.settingsKey}`, group: 'Created', label: TOOL_INFO[kind].label + (extra ? ` (${extra})` : ''), ready: true, note: outdated(a), blocks: () => artifactBlocks(kind, a.content, timeOf) });
+        sources.push({ id: `tool:${kind}:${a.settingsKey}`, group: 'Created', label: TOOL_INFO[kind].label + (extra ? ` (${extra})` : '') + earlier(a), ready: true, note: outdated(a), coded: !!a.content.speakers, blocks: () => artifactBlocks(kind, shown(a).content, timeOf) });
       }
     }
     // outputs of other recording types that were created earlier stay exportable
     for (const a of st.artifacts.values()) {
       if (!a.content || toolsFor(t).tools.includes(a.kind)) continue;
-      sources.push({ id: `tool:${a.kind}:${a.settingsKey}`, group: 'Created', label: TOOL_INFO[a.kind].label, ready: true, note: outdated(a), blocks: () => artifactBlocks(a.kind, a.content, timeOf) });
+      sources.push({ id: `tool:${a.kind}:${a.settingsKey}`, group: 'Created', label: TOOL_INFO[a.kind].label + earlier(a), ready: true, note: outdated(a), coded: !!a.content.speakers, blocks: () => artifactBlocks(a.kind, shown(a).content, timeOf) });
     }
     // signed out / not saved yet: only the transcript can be exported (nothing else exists)
     if (!signedIn) sources.splice(2);
     // results written with an earlier speaker name ("Speaker 1") export with the current one ("Hadi")
     const names = ctx.nameMap?.() || new Map();
-    if (names.size) for (const s of sources) if (s.blocks && !s.id.startsWith('transcript')) { const b = s.blocks; s.blocks = () => b().map((x) => ({ ...x, text: renameInText(x.text, names) })); }
+    if (names.size) for (const s of sources) if (s.blocks && !s.coded && !s.id.startsWith('transcript')) { const b = s.blocks; s.blocks = () => b().map((x) => ({ ...x, text: renameInText(x.text, names) })); }
     const title = ctx.title?.() || 'SparkScribe transcript';
     const meta = [ctx.createdAt?.() ? `Recorded ${new Date(ctx.createdAt()).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}` : null, 'Exported from SparkScribe'].filter(Boolean);
     openExportDialog({ title, meta, sources, segments: segs, coarse: !!ctx.coarse, preselect, onDone: (m) => ctx.toast?.(m) });

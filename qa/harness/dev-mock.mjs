@@ -2,7 +2,7 @@
 // and the mock AI provider. No Supabase or Anthropic calls leave this machine for /api/*, and the browser
 // mock (browser-mock.js) answers the Supabase REST/auth calls the pages make.
 //   node qa/harness/dev-mock.mjs [port]      (default 5190)
-// Test-only endpoints under /__harness/: seed, state, fail (mock AI failure), model (model override), ai-limits.
+// Test-only endpoints under /__harness/: seed, artifact(s), state, fail (mock AI failure), model (model override), ai-limits.
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -42,6 +42,12 @@ const server = await createServer({
         req.on('data', (c) => (raw += c));
         req.on('end', () => { store.seed(JSON.parse(raw)); res.end('ok'); });
       });
+      s.middlewares.use('/__harness/artifact', (req, res) => { // seed a stored Create result (e.g. from an earlier engine)
+        let raw = '';
+        req.on('data', (c) => (raw += c));
+        req.on('end', () => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(store.seedArtifact(JSON.parse(raw)))); });
+      });
+      s.middlewares.use('/__harness/artifacts', (req, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(store._a)); });
       s.middlewares.use('/__harness/model', (req, res) => {
         const q = new URL(req.url, 'http://x').searchParams;
         const k = q.get('task');

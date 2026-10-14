@@ -21,9 +21,11 @@ import { createMeter } from './usage.js';
 import { GRADE_SYSTEM, GRADE_SCHEMA, gradeInstructions, ANALYST_SYSTEM, ASK_SYSTEM, OVERVIEW_SCHEMA, overviewInstructions, DETAILED_SCHEMA, detailedInstructions, NOTES_SCHEMA, notesInstructions, INSIGHT_SPECS, EXPAND_SCHEMA, expandInstructions } from './prompts.js';
 import { groundStructured, groundChapters, groundAnswer } from './grounding.js';
 import { TOOLS, ARTIFACT_KINDS, normalizeSettings, cardCount, questionCount, examBacked } from './tools.js';
+import { FILL_SCHEMA, fillInstructions, uncoveredConcepts, inheritRefs } from './study.js';
 import { INSTRUCTIONS_MISSING } from '../../src/lib/tool-settings.js';
 import { selectContext, needsRetrieval, formatExcerpts } from './retrieve.js';
-import { segmentsFromRow, modelLine, estimateTokens, normalizeRecordingType, RECORDING_TYPES, isNotFound, refersToPlayback, isFollowUp } from '../../src/lib/segments.js';
+import { segmentsFromRow, modelLine, estimateTokens, normalizeRecordingType, RECORDING_TYPES, isNotFound, refersToPlayback, isFollowUp, fmtClock } from '../../src/lib/segments.js';
+import { speakerTable, dominantSpeaker, codedLine, tokenizeSpeakers, transcriptBasis, sameBasis, renderSpeakers } from '../../src/lib/speaker-refs.js';
 
 const PART_TOKENS = 80_000;
 // A request that started a generation and then died (function timeout, closed tab) leaves the row "generating".
@@ -38,8 +40,10 @@ const ARTIFACT_TAKEOVER_MS = 310_000;
 const EXPECTED_OUTPUT_TOKENS = { ask: 400, overview: 900, detailed_summary: 1800, notes: 2200, insights: 1800, grade: 150 };
 export function estimateMicrousd(feature, promptTokens) {
   // Haiku 5.5 base rates: $0.10 / M input = 0.1 µ$ per token, $0.50 / M output = 0.5 µ$ per token
-  const kind = String(feature).split(':')[0] === 'tool' ? 'tool' : String(feature).split(':')[0];
-  const out = EXPECTED_OUTPUT_TOKENS[kind] ?? 3000;
+  const [head, tool] = String(feature).split(':');
+  const kind = head === 'tool' ? 'tool' : head;
+  // study engine 2 writes a knowledge map before the cards / questions (measured: ~5–9k output tokens)
+  const out = head === 'tool' && (tool === 'flashcards' || tool === 'quiz') ? 9000 : EXPECTED_OUTPUT_TOKENS[kind] ?? 3000;
   return Math.round(Math.max(0, promptTokens) * 0.1 + out * 0.5);
 }
 // what one action sends: analyses read the whole transcript (in parts when long); Ask sends at most one part
@@ -89,6 +93,14 @@ function transcriptHeader(row, segments) {
   return `Recording length: about ${mins} minute${mins === 1 ? '' : 's'}. Speakers: ${speakers.join(', ') || 'unknown'}.`;
 }
 
+// Create tools: the transcript with speaker codes. The model writes {{S1}} for a speaker; the result shows each
+// speaker's current name (lib/speaker-refs.js), so renaming later needs no new generation.
+function codedHeader(row, segments, { table, shares }) {
+  const mins = Math.round((row.duration_seconds || segments.at(-1)?.end || 0) / 60);
+  const who = Object.entries(table).map(([code, t]) => `${code} = "${t.name}" (${Math.round((shares[code] || 0) * 100)}% of the words)`).join(', ');
+  return `Recording length: about ${mins} minute${mins === 1 ? '' : 's'}. Speakers, shown in the transcript by code: ${who || 'unknown'}. "Unknown" lines are from an unidentified speaker. Whenever your output refers to a speaker, write their code in double braces, e.g. {{S1}}; the app shows the speaker's current name there. Never write a speaker's name or code any other way.`;
+}
+
 // Split the transcript into parts that each fit one prompt.
 function parts(segments) {
   const out = [];
@@ -103,24 +115,26 @@ function parts(segments) {
   return out;
 }
 
-const userMessage = (header, segs, instructions) => ({
+const userMessage = (header, segs, instructions, line = modelLine) => ({
   role: 'user',
   content: [
     // No prompt caching: each analysis uses a different output schema, which changes the cached prefix, so
     // in testing cache writes (+25% input price) were never read back.
-    { type: 'text', text: `${header}\n<transcript>\n${segs.map(modelLine).join('\n')}\n</transcript>` },
+    { type: 'text', text: `${header}\n<transcript>\n${segs.map(line).join('\n')}\n</transcript>` },
     { type: 'text', text: instructions },
   ],
 });
 
 // One structured analysis over the whole transcript (map-reduce when it doesn't fit one prompt).
-async function analyze({ task, schema, instructions, row, segments, meter }) {
+// `speakers` (Create tools): lines show speaker codes ("S1") instead of names, and the header says who is who.
+async function analyze({ task, schema, instructions, row, segments, meter, speakers = null, mergeNote = '' }) {
   const ai = getProvider();
   const cfg = taskConfig(task);
-  const header = transcriptHeader(row, segments);
+  const header = speakers ? codedHeader(row, segments, speakers) : transcriptHeader(row, segments);
+  const line = speakers ? (s) => codedLine(s, speakers.codeOf, fmtClock) : modelLine;
   const usage = { input: 0, output: 0 };
   const run = async (segs, extra = '') => {
-    const r = await meter.call(task, () => ai.complete({ task, ...cfg, system: ANALYST_SYSTEM, schema, messages: [userMessage(header, segs, instructions + extra)] }));
+    const r = await meter.call(task, () => ai.complete({ task, ...cfg, system: ANALYST_SYSTEM, schema, messages: [userMessage(header, segs, instructions + extra, line)] }));
     usage.input += r.usage.input; usage.output += r.usage.output;
     return r;
   };
@@ -138,7 +152,7 @@ async function analyze({ task, schema, instructions, row, segments, meter }) {
   const reduce = taskConfig('reduce');
   const r = await meter.call(`${task}:merge`, () => ai.complete({
     task, ...reduce, system: ANALYST_SYSTEM, schema,
-    messages: [{ role: 'user', content: `${header}\nA long recording was analysed in ${chunks.length} consecutive parts. Merge these partial results into one result for the whole recording, following the same instructions. Keep the line-number refs exactly as given (they refer to the full transcript), remove duplicates, and keep the most important items.\n\nInstructions for the result:\n${instructions}\n\nPartial results in order:\n${partial.map((p, i) => `<part n="${i + 1}">\n${JSON.stringify(p)}\n</part>`).join('\n')}` }],
+    messages: [{ role: 'user', content: `${header}\nA long recording was analysed in ${chunks.length} consecutive parts. Merge these partial results into one result for the whole recording, following the same instructions. Keep the line-number refs exactly as given (they refer to the full transcript), remove duplicates, and keep the most important items.${mergeNote}\n\nInstructions for the result:\n${instructions}\n\nPartial results in order:\n${partial.map((p, i) => `<part n="${i + 1}">\n${JSON.stringify(p)}\n</part>`).join('\n')}` }],
   }));
   usage.input += r.usage.input; usage.output += r.usage.output;
   return { json: r.json, model: r.model, usage };
@@ -246,8 +260,11 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
   const fromStorage = async (a) => { await meter.finish({ cached: true }); return { artifact: publicArtifact(a), cached: true }; };
 
   const existing = await db.getArtifact(transcriptionId, kind, key);
+  // a result is current for the transcript's version, or for any later version that only renamed speakers
+  const basis = transcriptBasis(segments);
+  const current = (a) => a.source_version === version || sameBasis(a.content?.basis, basis);
   if (existing) {
-    if (existing.status === 'ready' && existing.source_version === version && !force) return fromStorage(existing);
+    if (existing.status === 'ready' && current(existing) && !force) return fromStorage(existing);
     if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < ARTIFACT_TAKEOVER_MS) return fromStorage(existing);
   }
   await reserveAi(db, meter, promptTokensOf(segments, { whole: true }));
@@ -258,17 +275,46 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
 
   try {
     const minutes = (row.duration_seconds || segments.at(-1)?.end || 0) / 60;
+    const speakers = speakerTable(segments);
+    let count = kind === 'flashcards' ? cardCount(minutes, normalized.size) : kind === 'quiz' ? questionCount(minutes, normalized.size) : null;
+    if (count && normalized.focus === 'essentials') count = Math.max(5, Math.round(count * 0.6));
     const ctx = {
-      count: kind === 'flashcards' ? cardCount(minutes, normalized.size) : kind === 'quiz' ? questionCount(minutes, normalized.size) : null,
+      count,
       transcriptText: segments.map((s) => s.text).join(' '),
       settings: normalized,
+      codeOf: speakers.codeOf,
+      dominant: dominantSpeaker(speakers.shares),
     };
     const instructions = tool.instructions(ctx) + (tool.focusNote?.[normalized.focus] || '');
-    const r = await analyze({ task: tool.task, schema: tool.schema, instructions, row, segments, meter });
+    const r = await analyze({
+      task: tool.task, schema: tool.schema, instructions, row, segments, meter, speakers,
+      mergeNote: tool.engine ? ' Concept ids from different parts may clash: give every concept a unique id and update the items that point to it.' : '',
+    });
+    tool.beforeGrounding?.(r.json);
     const g = groundStructured(r.json, segments);
-    const extra = tool.validate(g.content, segments, ctx) || 0;
-    tool.after?.(g.content, segments);
+    g.content = tokenizeSpeakers(g.content, speakers.codeOf);
+    const firstPass = tool.itemsKey ? structuredClone(g.content[tool.itemsKey] || []) : null;
+    let extra = tool.validate(g.content, segments, ctx) || 0;
+    // coverage pass (study engine 2): core concepts still without an item get one more, small call
+    if (tool.itemsKey) {
+      const missing = uncoveredConcepts(g.content.concepts, g.content[tool.itemsKey]);
+      if (missing.length && g.content[tool.itemsKey].length < ctx.count) {
+        const filled = await fillCoverage({ kind, tool, missing, row, segments, speakers, ctx, meter, usage: r.usage });
+        if (filled.length) {
+          // the whole set is checked again, so duplicates and limits apply across both passes
+          g.content[tool.itemsKey] = [...firstPass, ...filled];
+          delete g.content.quality;
+          extra = tool.validate(g.content, segments, ctx) || 0;
+          g.content.quality.filled = g.content[tool.itemsKey].filter((x) => missing.some((m) => String(m.id) === x.concept)).length;
+        }
+      }
+    }
+    tool.after?.(g.content, segments, ctx);
     if (ctx.count) g.content.target = ctx.count;
+    // what's needed to show current speaker names later, and to tell a rename from a real change
+    g.content.speakers = speakers.table;
+    g.content.basis = basis;
+    if (tool.engine) g.content.engine = tool.engine;
     const saved = await db.finishArtifact(claimed.id, { content: g.content, model: r.model, usage: r.usage });
     await meter.finish({ groundingPassed: g.dropped + extra === 0, droppedItems: g.dropped + extra });
     return { artifact: publicArtifact(saved), cached: false, dropped: g.dropped + extra };
@@ -277,6 +323,28 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
     await meter.finish({ error: message });
     await db.failArtifact(claimed.id, message, previous).catch(() => {});
     throw err instanceof AIError ? err : new AIError(message);
+  }
+}
+
+// Coverage pass: items for concepts the first pass left untested, written from the lines that explain them
+// (each concept's lines ± 2), so it costs a fraction of the first call. Returns grounded items with speaker codes.
+async function fillCoverage({ kind, tool, missing, row, segments, speakers, ctx, meter, usage }) {
+  const ids = new Set();
+  for (const k of missing) for (const ref of k.refs || []) for (let d = -2; d <= 2; d++) ids.add(ref + d);
+  const excerpt = segments.filter((s) => ids.has(s.id)).slice(0, 240);
+  if (!excerpt.length) return [];
+  try {
+    const r = await analyze({
+      task: `${tool.task}:fill`, schema: FILL_SCHEMA[kind], row, segments: excerpt, meter, speakers,
+      instructions: fillInstructions(kind, { concepts: missing, settings: ctx.settings, dominant: ctx.dominant }),
+    });
+    usage.input += r.usage.input; usage.output += r.usage.output;
+    const items = r.json?.[tool.itemsKey] || [];
+    inheritRefs(items, { concepts: missing });
+    const g = groundStructured({ [tool.itemsKey]: items }, segments);
+    return tokenizeSpeakers(g.content, speakers.codeOf)[tool.itemsKey] || [];
+  } catch {
+    return []; // the first pass stands on its own; coverage is a bonus
   }
 }
 
@@ -297,9 +365,12 @@ export async function gradeShortAnswer(db, { transcriptionId, artifactId, index,
   await reserveAi(db, meter, 600); // a bounded grading prompt (gradePromptFields)
   try {
     const ai = getProvider();
+    // a quiz from study engine 2 refers to speakers by code: grade with the names they had when it was written
+    const named = (t) => renderSpeakers(t, (code) => quiz.content.speakers?.[code]?.name || 'the speaker');
+    const qNamed = { ...q, question: named(q.question), answer: named(q.answer), explanation: named(q.explanation || ''), accept: (q.accept || []).map(named) };
     const r = await meter.call('grade', () => ai.complete({
       task: 'grade', ...taskConfig('grade'), system: GRADE_SYSTEM, schema: GRADE_SCHEMA,
-      messages: [{ role: 'user', content: gradeInstructions(gradePromptFields(q, lines, given)) }],
+      messages: [{ role: 'user', content: gradeInstructions(gradePromptFields(qNamed, lines, given)) }],
     }));
     const j = r.json || {};
     const verdict = ['correct', 'close', 'incorrect'].includes(j.verdict) ? j.verdict : 'incorrect';

@@ -1,10 +1,11 @@
 // Phase 5 tools: outputs a user creates on purpose from one recording (Study Guide, Flashcards, Quiz,
 // Meeting Recap, drafts…). Each tool = a JSON schema + instructions for the model + a validator that runs
-// after the shared grounding pass (grounding.js: unknown line ids removed, items without a real line dropped,
+// after the shared grounding pass. Speakers are written as codes ({{S1}}, lib/speaker-refs.js) in every tool (grounding.js: unknown line ids removed, items without a real line dropped,
 // `quote` / `evidence` fields checked word for word). Validators add the tool's own rules and count what
 // they had to drop, so the usage log shows how often the model needed correcting.
 import { str, nullableStr, refs, evidence, obj, list, point, decision, actionItem, dateItem, quote, DECISION_RULE, ACTION_RULE } from './prompts.js';
 import { normalizeToolSettings, quizQuestionCount } from '../../src/lib/tool-settings.js';
+import { STUDY_ENGINE, FLASHCARDS_SCHEMA, QUIZ_SCHEMA, flashcardInstructions, quizInstructions, inheritRefs, validateFlashcards, validateQuiz } from './study.js';
 
 const int = (description) => ({ type: 'integer', ...(description && { description }) });
 // Action Plan: where each candidate stands when the recording ends (only `open` is the plan itself)
@@ -75,19 +76,6 @@ export function unverifiedDetails(text, transcript) {
   return [...found].slice(0, 10);
 }
 
-// Deterministic shuffle (so a quiz's options don't always put the right answer first, yet stay stable).
-function shuffle(arr, seedText) {
-  let h = 2166136261;
-  for (const c of seedText) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
-    const j = h % (i + 1);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 const GROUNDED = 'Everything must come from this recording only. Do not add textbook knowledge, background facts, examples or definitions the speakers did not give; if something was only mentioned, not explained, leave it out or say it was mentioned.';
 
 // ---------- the tools ----------
@@ -138,91 +126,25 @@ Return empty lists for sections the lecture doesn't support.`,
     after: (c, segments) => { c.topics = fixStarts(c.topics, segments); },
   },
 
+  // Study engine 2 (server/ai/study.js): a knowledge map first, then cards / questions only from what matters
   flashcards: {
     task: 'flashcards',
-    schema: obj({
-      cards: list(obj({
-        front: str('A specific question or prompt that tests one piece of information'),
-        back: str('The answer, as stated in the recording (short)'),
-        evidence: evidence('the answer'),
-        refs,
-      })),
-    }),
-    instructions: ({ count }) => `Make up to ${count} FLASHCARDS from the recording above (fewer if it doesn't contain that much distinct material).
-${GROUNDED}
-- Each card tests one meaningful fact, definition, relationship, step or example that was actually stated. The back is the answer as stated (short), and evidence = the exact words it comes from.
-- Fronts must be specific ("What role did chlorophyll play, according to the lecture?"), never vague ("What topic was discussed?").
-- Only make a definition card when the term was actually defined in the recording.
-- No two cards may test the same fact.`,
-    validate(c, _segments, { count }) {
-      let dropped = 0;
-      const VAGUE = /^(what|which)\s+(topics?|subjects?)\s+(was|were|is|are)\s+(discussed|covered|talked about|mentioned)|^what (was|is) (this|the) (lecture|recording|talk|class) about/i;
-      const cards = (c.cards || []).filter((k) => {
-        const ok = String(k.front || '').trim().length >= 10 && String(k.back || '').trim().length >= 1 && !VAGUE.test(String(k.front).trim());
-        if (!ok) dropped++;
-        return ok;
-      });
-      const a = dedupe(cards, (k) => norm(k.front));
-      const b = dedupe(a.out, (k) => `${norm(k.back)}|${(k.refs || []).join(',')}`);
-      c.cards = b.out.slice(0, count + 2);
-      return dropped + a.dropped + b.dropped + Math.max(0, b.out.length - c.cards.length);
-    },
+    engine: STUDY_ENGINE,
+    schema: FLASHCARDS_SCHEMA,
+    instructions: flashcardInstructions,
+    itemsKey: 'cards',
+    beforeGrounding: (json) => inheritRefs(json.cards, json),
+    validate: validateFlashcards,
   },
 
   quiz: {
     task: 'quiz',
-    schema: obj({
-      questions: list(obj({
-        type: { type: 'string', enum: ['multiple_choice', 'true_false', 'short_answer'] },
-        question: str(),
-        options: list(str(), 'multiple_choice: 4 options, exactly one correct; true_false: ["True","False"]; short_answer: []'),
-        answer: str('The correct option text exactly, "True"/"False", or the short expected answer'),
-        accept: list(str(), 'short_answer only: other acceptable answers (synonyms, short forms)'),
-        explanation: str('One or two sentences explaining the answer from the recording'),
-        evidence: evidence('the answer'),
-        refs,
-      })),
-    }),
-    instructions: ({ count, settings }) => `Write a PRACTICE QUIZ of up to ${count} questions on the recording above (fewer if it doesn't support that many good questions).
-${GROUNDED}
-- Every question must be answerable from the recording alone; never test outside knowledge. Example: if the lecturer said "the exam only covers chapters 4 and 5", a valid question is "Which chapters did the lecturer say the exam covers?".
-- ${{
-    multiple_choice: 'Use only multiple_choice questions (4 plausible options, exactly one correct, the others clearly wrong according to the recording).',
-    true_false: 'Use only true_false questions; false statements must be clearly contradicted by the recording, not merely absent from it.',
-  }[settings?.types] || 'Mix types: mostly multiple_choice (4 plausible options, exactly one correct, the others clearly wrong according to the recording), some true_false, a few short_answer (answer of a few words).'}
-- ${settings?.difficulty === 'harder'
-    ? 'Make the questions challenging: test understanding of explanations, relationships, sequences and distinctions rather than single words, with plausible distractors — but every answer must still be stated in the recording.'
-    : 'Standard difficulty: test the important points clearly.'}
-- answer must be the exact text of the correct option for multiple_choice, "True" or "False" for true_false.
-- evidence = the exact words of the recording that give the answer. No two questions may test the same fact.`,
-    validate(c, _segments, { settings }) {
-      let dropped = 0;
-      const out = [];
-      for (const q of c.questions || []) {
-        const question = String(q.question || '').trim();
-        const answer = String(q.answer || '').trim();
-        if (question.length < 8 || !answer) { dropped++; continue; }
-        if (q.type === 'multiple_choice') {
-          const opts = [...new Map((q.options || []).map((o) => String(o).trim()).filter(Boolean).map((o) => [norm(o), o])).values()];
-          const correct = opts.filter((o) => norm(o) === norm(answer));
-          if (opts.length < 3 || opts.length > 5 || correct.length !== 1) { dropped++; continue; }
-          out.push({ ...q, question, answer: correct[0], options: shuffle(opts, question), accept: [] });
-        } else if (q.type === 'true_false') {
-          const a = /^true$/i.test(answer) ? 'True' : /^false$/i.test(answer) ? 'False' : null;
-          if (!a) { dropped++; continue; }
-          out.push({ ...q, question, answer: a, options: ['True', 'False'], accept: [] });
-        } else if (q.type === 'short_answer') {
-          if (answer.length > 120) { dropped++; continue; }
-          out.push({ ...q, question, answer, options: [], accept: (q.accept || []).map((x) => String(x).trim()).filter(Boolean).slice(0, 6) });
-        } else dropped++;
-      }
-      // a "multiple choice only" / "true or false only" quiz keeps only that type
-      const wanted = settings?.types && settings.types !== 'mixed' ? settings.types : null;
-      const typed = wanted ? out.filter((q) => q.type === wanted || (dropped++, false)) : out;
-      const d = dedupe(typed, (q) => norm(q.question));
-      c.questions = d.out;
-      return dropped + d.dropped;
-    },
+    engine: STUDY_ENGINE,
+    schema: QUIZ_SCHEMA,
+    instructions: quizInstructions,
+    itemsKey: 'questions',
+    beforeGrounding: (json) => inheritRefs(json.questions, json),
+    validate: validateQuiz,
   },
 
   definitions: {
@@ -276,12 +198,12 @@ ${GROUNDED}
 - important_dates: dates and deadlines exactly as said.
 A discussion, suggestion, preference or priority is not a decision. Return empty lists when nothing qualifies.`,
     validate: () => 0,
-    after(c, segments) {
+    after(c, segments, ctx) {
       c.topics = fixStarts(c.topics, segments);
-      // participants come from the transcript's own speaker labels, never from the model
+      // participants come from the transcript's own speakers, never from the model (as codes: renames show)
       const counts = new Map();
       for (const s of segments) if (s.speaker !== 'Unknown') counts.set(s.speaker, (counts.get(s.speaker) || 0) + 1);
-      c.participants = [...counts].sort((a, b) => b[1] - a[1]).map(([label, lines]) => ({ label, lines }));
+      c.participants = [...counts].sort((a, b) => b[1] - a[1]).map(([label, lines]) => ({ label: ctx?.codeOf?.has(label) ? `{{${ctx.codeOf.get(label)}}}` : label, lines }));
     },
   },
 

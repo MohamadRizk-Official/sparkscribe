@@ -9,7 +9,14 @@ export function memoryStore() {
   const artifacts = [];
   const now = () => new Date(Date.now() + insights.length + artifacts.length * 7 + Math.random()).toISOString();
   return {
-    _t: transcriptions, _i: insights, _q: questions,
+    _t: transcriptions, _i: insights, _q: questions, _a: artifacts,
+    // a stored Create result as it would exist in the database (e.g. one made by an earlier engine)
+    seedArtifact(row) {
+      const full = { id: randomUUID(), settings: {}, settings_key: '', status: 'ready', error: null, progress: null, model: 'seed', updated_at: now(), source_version: 1, ...row };
+      const i = artifacts.findIndex((a) => a.transcription_id === full.transcription_id && a.kind === full.kind && a.settings_key === full.settings_key);
+      if (i >= 0) artifacts.splice(i, 1, full); else artifacts.push(full);
+      return full;
+    },
     seed(row) {
       const prev = transcriptions.get(row.id);
       const changed = prev && (prev.transcript_text !== row.transcript_text || JSON.stringify(prev.segments) !== JSON.stringify(row.segments ?? null));

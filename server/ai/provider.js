@@ -19,8 +19,9 @@ const TASKS = {
   reduce: { env: 'AI_MODEL_SUMMARY', effort: 'medium', maxTokens: 10000 },
   // Phase 5 tools (Create tab): same default model; long structured outputs get more room
   study_guide: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 16000 },
-  flashcards: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000 },
-  quiz: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000 },
+  // study engine 2 writes a knowledge map before the cards / questions: more room
+  flashcards: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000 },
+  quiz: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000 },
   definitions: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 8000 },
   exam_points: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 8000 },
   meeting_recap: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000 },
