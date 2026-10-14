@@ -22,17 +22,21 @@ const sections = [
   { topics: [{ title: 'B', start_ref: 20 }], concepts: [con('c1', 'Comparative advantage again', 'supporting', [21], { topic: 'B' }), con('c2', 'Minimum wage debate', 'core', [30], { topic: 'B' })] },
 ];
 const merged = M.buildMap(sections, {
-  topics: [{ title: 'Trade', importance: 'major' }, { title: 'Labour', importance: 'minor' }],
-  concepts: [{ keys: ['s1.c2', 's2.c1'], name: 'Comparative advantage (trade)', importance: 'core', topic: 'Trade' }, { keys: ['s2.c2'], name: 'Minimum wage debate', importance: 'minor', topic: 'Labour' }],
+  topics: [{ title: 'Trade', importance: 'minor', keys: ['s1.c2', 's1.c3', 's2.c1'] }, { title: 'Labour', importance: 'minor', keys: ['s2.c2'] }, { title: 'Aside', importance: 'minor', keys: ['s1.c1'] }],
+  same: [{ keys: ['s1.c2', 's2.c1'], name: 'Comparative advantage (trade)' }],
 });
-ok(merged.concepts.length === 4, 'the same idea in two sections becomes one concept; nothing else is lost (left-out entries are kept)');
+ok(merged.concepts.length === 4, 'the same idea in two sections becomes one concept; nothing else is lost');
 const trade = merged.concepts.find((c) => c.name === 'Comparative advantage (trade)');
-ok(trade.refs.join() === '2,21', 'a merged concept keeps the lines of every section it came from');
-ok(merged.concepts.find((c) => c.name === 'Minimum wage debate').importance === 'supporting', 'an idea a section called core can be ranked down, but never to minor');
-ok(merged.concepts.find((c) => c.name === 'Elasticity debate').importance === 'supporting' && merged.concepts.find((c) => c.name === 'A date').importance === 'minor', 'entries the merge left out keep their own importance');
+ok(trade.refs.join() === '2,21' && trade.importance === 'core', 'a merged concept keeps the lines of every section and the highest importance any section gave it');
+ok(merged.concepts.find((c) => c.name === 'A date').importance === 'minor', 'entries keep their own importance');
 ok(merged.concepts.map((c) => c.id).join() === 'c1,c2,c3,c4' && merged.concepts[0].name === 'Comparative advantage (trade)', 'concepts are numbered in recording order');
-const justice = merged.topics.find((t) => t.title === 'Labour');
-ok(merged.topics.find((t) => t.title === 'Trade').importance === 'major' && justice.importance === 'minor', 'topics come from the merge, in order');
+const topicTitles = merged.topics.map((t) => t.title);
+ok(topicTitles.join() === 'Trade,Aside,Labour' && merged.topics.map((t) => t.id).join() === 't1,t2,t3', 'topics come from the merge, numbered in recording order');
+ok(merged.topics.find((t) => t.title === 'Trade').importance === 'major' && merged.topics.find((t) => t.title === 'Labour').importance === 'major', 'a topic holding a core idea is major even when the merge called it minor');
+ok(merged.topics.find((t) => t.title === 'Aside').importance === 'minor', 'a topic with one supporting idea stays minor');
+const long = M.buildMap([{ topics: [], concepts: [con('c1', 'Debate one', 'supporting', [1, 2, 3, 4]), con('c2', 'Debate two', 'supporting', [5, 6, 7, 8])] }], { topics: [{ title: 'Debate', importance: 'minor', keys: ['s1.c1', 's1.c2'] }], same: [] });
+ok(long.topics[0].importance === 'major', 'a topic the speaker spent substantial time explaining is major');
+ok(merged.concepts.find((c) => c.name === 'Minimum wage debate').topic === merged.topics.find((t) => t.title === 'Labour').id, 'each concept is in the topic the merge placed it in');
 ok(M.buildMap(sections, null).concepts.length === 5, 'without a merge (one section) every entry stays');
 
 // ---------- selection ----------
@@ -53,6 +57,10 @@ ok(two.coverage.topics_covered === 2 && two.coverage.missing_topics.join() === '
 const all = M.selectConcepts(map, 20);
 ok(all.selected.length === 5 && !all.selected.some((c) => c.id === 'c6' || c.id === 'c7'), 'never a minor or an unreliable concept, even with room to spare');
 ok(M.selectConcepts(map, 20, { focus: 'essentials' }).selected.map((c) => c.id).join() === 'c1,c2,c3,c5', 'Essentials: core ideas only');
+const lopsided = { topics: [{ id: 't1', title: 'Big', importance: 'major' }, { id: 't2', title: 'Small', importance: 'major' }], concepts: [
+  ...[1, 2, 3, 4, 5, 6].map((i) => ({ id: `b${i}`, topic: 't1', importance: 'core', clarity: 'clear', refs: [i] })),
+  ...[1, 2].map((i) => ({ id: `s${i}`, topic: 't2', importance: 'core', clarity: 'clear', refs: [20 + i] })) ] };
+ok(M.selectConcepts(lopsided, 4).selected.filter((c) => c.topic === 't1').length === 3, 'a topic with more key ideas gets proportionally more items, not the same number as a small one');
 ok(M.excerptIds([{ refs: [5] }, { refs: [7] }], Array.from({ length: 20 }, (_, id) => ({ id })), 1).join() === '4,5,6,7,8', 'excerpts: the cited lines with a little context, in order');
 
 // ---------- checks ----------
@@ -83,6 +91,7 @@ ok(M.applyChecks('quiz', [mcq], [{ ...base, index: 0, fixed_answer: 'Z' }]).item
 const words = M.transcriptWordSet([{ text: "Al-Kaldoon said the cycle repeats. The Keynesians and O'Neill's followers disagree; Adam Smith said look at what was said." }]);
 ok(M.unseenNames('What did al-Khaldun say about the cycle?', words).join() === 'al-Khaldun', 'a guessed spelling of a garbled name is caught');
 ok(M.unseenNames("Why do Keynesian and O'Neill's views differ, according to Adam Smith?", words).length === 0, 'plural / possessive forms of names in the transcript are fine');
+ok(M.unseenNames(['Which method did they propose?', 'Setting up protection areas', 'Moving reefs'].join('\n'), new Set(['which', 'method', 'they', 'propose', 'protection', 'areas', 'reefs'])).length === 0, 'the first word of each answer option is not treated as a name');
 ok(M.unseenNames('Mitosis is described by Smith.', new Set(['mitosis', 'described'])).join() === 'Smith', 'the first word of a sentence is not treated as a name');
 
 console.log(`\n${pass} checks passed`);

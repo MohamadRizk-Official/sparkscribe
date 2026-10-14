@@ -75,6 +75,9 @@ ok(S.keepsAttribution({ front: 'In the Keynesian view, what can cause inflation?
 ok(S.keepsAttribution({ front: 'Why does the lecturer reject the claim that printing money never causes inflation?', back: '…' }, { stance: 'criticized', held_by: 'some online commentators' }), 'a criticized view may be asked about through the criticism');
 ok(!S.keepsAttribution({ front: 'What argument was given for pricing at ten dollars?', back: 'Higher costs.' }, { stance: 'attributed', held_by: '{{S2}}' })
   && S.keepsAttribution({ front: 'Why did {{S2}} argue for ten dollars a month?', back: 'Higher costs.' }, { stance: 'attributed', held_by: '{{S2}}' }), "a meeting participant's proposal must say whose it was");
+ok(S.keepsAttribution({ front: 'What argument was given for pricing at ten dollars?', back: 'Higher costs.' }, { stance: 'attributed', held_by: null }), 'no recorded holder: nothing to check against, the item stays');
+ok(S.keepsAttribution({ front: 'Why does the lecturer say demand falls?', back: 'Prices rose.' }, { stance: 'attributed', held_by: '{{S1}}' }, 'S1')
+  && !S.keepsAttribution({ front: 'Why does demand fall?', back: 'Prices rose.' }, { stance: 'attributed', held_by: '{{S2}}' }, 'S1'), "the lecturer's own view needs no name; another speaker's still does");
 // legitimate items must survive the checks (short answers, definitions, technical terms, numbers, nuance)
 const legit = [
   ['What data structure do most database indexes use?', 'A B-tree'],

@@ -2,7 +2,7 @@
 //
 // Engine 2 read a whole long lecture in one go and listed concepts from memory of it; whole debates could fall
 // out of the map (and so out of every card and question). Engine 3:
-//   1. cuts the recording into sections (~12 minutes of speech, at natural pauses, with a few lines of context on
+//   1. cuts the recording into sections (~15–20 minutes of speech, at natural pauses, with a few lines of context on
 //      each side) and lists the topics and concepts of each section separately, in parallel;
 //   2. merges the section lists into one map for the whole recording (same idea in two sections → one concept),
 //      grouped into topics and ranked; nothing a section found is dropped, and nothing a section rated core can
@@ -19,8 +19,9 @@ import { str, nullableStr, refs, evidence, obj, list } from './prompts.js';
 import { CONCEPT_KINDS, STANCES, enumOf, STYLE_RULES, speakerNote, FOCUS, EXPLAIN, QUIZ_TYPES, FLASHCARD, QUESTION } from './study.js';
 
 export const STUDY_ENGINE_3 = 3;
-export const SECTION_TOKENS = 4500;
+export const SECTION_TOKENS = 6000;
 const OVERLAP_LINES = 4;
+const MAJOR_TOPIC_LINES = 8;
 const IMPORTANCE = ['core', 'supporting', 'minor'];
 const int = (description) => ({ type: 'integer', ...(description && { description }) });
 const bool = (description) => ({ type: 'boolean', ...(description && { description }) });
@@ -87,24 +88,24 @@ A section with nothing educational returns empty lists.`;
 }
 
 // ---------------- 2. one map for the whole recording ----------------
+// Short output on purpose (the merge used to rewrite every concept): topics with the keys they hold, and only the
+// groups of entries that are one idea. Names, importance and lines come from the sections.
 export const CONSOLIDATE_SCHEMA = obj({
-  topics: list(obj({ title: str('Topic title, 2–6 words'), importance: enumOf(['major', 'minor'], 'major = a central topic of the recording that study materials must cover') }), 'The recording\'s topics, in order'),
-  concepts: list(obj({
-    keys: list(str(), 'The keys of every section entry that is this same idea'),
-    name: str('Concept name'),
-    importance: enumOf(IMPORTANCE),
-    topic: str('Its topic: exactly one of the titles in "topics"'),
-  }), 'Every concept of the recording, in order; every key appears exactly once'),
+  topics: list(obj({
+    title: str('Topic title, 2–6 words'),
+    importance: enumOf(['major', 'minor'], 'major = a central topic of the recording that study materials must cover'),
+    keys: list(str(), 'The keys of the entries in this topic'),
+  }), 'The recording\'s topics, in order; every key in exactly one topic'),
+  same: list(obj({ keys: list(str(), 'Two or more keys that are the same idea'), name: str('Name for the merged idea') }), 'Only groups of entries that are the SAME idea; empty if none'),
 });
 
 export function consolidateInstructions(entries) {
-  return `These concepts were found section by section in one recording, in order. Build ONE study map for the whole recording.
+  return `These concepts were found section by section in one recording, in order. Organize them into ONE study map for the whole recording.
 <entries>
 ${entries.map((e) => `${e.key} | ${e.topic} | ${e.importance} | ${e.kind} | ${e.stance}${e.held_by ? ` (${e.held_by})` : ''} | ${e.name}: ${e.summary}`).join('\n')}
 </entries>
-- concepts: merge entries that are the SAME idea (sections overlap, and speakers recap). Do not merge different ideas just because they are related: two schools' positions on one question stay two concepts. Every key must appear in exactly one concept. Keep the recording's order.
-- importance for the whole recording: core = a central teaching a student must know; supporting = needed to understand a core idea, or a debate or example the speaker spent real time on; minor = trivia or a passing detail.
-- topics: the coherent themes the speaker spent time on, in order (usually 4–12 for an hour-long lecture; fewer for a short recording). A topic is "major" if it holds core material or a substantial debate. Give every concept a topic from this list.`;
+- topics: the coherent themes the speaker spent time on, in order (usually 4–12 for an hour-long lecture; fewer for a short recording), each listing the keys of its entries; every key in exactly one topic. A topic is "major" if it holds core material, or a debate or argument the speaker spent real time on.
+- same: groups of entries that are the SAME idea (sections overlap, and speakers recap), with a name for it. Do not group different ideas just because they are related: two schools' positions on one question stay separate.`;
 }
 
 const rank = (i) => IMPORTANCE.indexOf(i);
@@ -122,55 +123,67 @@ export function buildMap(sections, consolidation) {
     }
     for (const t of sec.topics || []) sectionTopic.set(`${si}|${String(t.title).toLowerCase()}`, t);
   });
+  // the topic each key was placed in (first placement wins)
+  const topicOfKey = new Map();
+  const given = (consolidation?.topics || []).map((t) => ({ title: String(t.title || '').trim(), importance: t.importance }));
+  (consolidation?.topics || []).forEach((t, i) => { for (const k of t.keys || []) if (base.has(String(k)) && !topicOfKey.has(String(k))) topicOfKey.set(String(k), i); });
+
   const used = new Set();
-  const merged = [];
-  for (const g of consolidation?.concepts || []) {
+  const groups = [];
+  for (const g of consolidation?.same || []) {
     const keys = (g.keys || []).map(String).filter((k) => base.has(k) && !used.has(k));
     if (!keys.length) continue;
     keys.forEach((k) => used.add(k));
-    merged.push({ keys, name: g.name, importance: g.importance, topic: g.topic });
+    groups.push({ keys, name: keys.length > 1 ? g.name : null });
   }
-  // anything the consolidation left out stays, as it was found
-  for (const k of base.keys()) if (!used.has(k)) merged.push({ keys: [k], name: base.get(k).name, importance: base.get(k).importance, topic: base.get(k).topic });
+  // every other entry stays, as it was found
+  for (const k of base.keys()) if (!used.has(k)) groups.push({ keys: [k], name: null });
 
-  const concepts = merged.map((g) => {
+  const concepts = groups.map((g) => {
     const src = g.keys.map((k) => base.get(k));
     const best = [...src].sort((a, b) => (a.clarity === 'clear' ? 0 : 1) - (b.clarity === 'clear' ? 0 : 1) || rank(a.importance) - rank(b.importance))[0];
     const held = src.find((s) => ['attributed', 'criticized', 'quotation'].includes(s.stance)) || best;
-    const bestSource = Math.min(...src.map((s) => rank(s.importance)));
-    // the map may rank an idea down, but never lose one a section called core
-    let importance = IMPORTANCE.includes(g.importance) ? g.importance : IMPORTANCE[bestSource];
-    if (bestSource === 0 && importance === 'minor') importance = 'supporting';
+    const placed = g.keys.map((k) => topicOfKey.get(k)).find((i) => i !== undefined);
     return {
-      name: String(g.name || best.name), kind: best.kind, importance, stance: held.stance, held_by: held.held_by ?? null,
+      // importance is the highest any section gave it: a merge never lowers an idea
+      name: String(g.name || best.name), kind: best.kind, importance: IMPORTANCE[Math.min(...src.map((s) => rank(s.importance)).filter((r) => r >= 0), 2)],
+      stance: held.stance, held_by: held.held_by ?? null,
       summary: best.summary, reasoning: src.map((s) => s.reasoning).find(Boolean) ?? null,
       clarity: src.some((s) => s.clarity === 'clear') ? 'clear' : 'unreliable',
       exam_words: src.map((s) => s.exam_words).find(Boolean) ?? null,
       evidence: best.evidence, refs: [...new Set(src.flatMap((s) => s.refs || []))].sort((a, b) => a - b).slice(0, 6),
-      topicTitle: String(g.topic || best.topic || '').trim(), section: best.section, sectionTopic: best.topic,
+      placed, section: best.section, sectionTopic: best.topic,
     };
   }).sort((a, b) => firstRef(a) - firstRef(b));
 
-  // topics: the consolidation's, in recording order; a concept without a valid one keeps its section's topic
-  const titles = new Map((consolidation?.topics || []).map((t) => [String(t.title).trim().toLowerCase(), t]));
+  // topics: the consolidation's, in recording order; a concept it did not place keeps its section's topic
   const topics = [];
   const topicOf = new Map();
   for (const c of concepts) {
-    const key = titles.has(c.topicTitle.toLowerCase()) ? c.topicTitle.toLowerCase() : `${c.section}|${String(c.sectionTopic || c.name).toLowerCase()}`;
+    const key = c.placed !== undefined && given[c.placed]?.title ? `g${c.placed}` : `${c.section}|${String(c.sectionTopic || c.name).toLowerCase()}`;
     let t = topicOf.get(key);
     if (!t) {
-      const given = titles.get(key);
+      const g = c.placed !== undefined ? given[c.placed] : null;
       const st = sectionTopic.get(`${c.section}|${String(c.sectionTopic || '').toLowerCase()}`);
-      t = { id: `t${topics.length + 1}`, title: given?.title || c.sectionTopic || c.name, importance: given?.importance === 'major' ? 'major' : 'minor', start_ref: Number.isInteger(st?.start_ref) ? st.start_ref : firstRef(c) };
+      t = { id: `t${topics.length + 1}`, title: g?.title || c.sectionTopic || c.name, importance: g?.importance === 'major' ? 'major' : 'minor', start_ref: Number.isInteger(st?.start_ref) ? st.start_ref : firstRef(c) };
       topics.push(t); topicOf.set(key, t);
     }
     c.topic = t.id;
     t.start_ref = Math.min(t.start_ref, firstRef(c));
-    if (c.importance === 'core' && c.clarity === 'clear') t.importance = 'major';
   }
+  // a topic is major (must be covered) when it holds a core idea, three or more ideas worth studying, or
+  // substantial explaining: the model's label alone can rank a long debate as an aside
+  for (const t of topics) {
+    const mine = concepts.filter((c) => c.topic === t.id && c.clarity === 'clear' && c.importance !== 'minor');
+    const lines = new Set(mine.flatMap((c) => c.refs || [])).size;
+    if (mine.some((c) => c.importance === 'core') || mine.length >= 3 || lines >= MAJOR_TOPIC_LINES) t.importance = 'major';
+  }
+  topics.sort((a, b) => (a.start_ref ?? Infinity) - (b.start_ref ?? Infinity));
+  const order = new Map(topics.map((t, i) => [t.id, `t${i + 1}`]));
+  for (const t of topics) t.id = order.get(t.id);
   const out = concepts.map((c, i) => {
-    const { topicTitle, section, sectionTopic: _s, ...rest } = c;
-    return { id: `c${i + 1}`, ...rest };
+    const { placed, section, sectionTopic: _s, ...rest } = c;
+    return { id: `c${i + 1}`, ...rest, topic: order.get(c.topic) };
   });
   for (const t of topics) if (!Number.isFinite(t.start_ref)) t.start_ref = null;
   return { topics, concepts: out };
@@ -178,7 +191,7 @@ export function buildMap(sections, consolidation) {
 
 // ---------------- 3. what gets an item ----------------
 // Within `count` items: one for every major topic first (its most important concept), then the remaining core
-// concepts, then supporting ones (not for Essentials), each round going topic by topic in recording order.
+// concepts, then supporting ones (not for Essentials), spread over topics in proportion to their key ideas.
 export function selectConcepts(map, count, { focus = 'balanced' } = {}) {
   const eligible = (map.concepts || []).filter((c) => c.clarity === 'clear' && (c.importance === 'core' || (c.importance === 'supporting' && focus !== 'essentials')));
   const majors = (map.topics || []).filter((t) => t.importance === 'major');
@@ -188,14 +201,21 @@ export function selectConcepts(map, count, { focus = 'balanced' } = {}) {
   const picked = [];
   const take = (c) => { if (c && picked.length < count && !picked.includes(c)) picked.push(c); };
   for (const t of majors) take(byTopic.get(t.id)?.[0]);
+  // the rest go where the share is lowest: a topic holding many key ideas (a long debate) gets proportionally
+  // more items than a short one, instead of the same number each; ties go in recording order
   const rounds = (level) => {
-    let more = true;
-    for (let r = 0; more && picked.length < count; r++) {
-      more = false;
+    while (picked.length < count) {
+      let best = null;
+      let bestShare = Infinity;
       for (const t of map.topics || []) {
-        const c = (byTopic.get(t.id) || []).filter((x) => x.importance === level && !picked.includes(x))[0];
-        if (c) { take(c); more = true; }
+        const list = byTopic.get(t.id) || [];
+        const c = list.find((x) => x.importance === level && !picked.includes(x));
+        if (!c) continue;
+        const share = list.filter((x) => picked.includes(x)).length / list.filter((x) => rank(x.importance) <= rank(level)).length;
+        if (share < bestShare) { best = c; bestShare = share; }
       }
+      if (!best) return;
+      take(best);
     }
   };
   rounds('core');

@@ -143,8 +143,8 @@ function studyEngine3(base, step, text) {
     };
   }
   if (base === 'studymap' && step === 'merge') {
-    const keys = [...tag('entries').matchAll(/^(s\d+\.c\d+) \| [^|]*\| (\w+)/gm)];
-    return { topics: [{ title: 'Mock topic', importance: 'major' }], concepts: keys.map((m) => ({ keys: [m[1]], name: m[1], importance: m[2], topic: 'Mock topic' })) };
+    const keys = [...tag('entries').matchAll(/^(s\d+\.c\d+) \|/gm)].map((m) => m[1]);
+    return { topics: [{ title: 'Mock topic', importance: 'major', keys }], same: [] };
   }
   if (step === 'compose') {
     const ids = [...tag('map').matchAll(/"id": "(c\d+)"/g)].map((m) => m[1]);

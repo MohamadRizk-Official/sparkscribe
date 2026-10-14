@@ -101,8 +101,9 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
 
   // a name the transcript never contains is a guess or an invention: say so on the item
   const words = transcriptWordSet(segments);
+  // each part on its own line: the first word of an answer or an option starts a sentence, it is not a name
   for (const it of c[key]) {
-    const names = unseenNames(`${it.front || it.question || ''} ${it.back || it.answer || ''} ${it.explanation || ''} ${(it.options || []).join(' ')}`, words);
+    const names = unseenNames([it.front || it.question, it.back || it.answer, it.explanation, ...(it.options || [])].filter(Boolean).join('\n'), words);
     if (names.length) {
       it.caution = [it.caution, `Spelling not found in the transcript: ${names.map((n) => `“${n}”`).join(', ')}. Check the recording.`].filter(Boolean).join(' ');
       stats.unseen_names = (stats.unseen_names || 0) + 1;

@@ -214,8 +214,11 @@ const jaccard = (a, b) => {
   return n / (A.size + B.size - n);
 };
 // An attributed / criticized / quoted position must keep who holds it (or, for a criticism, say it's criticized)
-export function keepsAttribution(item, c) {
+export function keepsAttribution(item, c, dominant = null) {
   if (!c || !['attributed', 'criticized', 'quotation'].includes(c.stance)) return true;
+  // nothing recorded to check against (the verification pass still checks attribution against the lines)
+  const held = String(c.held_by || '').trim();
+  if (!held) return true;
   // "True or false: adding indexes always makes queries faster" → False: testing the rejected claim IS the criticism
   if (c.stance === 'criticized' && item.type === 'true_false' && /^false$/i.test(String(item.answer))) return true;
   // "Does adding more indexes always make queries faster?" → "No. …": answering no is the criticism
@@ -224,7 +227,12 @@ export function keepsAttribution(item, c) {
   const text = raw.toLowerCase();
   // a participant's view: the item must say whose it is, by naming a participant (it may be about another
   // participant's reaction to it: "What concern did {{S2}} raise about {{S3}}'s proposal?")
-  if (/\{\{S\d+\}\}/.test(String(c.held_by || ''))) return /\{\{S\d+\}\}/.test(raw);
+  const codes = held.match(/\{\{S\d+\}\}/g);
+  if (codes) {
+    // the lecturer's own view (the speaker who says nearly everything is written as "the lecturer")
+    if (dominant && codes.every((x) => x === `{{${dominant}}}`)) return true;
+    return /\{\{S\d+\}\}/.test(raw);
+  }
   // the holder's name as a short stem, so spellings match ("Behaviourism" ~ "behaviorist", "O'Neill" ~ "ONeill", "Keynesian" ~ "Keynes")
   const flat = (t) => t.toLowerCase().normalize('NFKD').replace(/[̀-ͯ'’ʿʾ`]/g, '');
   const hay = flat(text);
@@ -300,7 +308,7 @@ export function validateFlashcards(c, segments, { count, dominant, rawConceptIds
     if (con.clarity === 'unreliable') { drop('unreliable_source', k.front, k.back); continue; }
     if (isCircular(front, back)) { drop('circular', k.front, k.back); continue; }
     if (vagueStart(front)) { drop('vague', k.front, k.back); continue; }
-    if (!keepsAttribution({ ...k, front }, con)) { drop('attribution_lost', k.front, k.back); continue; }
+    if (!keepsAttribution({ ...k, front }, con, dominant)) { drop('attribution_lost', k.front, k.back); continue; }
     const w = dupWords(front);
     if (seen.some((x) => isDup(x, w))) { drop('duplicate', k.front, k.back); continue; }
     const n = perConcept.get(con.id) || 0;
@@ -364,7 +372,7 @@ export function validateQuiz(c, segments, { count, settings, dominant, rawConcep
       if (isCircular(question, answer)) { drop('circular', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
       item.accept = (q.accept || []).map((x) => String(x).trim()).filter(Boolean).slice(0, 6);
     } else { drop('malformed', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
-    if (!keepsAttribution(item, con)) { drop('attribution_lost', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
+    if (!keepsAttribution(item, con, dominant)) { drop('attribution_lost', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
     const w = dupWords(question);
     if (seen.some((x) => isDup(x, w))) { drop('duplicate', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
     const n = perConcept.get(con.id) || 0;

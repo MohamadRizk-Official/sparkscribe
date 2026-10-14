@@ -363,7 +363,8 @@ export function createToolsUI(api) {
       const missing = (cv.missing_topics || []).slice(0, 4).map((x) => `“${esc(x)}”`).join(', ');
       return `<div class="ins-msg coverage-note warn"><span>Covers ${cv.topics_covered} of the ${cv.topics} main topics of this recording.${missing ? ` Not included: ${missing}.` : ''}${kind === 'study_guide' ? '' : ` Choose <b>${more}</b> for a fuller set.`}</span></div>`;
     }
-    return `<p class="ins-sub coverage-note">Covers all ${cv.topics} main topic${cv.topics === 1 ? '' : 's'} of this recording${cv.core ? ` and ${cv.core_covered} of its ${cv.core} key ideas` : ''}.</p>`;
+    const fuller = cv.core_covered < cv.core && kind !== 'study_guide' ? ` Choose <b>${more}</b> to include more of them.` : '';
+    return `<p class="ins-sub coverage-note">Covers all ${cv.topics} main topic${cv.topics === 1 ? '' : 's'} of this recording${cv.core ? ` and ${cv.core_covered} of its ${cv.core} key ideas` : ''}.${fuller}</p>`;
   }
 
   // the earlier version of flashcards / a quiz: kept, readable, and one click from an improved one
