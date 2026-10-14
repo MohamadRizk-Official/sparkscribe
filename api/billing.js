@@ -3,11 +3,12 @@
 //   action "authorize", durationSeconds -> may a recording this long be transcribed now?
 //   action "checkout", plan: "plus"|"pro" -> { url } Stripe Checkout (or a plan change for paid users)
 //   action "portal"                     -> { url } Stripe Customer Portal
+//   action "delete_account"             -> cancels the account's Stripe subscriptions, then deletes the account
 // The user is always the one in the verified session token; the browser never names a user, customer,
 // price or plan status. Only a plan key is accepted, and the server maps it to its own Stripe price.
 import { readJson, sendJson } from '../server/http.js';
 import { userClient, appOrigin, BillingError, billingLog, billingConfigured, isLiveMode, priceIdFor, loadPlans, paymentsEnabled } from '../server/billing/config.js';
-import { getStatus, authorize, createCheckout, createPortal } from '../server/billing/service.js';
+import { getStatus, authorize, createCheckout, createPortal, deleteAccount } from '../server/billing/service.js';
 
 async function signedIn(req) {
   const token = /^Bearer (.+)$/.exec(req.headers.authorization || '')?.[1];
@@ -37,6 +38,9 @@ export default async function handler(req, res) {
         return sendJson(res, 200, await createCheckout(sb, user, String(body.plan || ''), appOrigin(req)));
       case 'portal':
         return sendJson(res, 200, await createPortal(sb, user, appOrigin(req)));
+      case 'delete_account':
+        if (body.confirm !== 'DELETE') throw new BillingError('Type DELETE to confirm.', { status: 400, code: 'bad_request' });
+        return sendJson(res, 200, await deleteAccount(sb, user));
       default:
         throw new BillingError('Unknown action.', { status: 400, code: 'bad_request' });
     }

@@ -7,7 +7,8 @@
 //   createCheckout()     Stripe Checkout for Free -> Plus/Pro; a plan change for paid users (Customer Portal)
 //   createPortal()       Stripe Customer Portal for the signed-in user's own customer
 //   handleEvent()        a verified Stripe webhook event -> synchronized subscription state
-import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed } from './config.js';
+//   deleteAccount()      stop billing in Stripe, then delete the account (nobody keeps paying for a deleted account)
+import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured } from './config.js';
 
 const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
 // SparkScribe's own Customer Portal settings (plans, cancellation at period end), if configured
@@ -95,6 +96,10 @@ export async function createCheckout(sb, user, planKey, origin) {
     billingLog('plan_change_session', { user: user.id, to: plan.key });
     return { url: session.url, kind: 'change' };
   }
+  // Checkout pages this customer opened earlier (another tab, a double click) are closed first, so at most one can
+  // be paid. Two paid at the same instant are still caught by the webhook (settleDuplicates).
+  const open = await stripe.checkout.sessions.list({ customer, status: 'open', limit: 10 }).catch(() => ({ data: [] }));
+  for (const s of open.data || []) await stripe.checkout.sessions.expire(s.id).catch(() => {});
   if (current?.status === 'incomplete') {
     // an earlier checkout that never completed payment: let Stripe expire it rather than stacking another
     await stripe.subscriptions.cancel(current.id).catch(() => {});
@@ -153,6 +158,77 @@ async function syncSubscription(subscriptionId) {
   return { userId, customer: idOf(sub.customer), subscription: sub.id, plan: plan || 'unknown_price', status: sub.status };
 }
 
+const ACTIVE = (s) => PAID_STATUSES.has(s.status);
+
+// Refund what a subscription was charged (a duplicate, or a payment made for an account that no longer exists).
+// `invoice`: refund only that invoice (a renewal charged after the account was deleted); otherwise every paid one.
+async function refundSubscription(subscriptionId, reason, invoice = null) {
+  const stripe = getStripe();
+  const invoices = invoice ? { data: [await stripe.invoices.retrieve(invoice)] } : await stripe.invoices.list({ subscription: subscriptionId, status: 'paid', limit: 10 });
+  let refunded = 0;
+  for (const inv of invoices.data) {
+    if (!inv.amount_paid) continue;
+    const payments = await stripe.invoicePayments.list({ invoice: inv.id, limit: 10 });
+    for (const p of payments.data) {
+      if (p.status !== 'paid') continue;
+      const pi = idOf(p.payment?.payment_intent);
+      const charge = idOf(p.payment?.charge);
+      if (!pi && !charge) continue;
+      await stripe.refunds.create({ ...(pi ? { payment_intent: pi } : { charge }), reason: reason === 'duplicate' ? 'duplicate' : 'requested_by_customer', metadata: { sparkscribe_reason: reason } },
+        { idempotencyKey: `sparkscribe-refund-${pi || charge}` });
+      refunded++;
+    }
+  }
+  return refunded;
+}
+
+// One customer, one paying subscription. If two checkouts were paid at the same moment, the newer subscription is
+// canceled at once and its payment refunded; the first one stays.
+async function settleDuplicates(customer) {
+  const stripe = getStripe();
+  const subs = (await stripe.subscriptions.list({ customer, status: 'all', limit: 20 })).data.filter(ACTIVE);
+  if (subs.length < 2) return 0;
+  subs.sort((a, b) => a.created - b.created || (a.id < b.id ? -1 : 1));
+  for (const extra of subs.slice(1)) {
+    await stripe.subscriptions.cancel(extra.id, { prorate: false }, { idempotencyKey: `sparkscribe-dup-cancel-${extra.id}` });
+    const refunds = await refundSubscription(extra.id, 'duplicate');
+    billingLog('duplicate_subscription_canceled', { customer, subscription: extra.id, kept: subs[0].id, refunds });
+    await syncSubscription(extra.id).catch(() => {});
+  }
+  return subs.length - 1;
+}
+
+// A SparkScribe subscription whose account no longer exists (deleted while a Checkout page was still open, or
+// removed by an administrator) must not keep charging: it is canceled at once. A payment made after the account
+// was gone (a completed Checkout, or a renewal) is refunded too.
+async function stopOrphan(subscriptionId, { refund, invoice = null }) {
+  const stripe = getStripe();
+  const sub = await stripe.subscriptions.retrieve(subscriptionId);
+  if (!/^[0-9a-f-]{36}$/i.test(sub.metadata?.supabase_user_id || '')) return false; // not created by SparkScribe
+  if (!['canceled', 'incomplete_expired'].includes(sub.status)) {
+    await stripe.subscriptions.cancel(sub.id, { prorate: false }, { idempotencyKey: `sparkscribe-orphan-cancel-${sub.id}` });
+  }
+  const refunds = refund ? await refundSubscription(sub.id, 'account_deleted', invoice) : 0;
+  billingLog('orphan_subscription_canceled', { subscription: sub.id, refunds });
+  return true;
+}
+
+// A subscription for a customer the database doesn't know, but whose metadata (written by this server at Checkout)
+// names an existing account: link it and sync. Returns null if that account doesn't exist (an orphan).
+async function relinkFromMetadata(subscriptionId) {
+  const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+  const uid = sub.metadata?.supabase_user_id;
+  if (!/^[0-9a-f-]{36}$/i.test(uid || '')) return null;
+  try {
+    const linked = await billingDb().call('billing_link_customer', { p_user: uid, p_customer: idOf(sub.customer), p_livemode: Boolean(sub.livemode) });
+    if (linked !== idOf(sub.customer)) return null;
+  } catch (e) {
+    if (/unknown_user/.test(e.message)) return null;
+    throw e;
+  }
+  return syncSubscription(sub.id);
+}
+
 // Outcomes that will never succeed on retry: recorded, acknowledged, and never grant access.
 const FINAL_REFUSALS = /unknown_customer|user_mismatch|mode_mismatch|customer_belongs_to_another_user|unknown_user/;
 
@@ -179,7 +255,8 @@ export async function handleEvent(event) {
         const linked = await db.call('billing_link_customer', { p_user: uid, p_customer: idOf(obj.customer), p_livemode: Boolean(event.livemode) });
         if (linked !== idOf(obj.customer)) throw new Error('customer_belongs_to_another_user');
         const r = await syncSubscription(idOf(obj.subscription));
-        out = { ...out, result: 'synced', detail: `${r.plan}/${r.status}`, userId: r.userId, subscription: r.subscription };
+        const extra = await settleDuplicates(idOf(obj.customer));
+        out = { ...out, result: 'synced', detail: `${r.plan}/${r.status}${extra ? ` dup:${extra}` : ''}`, userId: r.userId, subscription: r.subscription };
         break;
       }
       case 'customer.subscription.created':
@@ -188,7 +265,8 @@ export async function handleEvent(event) {
       case 'customer.subscription.paused':
       case 'customer.subscription.resumed': {
         const r = await syncSubscription(obj.id);
-        out = { ...out, result: 'synced', detail: `${r.plan}/${r.status}`, userId: r.userId, subscription: r.subscription };
+        const extra = event.type === 'customer.subscription.created' || event.type === 'customer.subscription.resumed' ? await settleDuplicates(r.customer) : 0;
+        out = { ...out, result: 'synced', detail: `${r.plan}/${r.status}${extra ? ` dup:${extra}` : ''}`, userId: r.userId, subscription: r.subscription };
         break;
       }
       case 'invoice.paid':
@@ -205,7 +283,28 @@ export async function handleEvent(event) {
     }
   } catch (err) {
     const msg = String(err?.message || 'error');
-    const refusal = FINAL_REFUSALS.exec(msg)?.[0];
+    let refusal = FINAL_REFUSALS.exec(msg)?.[0];
+    // a SparkScribe subscription whose account is gone: stop it instead of only refusing it
+    if (refusal === 'unknown_user' || refusal === 'unknown_customer') {
+      try {
+        const subId = event.type === 'checkout.session.completed' ? idOf(obj.subscription)
+          : event.type.startsWith('customer.subscription.') ? obj.id : idOf(obj.parent?.subscription_details?.subscription) || idOf(obj.subscription);
+        if (subId) {
+          const recovered = refusal === 'unknown_customer' ? await relinkFromMetadata(subId) : null;
+          if (recovered) {
+            await db.call('billing_event_finish', { p_event_id: event.id, p_result: 'synced', p_detail: `relinked ${recovered.plan}/${recovered.status}`, p_user: recovered.userId, p_customer: recovered.customer, p_subscription: recovered.subscription });
+            billingLog('webhook_result', { id: event.id, type: event.type, result: 'synced', detail: 'relinked' });
+            return { status: 200, body: { received: true } };
+          }
+          const paidNow = event.type === 'checkout.session.completed' || event.type === 'invoice.paid';
+          if (await stopOrphan(subId, { refund: paidNow, invoice: event.type === 'invoice.paid' ? obj.id : null })) refusal = `${refusal}:stopped`;
+        }
+      } catch (e2) {
+        billingLog('orphan_check_failed', { id: event.id, kind: e2?.type || e2?.name || 'Error' });
+        await db.call('billing_event_finish', { p_event_id: event.id, p_result: 'error', p_detail: 'orphan check failed', p_user: null, p_customer: out.customer, p_subscription: out.subscription }).catch(() => {});
+        return { status: 500, body: { error: 'processing_failed' } }; // retried by Stripe
+      }
+    }
     await db.call('billing_event_finish', { p_event_id: event.id, p_result: refusal ? `refused:${refusal}` : 'error', p_detail: refusal || 'processing failed', p_user: null, p_customer: out.customer, p_subscription: out.subscription }).catch(() => {});
     billingLog('webhook_result', { id: event.id, type: event.type, result: refusal ? `refused:${refusal}` : 'error' });
     // a refusal is final (200, no retry); anything else is retried by Stripe
@@ -214,4 +313,44 @@ export async function handleEvent(event) {
   await db.call('billing_event_finish', { p_event_id: event.id, p_result: out.result, p_detail: out.detail, p_user: out.userId, p_customer: out.customer, p_subscription: out.subscription });
   billingLog('webhook_result', { id: event.id, type: event.type, result: out.result, user: out.userId, detail: out.detail });
   return { status: 200, body: { received: true } };
+}
+
+// ---------- account deletion ----------
+// Order matters: (1) the database confirms a recent sign-in without deleting anything, (2) every subscription of
+// this account is canceled in Stripe immediately and the result synced, (3) the account is deleted, (4) the Stripe
+// customer is deleted (its saved cards go with it; invoices stay in Stripe for accounting).
+// If Stripe can't be reached, nothing is deleted.
+const DONE = new Set(['canceled', 'incomplete_expired']);
+export async function deleteAccount(sb, user) {
+  const { data: check, error: checkError } = await sb.rpc('account_deletion_check');
+  if (checkError) {
+    if (checkError.code === 'PGRST202' || checkError.code === '42883') throw new BillingError('Deleting accounts isn’t switched on yet. Nothing was deleted.', { status: 503, code: 'deletion_unavailable' });
+    throw new BillingError('Your account couldn’t be deleted, and nothing was removed. Try again.', { status: 503, code: 'deletion_failed' });
+  }
+  if (check?.reason === 'reauth') return { deleted: false, reason: 'reauth' };
+
+  const { data: row } = await sb.from('subscriptions').select('stripe_customer_id, livemode').eq('user_id', user.id).maybeSingle();
+  const customer = row?.stripe_customer_id && billingConfigured() && row.livemode === isLiveMode() ? row.stripe_customer_id : null;
+  let canceled = 0;
+  if (customer) {
+    const stripe = getStripe();
+    const subs = await stripe.subscriptions.list({ customer, status: 'all', limit: 20 });
+    for (const sub of subs.data) {
+      if (DONE.has(sub.status)) continue;
+      await stripe.subscriptions.cancel(sub.id, { prorate: false }, { idempotencyKey: `sparkscribe-delete-cancel-${sub.id}` });
+      canceled++;
+      try { await syncSubscription(sub.id); } catch {
+        billingLog('account_delete_failed', { user: user.id, canceled, step: 'sync' });
+        throw new BillingError('Your subscription was canceled, but the account couldn’t be deleted. Try again.', { status: 503, code: 'deletion_failed' });
+      }
+    }
+  }
+  const { data, error } = await sb.rpc('delete_my_account', { p_confirm: 'DELETE' });
+  if (error || !data) {
+    billingLog('account_delete_failed', { user: user.id, canceled });
+    throw new BillingError(canceled ? 'Your subscription was canceled, but the account couldn’t be deleted. Try again.' : 'Your account couldn’t be deleted, and nothing was removed. Try again.', { status: 503, code: 'deletion_failed' });
+  }
+  if (data.deleted && customer) await getStripe().customers.del(customer).catch(() => billingLog('customer_delete_failed', { user: user.id }));
+  billingLog('account_deleted', { user: user.id, deleted: Boolean(data.deleted), canceled, reason: data.reason || null });
+  return data;
 }

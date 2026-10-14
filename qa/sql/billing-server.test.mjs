@@ -48,15 +48,40 @@ const restPort = await listen(rest);
 const stripeCalls = [];
 const subs = new Map();
 let nextId = 1;
+const openSessions = new Map();      // checkout session id -> customer
+const invoices = new Map();          // invoice id -> { id, subscription, amount_paid, status, pi }
+const refunds = [];
+const deletedCustomers = [];
+const list = (data) => ({ object: 'list', data, has_more: false });
 const fake = http.createServer(async (req, res) => {
   const body = await new Promise((r) => { let b = ''; req.on('data', (c) => (b += c)); req.on('end', () => r(b)); });
   stripeCalls.push(`${req.method} ${req.url.split('?')[0]}`);
   const send = (obj, status = 200) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(obj)); };
-  const path = req.url.split('?')[0];
+  const [path, qs = ''] = req.url.split('?');
+  const q = new URLSearchParams(qs);
+  const form = new URLSearchParams(body);
   if (path === '/v1/customers' && req.method === 'POST') return send({ id: `cus_${nextId++}`, object: 'customer' });
-  if (path === '/v1/subscriptions' && req.method === 'GET') return send({ object: 'list', data: [], has_more: false });
-  if (path === '/v1/checkout/sessions' && req.method === 'POST') return send({ id: 'cs_test_1', object: 'checkout.session', url: 'https://checkout.stripe.test/cs_test_1', body });
+  const cus = /^\/v1\/customers\/(cus_[A-Za-z0-9_]+)$/.exec(path);
+  if (cus && req.method === 'DELETE') { deletedCustomers.push(cus[1]); return send({ id: cus[1], object: 'customer', deleted: true }); }
+  if (path === '/v1/subscriptions' && req.method === 'GET') return send(list([...subs.values()].filter((x) => !q.get('customer') || x.customer === q.get('customer'))));
+  if (path === '/v1/checkout/sessions' && req.method === 'GET') return send(list([...openSessions].filter(([, c]) => c === q.get('customer')).map(([id]) => ({ id, object: 'checkout.session', status: 'open' }))));
+  if (path === '/v1/checkout/sessions' && req.method === 'POST') {
+    const id = `cs_test_${nextId++}`;
+    openSessions.set(id, form.get('customer'));
+    return send({ id, object: 'checkout.session', url: `https://checkout.stripe.test/${id}`, body });
+  }
+  const exp = /^\/v1\/checkout\/sessions\/(cs_[a-z0-9_]+)\/expire$/.exec(path);
+  if (exp) { openSessions.delete(exp[1]); return send({ id: exp[1], object: 'checkout.session', status: 'expired' }); }
+  if (path === '/v1/invoices' && req.method === 'GET') return send(list([...invoices.values()].filter((i) => i.subscription === q.get('subscription') && (!q.get('status') || i.status === q.get('status')))));
+  const inv = /^\/v1\/invoices\/(in_[a-z0-9_]+)$/.exec(path);
+  if (inv && invoices.has(inv[1])) return send(invoices.get(inv[1]));
+  if (path === '/v1/invoice_payments' && req.method === 'GET') {
+    const i = invoices.get(q.get('invoice'));
+    return send(list(i ? [{ id: `inpay_${i.id}`, object: 'invoice_payment', status: 'paid', payment: { type: 'payment_intent', payment_intent: i.pi } }] : []));
+  }
+  if (path === '/v1/refunds' && req.method === 'POST') { refunds.push({ pi: form.get('payment_intent'), reason: form.get('reason'), key: req.headers['idempotency-key'] }); return send({ id: `re_${nextId++}`, object: 'refund' }); }
   const m = /^\/v1\/subscriptions\/(sub_[a-z0-9_]+)$/.exec(path);
+  if (m && subs.has(m[1]) && req.method === 'DELETE') { const x = { ...subs.get(m[1]), status: 'canceled', canceled_at: Math.floor(Date.now() / 1000) }; subs.set(m[1], x); return send(x); }
   if (m && subs.has(m[1])) return send(subs.get(m[1]));
   send({ error: { type: 'invalid_request_error', message: 'No such resource' } }, 404);
 });
@@ -96,7 +121,9 @@ ok(authorized.ok && authorized.upgradesAvailable === false, 'authorize: recordin
 // ---------- 2. test mode on: checkout happens entirely against the fake Stripe ----------
 Object.assign(process.env, env({ STRIPE_SECRET_KEY: 'sk_test_qa', BILLING_PAYMENTS_ENABLED: '1' }));
 const c = await tryCheckout('plus');
-ok(c.url === 'https://checkout.stripe.test/cs_test_1' && stripeCalls.includes('POST /v1/customers') && stripeCalls.includes('POST /v1/checkout/sessions'), 'test mode + switch: Checkout session created (fake Stripe)');
+ok(/^https:\/\/checkout\.stripe\.test\/cs_test_\d+$/.test(c.url) && stripeCalls.includes('POST /v1/customers') && stripeCalls.includes('POST /v1/checkout/sessions'), 'test mode + switch: Checkout session created (fake Stripe)');
+const c2 = await tryCheckout('plus');
+ok(c2.url !== c.url && openSessions.size === 1 && !openSessions.has(c.url.split('/').pop()), 'a second Checkout (another tab, double click) closes the first one: only one can be paid');
 const linked = (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [user])).rows[0];
 ok(linked?.stripe_customer_id?.startsWith('cus_') && linked.livemode === false, 'the Stripe customer is linked to this account (test mode)');
 const bad = await tryCheckout('enterprise');
@@ -155,6 +182,62 @@ const steal = await deliver(event('evt_steal', 'customer.subscription.updated', 
 ok(steal.body.refused === 'user_mismatch' && (await statusOf(other)).plan === 'free', 'a subscription claiming another user is refused');
 const logged = (await db.query(`select id, result from public.billing_events order by created_at`)).rows.map((r) => `${r.id}:${r.result}`);
 ok(logged.includes('evt_checkout:synced') && logged.includes('evt_foreign:refused:unknown_customer'), `every processed event is logged with its outcome (${logged.length} events)`);
+
+// ---------- 4. duplicates, orphans, account deletion ----------
+// two checkouts paid at the same moment: the newer subscription is canceled and refunded, the first stays
+const sub2 = (id, created, o = {}) => subscription({ id, created, ...o });
+subs.set('sub_qa_1', subscription({ status: 'canceled' }));
+subs.set('sub_first', sub2('sub_first', now - 5));
+subs.set('sub_second', sub2('sub_second', now));
+invoices.set('in_second', { id: 'in_second', object: 'invoice', subscription: 'sub_second', amount_paid: 799, status: 'paid', pi: 'pi_second' });
+await deliver(event('evt_first', 'checkout.session.completed', { id: 'cs_a', mode: 'subscription', subscription: 'sub_first', customer, client_reference_id: user }));
+const dupDone = await deliver(event('evt_second', 'checkout.session.completed', { id: 'cs_b', mode: 'subscription', subscription: 'sub_second', customer, client_reference_id: user }));
+ok(dupDone.statusCode === 200 && subs.get('sub_second').status === 'canceled' && subs.get('sub_first').status === 'active', 'two paid checkouts: the second subscription is canceled at once, the first kept');
+ok(refunds.some((r) => r.pi === 'pi_second' && r.reason === 'duplicate'), '…and its payment is refunded (reason: duplicate)');
+const afterDup = await statusOf(user);
+ok(afterDup.plan === 'plus' && afterDup.subscriptionStatus === 'active', '…and the account keeps one active Plus plan');
+const again = await deliver(event('evt_second_retry', 'customer.subscription.updated', { id: 'sub_second' }));
+ok(again.statusCode === 200 && (await statusOf(user)).plan === 'plus', 'a late event for the canceled duplicate doesn’t take access away');
+
+// a Checkout completed after the account was deleted: canceled and refunded, never charging a missing account
+const ghost = '00000000-0000-4000-8000-00000000dead';
+subs.set('sub_ghost', subscription({ id: 'sub_ghost', customer: 'cus_ghost', metadata: { supabase_user_id: ghost } }));
+invoices.set('in_ghost', { id: 'in_ghost', object: 'invoice', subscription: 'sub_ghost', amount_paid: 1499, status: 'paid', pi: 'pi_ghost' });
+const g = await deliver(event('evt_ghost', 'checkout.session.completed', { id: 'cs_g', mode: 'subscription', subscription: 'sub_ghost', customer: 'cus_ghost', client_reference_id: ghost }));
+ok(g.statusCode === 200 && /unknown_user/.test(g.body.refused) && subs.get('sub_ghost').status === 'canceled' && refunds.some((r) => r.pi === 'pi_ghost'), 'payment for an account that no longer exists → subscription canceled and refunded');
+// a renewal for an account removed by an administrator: canceled, only that renewal refunded
+subs.set('sub_admin', subscription({ id: 'sub_admin', customer: 'cus_admin', metadata: { supabase_user_id: ghost } }));
+invoices.set('in_admin_old', { id: 'in_admin_old', object: 'invoice', subscription: 'sub_admin', amount_paid: 799, status: 'paid', pi: 'pi_admin_old' });
+invoices.set('in_admin_new', { id: 'in_admin_new', object: 'invoice', subscription: 'sub_admin', amount_paid: 799, status: 'paid', pi: 'pi_admin_new' });
+const ad = await deliver(event('evt_admin', 'invoice.paid', { id: 'in_admin_new', object: 'invoice', subscription: 'sub_admin', customer: 'cus_admin' }));
+ok(ad.statusCode === 200 && subs.get('sub_admin').status === 'canceled' && refunds.some((r) => r.pi === 'pi_admin_new') && !refunds.some((r) => r.pi === 'pi_admin_old'), 'a renewal charged after the account was removed → canceled, and only that renewal refunded');
+// a subscription that isn't SparkScribe's (no account in its metadata) is only refused, never touched
+ok(subs.get('sub_foreign').status === 'active', 'a subscription not created by SparkScribe is never canceled');
+// the database lost the customer link, but Stripe's metadata names an existing account: relinked, not canceled
+const third = await P.createUser('relink@example.com');
+subs.set('sub_relink', subscription({ id: 'sub_relink', customer: 'cus_relink', metadata: { supabase_user_id: third } }));
+const rl = await deliver(event('evt_relink', 'customer.subscription.updated', { id: 'sub_relink' }));
+ok(rl.statusCode === 200 && subs.get('sub_relink').status === 'active' && (await statusOf(third)).plan === 'plus', 'an existing account whose link was lost is relinked from Stripe metadata (not canceled)');
+
+// account deletion with an active subscription: canceled in Stripe first, then the account is deleted
+const asUserSb = (uid, claims) => ({
+  rpc: async (fn, args = {}) => {
+    try {
+      const keys = Object.keys(args);
+      const r = await P.asUser(uid, (d) => d.query(`select public.${fn}(${keys.map((k, i) => `${k} => $${i + 1}`).join(', ')}) r`, keys.map((k) => args[k])), claims);
+      return { data: r.rows[0].r, error: null };
+    } catch (e) { return { data: null, error: { code: e.code, message: e.message } }; }
+  },
+  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [uid])).rows[0] || null }) }) }) }),
+});
+const t = () => Math.floor(Date.now() / 1000);
+const stale = await service.deleteAccount(asUserSb(user, { amr: [{ method: 'password', timestamp: t() - 3600 }] }), { id: user });
+ok(stale.deleted === false && stale.reason === 'reauth' && subs.get('sub_first').status === 'active', 'deletion without a recent sign-in: nothing canceled, nothing deleted');
+const gone = await service.deleteAccount(asUserSb(user, { amr: [{ method: 'password', timestamp: t() - 30 }] }), { id: user });
+ok(gone.deleted === true && subs.get('sub_first').status === 'canceled', 'deletion with a recent sign-in: the active subscription is canceled in Stripe, then the account deleted');
+ok((await db.query('select count(*)::int n from auth.users where id = $1', [user])).rows[0].n === 0 && deletedCustomers.includes(customer), '…the account is gone and its Stripe customer (saved card) deleted');
+const late = await deliver(event('evt_late', 'customer.subscription.deleted', { id: 'sub_first' }));
+ok(late.statusCode === 200 && late.body.refused, 'Stripe’s later events for the deleted account are acknowledged and change nothing');
 
 delete process.env.STRIPE_WEBHOOK_SECRET;
 ok((await deliver(event('evt_x', 'customer.subscription.updated', { id: 'sub_qa_1' }))).statusCode === 503, 'webhook without its secret configured → 503 (nothing processed)');

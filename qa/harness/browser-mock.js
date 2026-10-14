@@ -63,6 +63,12 @@
       return json({ ok: false, enforced: true, reason: remaining < 1 ? 'limit_reached' : 'too_long', requestedSeconds: body.durationSeconds, ...base });
     }
     if (body.action === 'checkout' || body.action === 'portal') return json({ error: 'payments_unavailable', message: "Paid plans aren't available yet. Nothing was charged." }, 503);
+    if (body.action === 'delete_account') { // the server (no Stripe subscription here), then the delete_my_account RPC below
+      if (K.deleteMissing) return json({ error: 'deletion_unavailable', message: 'Deleting accounts isn’t switched on yet. Nothing was deleted.' }, 503);
+      const r = await window.fetch('https://qa.supabase.co/rest/v1/rpc/delete_my_account', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ p_confirm: body.confirm }) });
+      if (!r.ok) return json({ error: 'deletion_failed', message: 'Your account couldn’t be deleted, and nothing was removed. Try again.' }, 503);
+      return json(await r.json());
+    }
     return json({ error: 'bad_request', message: 'Unknown action.' }, 400);
   }
 

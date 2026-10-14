@@ -1,13 +1,16 @@
 // One-time Stripe setup for SparkScribe (safe to re-run: it reuses what already exists).
 //
-//   node scripts/stripe-setup.mjs [--webhook-url https://.../api/stripe-webhook --secret-out <file>]
+//   node scripts/stripe-setup.mjs [--webhook-url https://.../api/stripe-webhook --secret-out <file>] [--legal-base https://<site>]
 //
 // Reads STRIPE_SECRET_KEY (and the public Supabase URL/key) from the environment or .env.local. Never prints
 // a secret. Creates, or finds by lookup key:
 //   * one product + monthly price per paid plan in billing_plans (prices and names come from the database)
 //   * a Customer Portal configuration: update payment method, invoices, switch Plus <-> Pro (prorated),
 //     cancel at the end of the period
-//   * optionally a webhook endpoint; its signing secret is written only to --secret-out (mode 600)
+//   * optionally a webhook endpoint; its signing secret is written only to --secret-out (mode 600). Its events use
+//     the same Stripe API version as the server's library. A Vercel protection-bypass query (?x-vercel-protection-bypass=…)
+//     may be appended to the URL when the deployment is protected; the URL is never printed.
+//   * --legal-base: adds <base>/terms and <base>/privacy to the Customer Portal (needed before live payments)
 // Prints the IDs to put in the server environment (STRIPE_<PLAN>_PRICE_ID, STRIPE_PORTAL_CONFIGURATION_ID).
 import Stripe from 'stripe';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -20,7 +23,9 @@ const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? pro
 const webhookUrl = arg('--webhook-url');
 const secretOut = arg('--secret-out');
 if (webhookUrl && !secretOut) { console.error('--webhook-url needs --secret-out <file>'); process.exit(1); }
-if (webhookUrl && !/^https:\/\/[a-z0-9.-]+\/api\/stripe-webhook$/i.test(webhookUrl)) { console.error('webhook URL must be https://<host>/api/stripe-webhook'); process.exit(1); }
+if (webhookUrl && !/^https:\/\/[a-z0-9.-]+\/api\/stripe-webhook(\?x-vercel-protection-bypass=[A-Za-z0-9]+)?$/i.test(webhookUrl)) { console.error('webhook URL must be https://<host>/api/stripe-webhook'); process.exit(1); }
+const legalBase = arg('--legal-base');
+if (legalBase && !/^https:\/\/[a-z0-9.-]+$/i.test(legalBase)) { console.error('--legal-base must be https://<host>'); process.exit(1); }
 
 const stripe = new Stripe(key);
 const sbUrl = env.NEXT_PUBLIC_SUPABASE_URL, sbKey = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -56,7 +61,7 @@ for (const p of paid) {
 }
 
 const portalSpec = {
-  business_profile: { headline: 'SparkScribe: manage your plan and billing' },
+  business_profile: { headline: 'SparkScribe: manage your plan and billing', ...(legalBase && { terms_of_service_url: `${legalBase}/terms`, privacy_policy_url: `${legalBase}/privacy` }) },
   features: {
     customer_update: { enabled: true, allowed_updates: ['email', 'address'] },
     invoice_history: { enabled: true },
@@ -79,7 +84,7 @@ if (webhookUrl) {
     await stripe.webhookEndpoints.update(found.id, { enabled_events: events });
     console.log(`webhook exists: ${found.id} (its signing secret is only shown once, at creation; delete the endpoint to get a new one)`);
   } else {
-    const wh = await stripe.webhookEndpoints.create({ url: webhookUrl, enabled_events: events, description: `SparkScribe ${live ? 'production' : 'test'} webhook` });
+    const wh = await stripe.webhookEndpoints.create({ url: webhookUrl, enabled_events: events, api_version: Stripe.API_VERSION, description: `SparkScribe ${live ? 'production' : 'test'} webhook` });
     writeFileSync(secretOut, wh.secret, { mode: 0o600 });
     console.log(`created webhook ${wh.id}; signing secret written to ${secretOut}`);
   }

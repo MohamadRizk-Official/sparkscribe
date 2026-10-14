@@ -46,7 +46,7 @@ function openDeleteDialog(user) {
       <div class="dlg-body">
         <p>This permanently deletes:</p>
         <ul class="dlg-list"><li>every saved transcript and its speaker names</li><li>summaries, notes, insights and Ask answers</li><li>everything made in Create (study guides, quizzes, recaps…)</li><li>your folders and preferences</li><li>your sign-in${user.email ? ` (${esc(user.email)})` : ''}</li></ul>
-        <p class="dlg-dim">It can’t be undone, and we can’t restore it. Your audio was never uploaded. Files you exported stay on your devices.</p>
+        <p class="dlg-dim">A paid plan is canceled right away, so you won’t be charged again. It can’t be undone, and we can’t restore it. Your audio was never uploaded. Files you exported stay on your devices.</p>
       </div>
       ${hasPassword ? '<label class="dlg-field"><span>Your password</span><input type="password" name="password" autocomplete="current-password" required /></label>' : ''}
       <label class="dlg-field"><span>Type DELETE to confirm</span><input type="text" name="confirm" autocomplete="off" autocapitalize="characters" spellcheck="false" required /></label>

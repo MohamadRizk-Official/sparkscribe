@@ -35,6 +35,7 @@ export const getBillingStatus = () => call('status');
 export const authorizeTranscription = (durationSeconds) => call('authorize', { durationSeconds });
 export async function startCheckout(plan) { const r = await call('checkout', { plan }); location.assign(r.url); return r; }
 export async function openPortal() { const r = await call('portal'); location.assign(r.url); return r; }
+export const deleteAccountOnServer = () => call('delete_account', { confirm: 'DELETE' });
 
 // ---------- formatting (exact seconds are stored; these round only for display) ----------
 export const price = (p) => (p.price_cents ? `$${(p.price_cents / 100).toFixed(2)}` : '$0');

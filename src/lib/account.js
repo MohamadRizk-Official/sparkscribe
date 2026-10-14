@@ -1,7 +1,7 @@
 // Session helpers + the small account area in the top bar (shared by every page).
 import { supabase, isConfigured } from './supabase.js';
 import { adoptAccountPrefs } from './prefs.js';
-import { getBillingStatus, usageText } from './billing.js';
+import { getBillingStatus, usageText, deleteAccountOnServer } from './billing.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -74,10 +74,12 @@ export async function deleteMyAccount(password) {
     const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
     if (authError) throw new Error(/invalid login|invalid_grant|credentials/i.test(authError.message) ? 'That password isn’t right.' : authError.message);
   }
-  const { data, error } = await supabase.rpc('delete_my_account', { p_confirm: 'DELETE' });
-  if (error) {
-    if (error.code === 'PGRST202' || error.code === '42883') throw new Error('Deleting accounts isn’t switched on yet. Nothing was deleted.');
-    throw new Error('Your account couldn’t be deleted, and nothing was removed. Try again.');
+  // through the server: it cancels any Stripe subscription first, so nobody keeps paying for a deleted account
+  let data;
+  try {
+    data = await deleteAccountOnServer();
+  } catch (err) {
+    throw new Error(err.code === 'network' || err.code === 'deletion_unavailable' || err.code === 'deletion_failed' ? err.message : 'Your account couldn’t be deleted, and nothing was removed. Try again.');
   }
   if (!data?.deleted) {
     throw new Error(data?.reason === 'subscription'
