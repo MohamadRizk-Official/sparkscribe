@@ -20,8 +20,9 @@ const TASKS = {
   // Phase 5 tools (Create tab): same default model; long structured outputs get more room
   study_guide: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 16000 },
   // study engine 2 writes a knowledge map before the cards / questions: more room
-  flashcards: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000 },
-  quiz: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000 },
+  // and takes longer: up to ~2 minutes for a 90-minute lecture (api/tools may run 300 s; a coverage pass may follow)
+  flashcards: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000, timeoutMs: 170_000 },
+  quiz: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000, timeoutMs: 170_000 },
   definitions: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 8000 },
   exam_points: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 8000 },
   meeting_recap: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000 },
@@ -37,7 +38,7 @@ const TASKS = {
 
 export function taskConfig(task) {
   const base = TASKS[task.split(':')[0]] || TASKS.insights;
-  return { model: process.env[base.env] || process.env.AI_MODEL || DEFAULT_MODEL, effort: base.effort, maxTokens: base.maxTokens };
+  return { model: process.env[base.env] || process.env.AI_MODEL || DEFAULT_MODEL, effort: base.effort, maxTokens: base.maxTokens, ...(base.timeoutMs && { timeoutMs: base.timeoutMs }) };
 }
 
 let cached;

@@ -274,6 +274,7 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
   if (!claimed) return fromStorage(await db.getArtifact(transcriptionId, kind, key));
 
   try {
+    const started = Date.now();
     const minutes = (row.duration_seconds || segments.at(-1)?.end || 0) / 60;
     const speakers = speakerTable(segments);
     let count = kind === 'flashcards' ? cardCount(minutes, normalized.size) : kind === 'quiz' ? questionCount(minutes, normalized.size) : null;
@@ -291,6 +292,7 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
       mergeNote: tool.engine ? ' Concept ids from different parts may clash: give every concept a unique id and update the items that point to it.' : '',
     });
     tool.beforeGrounding?.(r.json);
+    if (tool.itemsKey) ctx.rawConceptIds = new Set((r.json?.concepts || []).map((k) => String(k?.id)));
     const g = groundStructured(r.json, segments);
     g.content = tokenizeSpeakers(g.content, speakers.codeOf);
     const firstPass = tool.itemsKey ? structuredClone(g.content[tool.itemsKey] || []) : null;
@@ -298,7 +300,8 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
     // coverage pass (study engine 2): core concepts still without an item get one more, small call
     if (tool.itemsKey) {
       const missing = uncoveredConcepts(g.content.concepts, g.content[tool.itemsKey]);
-      if (missing.length && g.content[tool.itemsKey].length < ctx.count) {
+      // only while time is left: api/tools may run 300 s in all (vercel.json), the main call up to 170 s
+      if (missing.length && g.content[tool.itemsKey].length < ctx.count && Date.now() - started < 150_000) {
         const filled = await fillCoverage({ kind, tool, missing, row, segments, speakers, ctx, meter, usage: r.usage });
         if (filled.length) {
           // the whole set is checked again, so duplicates and limits apply across both passes

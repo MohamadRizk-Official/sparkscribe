@@ -37,7 +37,8 @@ const concept = obj({
 const MAP_RULES = `STEP 1 — KNOWLEDGE MAP (field "concepts"). Read the whole recording first. List what a student would need to understand and remember:
 - important concepts and terms (with their meaning as explained), central arguments and the reasoning behind them, comparisons and distinctions, cause-and-effect relationships, principles, processes, the examples that illustrate a concept, and what the speaker explicitly stressed.
 - Leave out: filler, repetition, side conversations, incomplete or garbled statements, organisational announcements (sign-ups, attendance, websites, homework logistics, scheduling), personal remarks, and minor details (dates, counts, names) unless they matter for understanding. One concept per idea: merge repeated explanations of the same idea.
-- importance: core / supporting / minor (be strict: a date, a count or an aside is minor unless the speaker made it central).
+- Go through the whole recording in order. A long lecture (an hour or more) usually has 20–35 concepts. Before you finish the map, check that every part of the recording (beginning, middle and end) is represented, including the debates, arguments and examples near the end.
+- importance: core / supporting / minor (be strict: a date, a count or an aside is minor unless the speaker made it central). A debate, argument or worked example the speaker spends several minutes on is at least supporting.
 - stance and held_by: keep positions apart. A view presented as a school's or scholar's (e.g. one theological or economic school's doctrine) is "attributed" to it, never a general truth and never the speaker's own view. A view the speaker argues against is "criticized". An imagined case is "hypothetical". A quoted saying is "quotation" (held_by = its source). Only "own" may be stated as the speaker's teaching.
 - In a conversation with several participants (a meeting, a debate, an interview), a proposal, opinion or argument put forward by one participant is "attributed" with held_by = that participant's code, e.g. {{S2}} — especially when others disagree.
 - summary: what the recording establishes, keeping qualifiers exactly ("sometimes" is not "always", "may" is not "will").
@@ -178,6 +179,9 @@ export function isCircular(question, answer) {
   if (/^\s*(?:yes|no)\b/i.test(String(answer)) || /^\s*[\d.,%]+\s*$/.test(String(answer))) return false;
   // naming a term ("What is the term for the costs of changing prices…?" → "Menu costs") may echo the description
   if (/\b(?:term|name|called|call it|known as|word for|stand for|abbreviation)\b/i.test(String(question)) && String(answer).split(/\s+/).length <= 6) return false;
+  // choosing between alternatives the question names ("…fixed or flexible?" → "Fixed")
+  const pick = String(answer).toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').trim();
+  if (/\bor\b/i.test(String(question)) && pick && pick.split(/\s+/).length <= 4 && String(question).toLowerCase().includes(pick)) return false;
   const a = contentWords(answer);
   if (!a.length) return true;
   const novel = a.filter((w) => !q.has(w));
@@ -219,8 +223,11 @@ export function keepsAttribution(item, c) {
   // a participant's view: the item must name that participant (by code)
   const codes = String(c.held_by || '').match(/\{\{S\d+\}\}/g);
   if (codes) return codes.some((code) => raw.includes(code));
-  const holder = String(c.held_by || '').toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}' ]+/gu, ' ').split(' ').filter((w) => w.length > 3 && !STOP.has(w));
-  if (holder.some((w) => text.includes(w.slice(0, Math.max(4, w.length - 2))))) return true;
+  // the holder's name as a short stem, so spellings match ("Behaviourism" ~ "behaviorist", "O'Neill" ~ "ONeill", "Keynesian" ~ "Keynes")
+  const flat = (t) => t.toLowerCase().normalize('NFKD').replace(/[̀-ͯ'’ʿʾ`]/g, '');
+  const hay = flat(text);
+  const holder = flat(String(c.held_by || '')).replace(/[^\p{L}\p{N} ]+/gu, ' ').split(' ').filter((w) => w.length > 3 && !STOP.has(w));
+  if (holder.some((w) => hay.includes(w.slice(0, Math.min(5, Math.max(4, w.length - 2)))))) return true;
   return c.stance === 'criticized' && /\b(reject|critici|argu(?:e|es|ed) against|object|disagree|refut|warn|wrong|mistaken|corrupt|false claim)/i.test(text);
 }
 export const restates = (explanation, answer, question) => {
@@ -244,6 +251,16 @@ export function inheritRefs(items, content) {
 }
 
 const bump = (q, k) => { q[k] = (q[k] || 0) + 1; };
+// The item's concept. One the model mapped but grounding removed (its evidence isn't in the transcript) → null:
+// the item is dropped. One the model wrote an item for but never listed in its map → kept as an ordinary,
+// supporting idea of the speaker's own (the item still passes every other check and its lines are grounded).
+function conceptOf(map, id, rawConceptIds, quality) {
+  const con = map.get(String(id));
+  if (con) return con;
+  if (!rawConceptIds || rawConceptIds.has(String(id))) return null;
+  bump(quality, 'unmapped');
+  return { id: `u:${String(id || '?')}`, importance: 'supporting', clarity: 'clear', stance: 'own', held_by: null, evidence: null };
+}
 // STUDY_DEBUG_DROPS=1 (the evaluation harness): keep what was dropped and why, to audit false rejections
 const dropper = (quality) => (reason, q, a) => {
   bump(quality, reason);
@@ -261,7 +278,7 @@ const dupWords = (t) => ({ w: contentWords(t), sp: [...new Set(String(t).match(/
 const isDup = (a, b) => jaccard(a.w, b.w) >= 0.7 && !(a.sp && b.sp && a.sp !== b.sp);
 
 // -> number dropped; writes content.quality = { reason: count, …, kept }
-export function validateFlashcards(c, segments, { count, dominant }) {
+export function validateFlashcards(c, segments, { count, dominant, rawConceptIds }) {
   const { map } = conceptIndex(c, segments);
   const quality = {};
   const drop = dropper(quality);
@@ -271,9 +288,9 @@ export function validateFlashcards(c, segments, { count, dominant }) {
     const rawFront = String(k.front || '').trim();
     const front = dropNeedlessAttribution(rawFront, dominant);
     const back = lecturerWord(String(k.back || '').trim(), dominant);
-    const con = map.get(String(k.concept));
+    const con = conceptOf(map, k.concept, rawConceptIds, quality);
     if (front.length < 10 || !back) { drop('empty', k.front, k.back); continue; }
-    if (!con) { drop('no_concept', k.front, k.back); continue; }
+    if (!con) { drop('ungrounded_concept', k.front, k.back); continue; }
     if (con.importance === 'minor') { drop('minor_concept', k.front, k.back); continue; }
     if (con.clarity === 'unreliable') { drop('unreliable_source', k.front, k.back); continue; }
     if (isCircular(front, back)) { drop('circular', k.front, k.back); continue; }
@@ -300,7 +317,7 @@ export function validateFlashcards(c, segments, { count, dominant }) {
 }
 
 const NOTA = /\b(all|none|both|neither) of (the )?(above|these|them)\b/i;
-export function validateQuiz(c, segments, { count, settings, dominant }) {
+export function validateQuiz(c, segments, { count, settings, dominant, rawConceptIds }) {
   const { map } = conceptIndex(c, segments);
   const quality = {};
   const drop = dropper(quality);
@@ -313,9 +330,9 @@ export function validateQuiz(c, segments, { count, settings, dominant }) {
     const rawQuestion = String(q.question || '').trim();
     const question = dropNeedlessAttribution(rawQuestion, dominant);
     const answer = String(q.answer || '').trim();
-    const con = map.get(String(q.concept));
+    const con = conceptOf(map, q.concept, rawConceptIds, quality);
     if (question.length < 8 || !answer) { drop('empty', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
-    if (!con) { drop('no_concept', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
+    if (!con) { drop('ungrounded_concept', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
     if (con.importance === 'minor') { drop('minor_concept', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
     if (con.clarity === 'unreliable') { drop('unreliable_source', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }
     if (wanted && q.type !== wanted) { drop('wrong_type', q.question, [q.answer, ...(q.options || [])].join(' | ')); continue; }

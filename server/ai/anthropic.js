@@ -2,7 +2,7 @@
 // process.env.ANTHROPIC_API_KEY and is never sent to the browser or logged.
 const API_URL = 'https://api.anthropic.com/v1/messages';
 const VERSION = '2023-06-01';
-const TIMEOUT_MS = 55_000;
+const TIMEOUT_MS = 55_000; // default per call; long Create tools pass their own (provider.js)
 
 export class AIError extends Error {
   constructor(message, { status = 502, code = 'ai_error' } = {}) {
@@ -26,7 +26,7 @@ function buildBody({ model, system, messages, schema, maxTokens, effort, stream 
   };
 }
 
-async function post(apiKey, body) {
+async function post(apiKey, body, timeoutMs = TIMEOUT_MS) {
   let lastErr;
   for (let attempt = 0; attempt < 2; attempt++) {
     let res;
@@ -35,10 +35,12 @@ async function post(apiKey, body) {
         method: 'POST',
         headers: { 'x-api-key': apiKey, 'anthropic-version': VERSION, 'content-type': 'application/json' },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
+        signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (err) {
       lastErr = new AIError(err.name === 'TimeoutError' ? 'The analysis took too long.' : 'Could not reach the analysis service.', { status: 504 });
+      // a long call that timed out is not repeated: a second try wouldn't fit the time left and would be paid twice
+      if (err.name === 'TimeoutError' && timeoutMs > TIMEOUT_MS) break;
       continue;
     }
     if (res.ok) return res;
@@ -71,7 +73,7 @@ export function anthropicProvider(apiKey) {
   return {
     name: 'anthropic',
     async complete(opts) {
-      const res = await post(apiKey, buildBody(opts));
+      const res = await post(apiKey, buildBody(opts), opts.timeoutMs);
       const msg = await res.json();
       if (msg.stop_reason === 'max_tokens') throw new AIError('The result was too long to finish.', { code: 'too_long' });
       if (msg.stop_reason === 'refusal') throw new AIError('The analysis was declined for this content.', { code: 'refused' });

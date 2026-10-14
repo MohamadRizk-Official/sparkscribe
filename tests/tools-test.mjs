@@ -34,7 +34,7 @@ const fc = await svc.generateArtifact(db, { transcriptionId: T, kind: 'flashcard
 const fq = fc.artifact.content.quality;
 ok(fc.artifact.settingsKey === 'g2' && fc.artifact.content.engine === 2, 'new flashcards are stored under their own key (earlier ones are never overwritten)');
 ok(fc.artifact.content.cards.length === 2, 'only the two sound cards are kept');
-ok(fq.circular === 1 && fq.vague === 1 && fq.duplicate === 1 && fq.minor_concept === 1 && fq.unreliable_source === 1 && fq.no_concept === 1 && fq.attribution_lost === 1,
+ok(fq.circular === 1 && fq.vague === 1 && fq.duplicate === 1 && fq.minor_concept === 1 && fq.unreliable_source === 1 && fq.ungrounded_concept === 1 && fq.attribution_lost === 1,
   'circular, vague, duplicate, trivia, unreliable-passage, ungrounded and attribution-less cards are each dropped and counted');
 ok(fq.explanation_removed === 1 && fc.artifact.content.cards.some((k) => k.explanation) && fc.artifact.content.cards.some((k) => k.explanation === null), 'an explanation that only repeats the answer is removed; useful ones stay');
 ok(fc.artifact.content.cards.every((k) => k.refs.length), "a card without lines gets its concept's lines");

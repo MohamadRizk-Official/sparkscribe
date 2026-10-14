@@ -96,6 +96,17 @@ ok(S.uncoveredConcepts([{ id: 'a', importance: 'core', clarity: 'clear' }, { id:
 ok(S.keepsAttribution({ type: 'true_false', question: 'Adding more indexes to a table always makes queries faster.', answer: 'False', options: ['True', 'False'] }, { stance: 'criticized', held_by: 'a common misconception' })
   && !S.keepsAttribution({ type: 'true_false', question: 'Adding more indexes to a table always makes queries faster.', answer: 'True', options: ['True', 'False'] }, { stance: 'criticized', held_by: 'a common misconception' }),
   'a true/false item that marks a criticized claim False is kept; one presenting it as true is not');
+ok(S.keepsAttribution({ front: 'How does the Keynes-inspired position explain wage pressure?', back: '…' }, { stance: 'attributed', held_by: 'Keynesian school' })
+  && S.keepsAttribution({ front: 'How does the behaviorist position explain learning?', back: '…' }, { stance: 'attributed', held_by: 'Behaviourism' })
+  && S.keepsAttribution({ front: "What does the ONeill model predict?", back: '…' }, { stance: 'attributed', held_by: "O'Neill's school" }), "spelling variants of a school's name count as naming it");
+ok(!S.isCircular('In the lecture, is the money supply fixed or flexible under that rule?', 'Fixed') && S.isCircular('What does the rule say about money?', 'Money'), 'picking one of the alternatives a question names is an answer, not circular');
+const um = { concepts: [{ id: 'k1', importance: 'core', clarity: 'clear', stance: 'own', held_by: null, evidence: 'x', refs: [0] }], cards: [
+  { concept: 'k1', front: 'What is a covering index?', back: 'An index holding every column a query needs, so the table is not read.', explanation: null, refs: [0] },
+  { concept: 'k9', front: 'Why does a low-selectivity column rarely benefit from an index?', back: 'The database would still read a large share of the rows.', explanation: null, refs: [1] },
+  { concept: 'k5', front: 'What does the invented concept claim about indexes?', back: 'Something nobody said in the lesson at all.', explanation: null, refs: [1] },
+] };
+S.validateFlashcards(um, [], { count: 10, dominant: null, rawConceptIds: new Set(['k1', 'k5']) });
+ok(um.cards.length === 2 && um.quality.unmapped === 1 && um.quality.ungrounded_concept === 1, 'a grounded item for an idea missing from the map is kept; one whose concept failed grounding is dropped');
 ok(S.shuffle(['a', 'b', 'c', 'd'], 'q1').join() === S.shuffle(['a', 'b', 'c', 'd'], 'q1').join(), 'option order is stable');
 
 console.log(`\n${pass} checks passed`);
