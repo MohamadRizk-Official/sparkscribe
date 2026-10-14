@@ -299,7 +299,9 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
     let extra = tool.validate(g.content, segments, ctx) || 0;
     // coverage pass (study engine 2): core concepts still without an item get one more, small call
     if (tool.itemsKey) {
-      const missing = uncoveredConcepts(g.content.concepts, g.content[tool.itemsKey]);
+      // untested concepts while the ceiling allows: core first, then supporting (never minor or unreliable)
+      const room = ctx.count - g.content[tool.itemsKey].length;
+      const missing = uncoveredConcepts(g.content.concepts, g.content[tool.itemsKey], { supporting: true }).slice(0, Math.max(0, room));
       // only while time is left: api/tools may run 300 s in all (vercel.json), the main call up to 170 s
       if (missing.length && g.content[tool.itemsKey].length < ctx.count && Date.now() - started < 150_000) {
         const filled = await fillCoverage({ kind, tool, missing, row, segments, speakers, ctx, meter, usage: r.usage });

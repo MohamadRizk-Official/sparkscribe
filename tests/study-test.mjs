@@ -107,6 +107,8 @@ const um = { concepts: [{ id: 'k1', importance: 'core', clarity: 'clear', stance
 ] };
 S.validateFlashcards(um, [], { count: 10, dominant: null, rawConceptIds: new Set(['k1', 'k5']) });
 ok(um.cards.length === 2 && um.quality.unmapped === 1 && um.quality.ungrounded_concept === 1, 'a grounded item for an idea missing from the map is kept; one whose concept failed grounding is dropped');
+ok(S.keepsAttribution({ question: 'What concern did {{S2}} raise about an eight-dollar price?', answer: 'Support costs' }, { stance: 'attributed', held_by: '{{S3}}' }), "a question about another participant's reaction to a proposal still says whose view it is");
+ok(S.uncoveredConcepts([{ id: 's', importance: 'supporting', clarity: 'clear' }, { id: 'a', importance: 'core', clarity: 'clear' }, { id: 'm', importance: 'minor', clarity: 'clear' }], [], { supporting: true }).map((k) => k.id).join() === 'a,s', 'the coverage pass fills core concepts first, then supporting ones, never minor');
 ok(S.shuffle(['a', 'b', 'c', 'd'], 'q1').join() === S.shuffle(['a', 'b', 'c', 'd'], 'q1').join(), 'option order is stable');
 
 console.log(`\n${pass} checks passed`);

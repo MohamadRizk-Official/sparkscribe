@@ -220,9 +220,9 @@ export function keepsAttribution(item, c) {
   if (c.stance === 'criticized' && item.type === 'true_false' && /^false$/i.test(String(item.answer))) return true;
   const raw = `${item.front || item.question || ''} ${item.back || item.answer || ''} ${item.explanation || ''} ${(item.options || []).join(' ')}`;
   const text = raw.toLowerCase();
-  // a participant's view: the item must name that participant (by code)
-  const codes = String(c.held_by || '').match(/\{\{S\d+\}\}/g);
-  if (codes) return codes.some((code) => raw.includes(code));
+  // a participant's view: the item must say whose it is, by naming a participant (it may be about another
+  // participant's reaction to it: "What concern did {{S2}} raise about {{S3}}'s proposal?")
+  if (/\{\{S\d+\}\}/.test(String(c.held_by || ''))) return /\{\{S\d+\}\}/.test(raw);
   // the holder's name as a short stem, so spellings match ("Behaviourism" ~ "behaviorist", "O'Neill" ~ "ONeill", "Keynesian" ~ "Keynes")
   const flat = (t) => t.toLowerCase().normalize('NFKD').replace(/[̀-ͯ'’ʿʾ`]/g, '');
   const hay = flat(text);
@@ -267,9 +267,12 @@ const dropper = (quality) => (reason, q, a) => {
   if (globalThis.process?.env?.STUDY_DEBUG_DROPS === '1' && (quality.dropped ||= []).length < 60) quality.dropped.push({ reason, q: String(q || '').slice(0, 300), a: String(a || '').slice(0, 300) });
 };
 // core, reliable concepts of the map that no kept item tests (a coverage measure; nothing is dropped)
-export const uncoveredConcepts = (concepts, items) => {
+// reliable concepts no kept item tests: core ones only, or (for the coverage pass) core first, then supporting
+export const uncoveredConcepts = (concepts, items, { supporting = false } = {}) => {
   const tested = new Set((items || []).map((x) => String(x.concept)));
-  return (concepts || []).filter((k) => k.importance === 'core' && k.clarity !== 'unreliable' && !tested.has(String(k.id)));
+  const open = (concepts || []).filter((k) => k.clarity !== 'unreliable' && !tested.has(String(k.id)));
+  const core = open.filter((k) => k.importance === 'core');
+  return supporting ? [...core, ...open.filter((k) => k.importance === 'supporting')] : core;
 };
 const uncoveredCore = (concepts, items) => uncoveredConcepts(concepts, items).length;
 // Two questions are duplicates when their words mostly match, unless both name speakers and the speakers differ
