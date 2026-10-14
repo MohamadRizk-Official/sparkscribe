@@ -230,7 +230,7 @@ export function keepsAttribution(item, c) {
   const hay = flat(text);
   const holder = flat(String(c.held_by || '')).replace(/[^\p{L}\p{N} ]+/gu, ' ').split(' ').filter((w) => w.length > 3 && !STOP.has(w));
   if (holder.some((w) => hay.includes(w.slice(0, Math.min(5, Math.max(4, w.length - 2)))))) return true;
-  return c.stance === 'criticized' && /\b(reject|critici|argu(?:e|es|ed) against|object|disagree|refut|warn|wrong|mistaken|corrupt|false claim)/i.test(text);
+  return c.stance === 'criticized' && /\b(reject|critici|argu(?:e|es|ed) against|against|object|disagree|difficult|problem|flaw|weakness|critique|challeng|refut|warn|wrong|mistaken|corrupt|false claim)/i.test(text);
 }
 export const restates = (explanation, answer, question) => {
   if (!explanation) return false;
