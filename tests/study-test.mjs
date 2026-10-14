@@ -109,6 +109,7 @@ S.validateFlashcards(um, [], { count: 10, dominant: null, rawConceptIds: new Set
 ok(um.cards.length === 2 && um.quality.unmapped === 1 && um.quality.ungrounded_concept === 1, 'a grounded item for an idea missing from the map is kept; one whose concept failed grounding is dropped');
 ok(S.keepsAttribution({ question: 'What concern did {{S2}} raise about an eight-dollar price?', answer: 'Support costs' }, { stance: 'attributed', held_by: '{{S3}}' }), "a question about another participant's reaction to a proposal still says whose view it is");
 ok(S.uncoveredConcepts([{ id: 's', importance: 'supporting', clarity: 'clear' }, { id: 'a', importance: 'core', clarity: 'clear' }, { id: 'm', importance: 'minor', clarity: 'clear' }], [], { supporting: true }).map((k) => k.id).join() === 'a,s', 'the coverage pass fills core concepts first, then supporting ones, never minor');
+ok(S.keepsAttribution({ front: 'Does adding more indexes always make queries faster?', back: 'No. Unused indexes only slow down writes.' }, { stance: 'criticized', held_by: 'a common misconception' }), 'a card that answers a criticized claim with "No" is the criticism');
 ok(S.shuffle(['a', 'b', 'c', 'd'], 'q1').join() === S.shuffle(['a', 'b', 'c', 'd'], 'q1').join(), 'option order is stable');
 
 console.log(`\n${pass} checks passed`);

@@ -218,6 +218,8 @@ export function keepsAttribution(item, c) {
   if (!c || !['attributed', 'criticized', 'quotation'].includes(c.stance)) return true;
   // "True or false: adding indexes always makes queries faster" → False: testing the rejected claim IS the criticism
   if (c.stance === 'criticized' && item.type === 'true_false' && /^false$/i.test(String(item.answer))) return true;
+  // "Does adding more indexes always make queries faster?" → "No. …": answering no is the criticism
+  if (c.stance === 'criticized' && /^\s*no\b/i.test(String(item.back || item.answer || ''))) return true;
   const raw = `${item.front || item.question || ''} ${item.back || item.answer || ''} ${item.explanation || ''} ${(item.options || []).join(' ')}`;
   const text = raw.toLowerCase();
   // a participant's view: the item must say whose it is, by naming a participant (it may be about another
