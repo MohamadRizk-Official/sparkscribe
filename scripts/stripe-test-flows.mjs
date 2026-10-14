@@ -65,18 +65,19 @@ switch (step) {
   case 'upgrade':
   case 'downgrade': {
     const s = await current();
-    await stripe.subscriptions.update(s.id, { items: [{ id: s.items.data[0].id, price: PRICE[step === 'upgrade' ? 'pro' : 'plus'] }], proration_behavior: 'create_prorations' });
+    await stripe.subscriptions.update(s.id, { items: [{ id: s.items.data[0].id, price: PRICE[step === 'upgrade' ? 'pro' : 'plus'] }], proration_behavior: 'always_invoice' }); // like the Customer Portal
     break;
   }
   case 'renew': {
     const s = await current();
-    await stripe.subscriptions.update(s.id, { billing_cycle_anchor: 'now', proration_behavior: 'none' });
+    // a new period starts now and is invoiced at once (unused time of the old period is credited)
+    await stripe.subscriptions.update(s.id, { billing_cycle_anchor: 'now', proration_behavior: 'always_invoice' });
     break;
   }
   case 'fail-renew': {
     const s = await current();
     const pm = await useCard('pm_card_chargeCustomerFail');
-    await stripe.subscriptions.update(s.id, { default_payment_method: pm, billing_cycle_anchor: 'now', proration_behavior: 'none', payment_behavior: 'allow_incomplete' });
+    await stripe.subscriptions.update(s.id, { default_payment_method: pm, billing_cycle_anchor: 'now', proration_behavior: 'always_invoice', payment_behavior: 'allow_incomplete' });
     break;
   }
   case 'fix-card': {

@@ -11,6 +11,7 @@
 import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured } from './config.js';
 
 const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
+const ACTIVE = (s) => PAID_STATUSES.has(s.status);
 // SparkScribe's own Customer Portal settings (plans, cancellation at period end), if configured
 const portalConfig = () => (/^bpc_[A-Za-z0-9]+$/.test(process.env.STRIPE_PORTAL_CONFIGURATION_ID || '') ? { configuration: process.env.STRIPE_PORTAL_CONFIGURATION_ID } : {});
 const MAX_SECONDS = 360_000;
@@ -135,8 +136,16 @@ const idOf = (x) => (typeof x === 'string' ? x : x?.id || null);
 
 // Store a subscription exactly as Stripe reports it now (fetched fresh, so late or out-of-order events can't
 // leave stale state behind).
+// The account always stores the customer's PAYING subscription (the oldest one that still gives access; there is
+// only ever one after settleDuplicates), whichever subscription the event was about. Only when none gives access is
+// the event's own subscription stored (canceled, incomplete…). So a duplicate's events can never replace or end the
+// subscription that is kept, in any order.
 async function syncSubscription(subscriptionId) {
-  const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+  const stripe = getStripe();
+  let sub = await stripe.subscriptions.retrieve(subscriptionId);
+  const paying = (await stripe.subscriptions.list({ customer: idOf(sub.customer), status: 'all', limit: 20 })).data
+    .filter(ACTIVE).sort((a, b) => a.created - b.created || (a.id < b.id ? -1 : 1));
+  if (paying.length) sub = paying[0];
   const item = sub.items?.data?.[0];
   const price = item?.price?.id || null;
   const plan = await planForPrice(price);
@@ -157,8 +166,6 @@ async function syncSubscription(subscriptionId) {
   });
   return { userId, customer: idOf(sub.customer), subscription: sub.id, plan: plan || 'unknown_price', status: sub.status };
 }
-
-const ACTIVE = (s) => PAID_STATUSES.has(s.status);
 
 // Refund what a subscription was charged (a duplicate, or a payment made for an account that no longer exists).
 // `invoice`: refund only that invoice (a renewal charged after the account was deleted); otherwise every paid one.

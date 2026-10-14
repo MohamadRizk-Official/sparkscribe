@@ -198,6 +198,14 @@ const afterDup = await statusOf(user);
 ok(afterDup.plan === 'plus' && afterDup.subscriptionStatus === 'active', '…and the account keeps one active Plus plan');
 const again = await deliver(event('evt_second_retry', 'customer.subscription.updated', { id: 'sub_second' }));
 ok(again.statusCode === 200 && (await statusOf(user)).plan === 'plus', 'a late event for the canceled duplicate doesn’t take access away');
+// the order seen in real Stripe test mode: the duplicate's own "created" event, then its "deleted" event
+subs.set('sub_third', sub2('sub_third', now + 5, { items: { data: [{ id: 'si_3', price: { id: 'price_pro' }, current_period_start: now, current_period_end: now + 30 * 86400 }] } }));
+invoices.set('in_third', { id: 'in_third', object: 'invoice', subscription: 'sub_third', amount_paid: 1499, status: 'paid', pi: 'pi_third' });
+await deliver(event('evt_third_created', 'customer.subscription.created', { id: 'sub_third', object: 'subscription' }));
+await deliver(event('evt_third_deleted', 'customer.subscription.deleted', { id: 'sub_third', object: 'subscription' }));
+const kept = await statusOf(user);
+ok(subs.get('sub_third').status === 'canceled' && refunds.some((r) => r.pi === 'pi_third') && kept.plan === 'plus' && kept.subscriptionStatus === 'active',
+  `a duplicate made outside Checkout is canceled and refunded, and the account keeps the subscription that stays (got ${kept.plan}/${kept.subscriptionStatus})`);
 
 // a Checkout completed after the account was deleted: canceled and refunded, never charging a missing account
 const ghost = '00000000-0000-4000-8000-00000000dead';

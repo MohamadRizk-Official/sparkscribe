@@ -5,8 +5,8 @@
 // Reads STRIPE_SECRET_KEY (and the public Supabase URL/key) from the environment or .env.local. Never prints
 // a secret. Creates, or finds by lookup key:
 //   * one product + monthly price per paid plan in billing_plans (prices and names come from the database)
-//   * a Customer Portal configuration: update payment method, invoices, switch Plus <-> Pro (prorated),
-//     cancel at the end of the period
+//   * a Customer Portal configuration: update payment method, invoices, switch Plus <-> Pro (prorated and invoiced at once),
+//     cancel at the end of the period; a plan switch is invoiced at once (always_invoice)
 //   * optionally a webhook endpoint; its signing secret is written only to --secret-out (mode 600). Its events use
 //     the same Stripe API version as the server's library. A Vercel protection-bypass query (?x-vercel-protection-bypass=…)
 //     may be appended to the URL when the deployment is protected; the URL is never printed.
@@ -67,7 +67,7 @@ const portalSpec = {
     invoice_history: { enabled: true },
     payment_method_update: { enabled: true },
     subscription_cancel: { enabled: true, mode: 'at_period_end', proration_behavior: 'none', cancellation_reason: { enabled: true, options: ['too_expensive', 'unused', 'switched_service', 'other'] } },
-    subscription_update: { enabled: true, default_allowed_updates: ['price'], proration_behavior: 'create_prorations', products: prices },
+    subscription_update: { enabled: true, default_allowed_updates: ['price'], proration_behavior: 'always_invoice', products: prices },
   },
   metadata: { sparkscribe: 'portal' },
 };
