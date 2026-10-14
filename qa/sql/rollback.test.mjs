@@ -7,6 +7,7 @@ import { freshDb } from './pg.mjs';
 let pass = 0;
 const ok = (c, m) => { assert.ok(c, m); pass++; console.log('ok -', m); };
 const file = (p) => readFileSync(new URL(`../../supabase/proposed/${p}`, import.meta.url), 'utf8');
+const applied = (p) => readFileSync(new URL(`../../supabase/migrations/${p}`, import.meta.url), 'utf8'); // account deletion: applied 2026-10-14
 const P = await freshDb({ proposed: true });
 const { db } = P;
 const exists = async (sql) => (await db.query(`select ${sql} as x`)).rows[0].x;
@@ -19,7 +20,7 @@ const objects = async () => ({
 });
 const u = await P.createUser('keep@example.com');
 await P.asUser(u, (d) => d.query(`insert into public.transcriptions (title, transcript_text, duration_seconds) values ('kept', 'x', 5)`));
-ok(Object.values(await objects()).every(Boolean), 'both proposals applied');
+ok(Object.values(await objects()).every(Boolean), 'the AI-limits proposal and the account-deletion migration are both in place');
 
 await db.exec(file('rollback/20261012100000_ai_usage_limits.down.sql'));
 await db.exec(file('rollback/20261012110000_account_deletion.down.sql'));
@@ -28,6 +29,6 @@ ok(!after.reserve && !after.usage && !after.col && !after.del && after.queue, `r
 ok((await db.query('select count(*)::int n from public.transcriptions')).rows[0].n === 1 && (await db.query('select count(*)::int n from auth.users')).rows[0].n === 1, 'user content and accounts untouched');
 
 await db.exec(file('20261012100000_ai_usage_limits.sql'));
-await db.exec(file('20261012110000_account_deletion.sql'));
+await db.exec(applied('20261012110000_account_deletion.sql'));
 ok(Object.values(await objects()).every(Boolean), 're-applying both migrations after a rollback works');
 console.log(`\n${pass} checks passed`);

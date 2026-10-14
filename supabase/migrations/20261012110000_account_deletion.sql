@@ -1,4 +1,4 @@
--- PROPOSED (not applied): self-service account deletion. Requires the Phase 6 billing schema (subscriptions columns).
+-- Applied to production 2026-10-14 (owner-approved, for the Stripe test-mode deletion scenario). Self-service account deletion. Requires the Phase 6 billing schema (subscriptions columns). Rollback: supabase/proposed/rollback/20261012110000_account_deletion.down.sql
 --
 -- Called through the server (POST /api/billing {action: "delete_account"}), which first asks
 -- public.account_deletion_check(), then cancels the account's Stripe subscriptions immediately, then calls

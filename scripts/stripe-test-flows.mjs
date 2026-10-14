@@ -6,7 +6,7 @@
 // Steps (each one makes Stripe send its normal signed webhooks to the endpoint configured in the dashboard):
 //   show         the customer's subscriptions (status, plan price, period end, cancel-at-period-end)
 //   subscribe    plus|pro: a subscription paid with Stripe's test card token pm_card_visa (like a completed Checkout)
-//   decline      plus|pro: a subscription whose first payment is declined (pm_card_chargeDeclined) -> no access
+//   decline      plus|pro: a subscription whose first payment is declined (pm_card_chargeCustomerFail) -> no access
 //   upgrade      switch the active subscription to Pro (prorated)
 //   downgrade    switch the active subscription to Plus (prorated)
 //   renew        start a new billing period now (an immediate renewal invoice, paid with the saved card)
@@ -57,7 +57,7 @@ switch (step) {
   case 'subscribe':
   case 'decline': {
     const price = PRICE[planArg] || die('plus or pro');
-    const pm = await useCard(step === 'subscribe' ? 'pm_card_visa' : 'pm_card_chargeDeclined');
+    const pm = await useCard(step === 'subscribe' ? 'pm_card_visa' : 'pm_card_chargeCustomerFail');
     const s = await stripe.subscriptions.create({ customer: customerId, items: [{ price }], default_payment_method: pm, payment_behavior: 'allow_incomplete', metadata: { supabase_user_id: uid, plan: planArg } });
     console.log(`subscription ${s.id}: ${s.status}`);
     break;
