@@ -76,6 +76,8 @@ export const codedLine = (s, codeOf, clock) => `[${s.id}] ${clock(s.start)} ${co
 // Model output -> stored form: every way the model may have referred to a speaker becomes {{S1}}.
 // Verbatim fields (quotes, evidence) are transcript words and are left exactly as they are.
 const VERBATIM = new Set(['quote', 'evidence', 'anchor']);
+const SPEECH_VERBS = 'said|say|says|tell|tells|told|argue|argues|argued|ask|asks|asked|explain|explains|explained|note|notes|noted|propose|proposes|proposed|suggest|suggests|suggested|mention|mentions|mentioned|think|thinks|thought|believe|believes|believed|claim|claims|claimed|reply|replies|replied|answer|answers|answered|agree|agrees|agreed|disagree|disagrees|disagreed|state|states|stated|want|wants|wanted|mean|means|meant|recommend|recommends|recommended|decide|decides|decided|promise|promises|promised|offer|offers|offered|object|objects|objected|respond|responds|responded|wonder|wonders|wondered|point|points|pointed|raise|raises|raised|describe|describes|described|warn|warns|warned|insist|insists|insisted|admit|admits|admitted';
+const BARE_SPEAKER_RE = new RegExp(`(?<![\\p{L}\\p{N}{])(S\\d+)(?![\\p{L}\\p{N}}])(?=\\s*:|['’]s\\b|\\s+(?:${SPEECH_VERBS})\\b)|(?<=\\b(?:by|from|asked|told|to|with)\\s+)(S\\d+)(?![\\p{L}\\p{N}}])`, 'gu');
 export function tokenizeSpeakers(value, codeOf) {
   const codes = new Set(codeOf.values());
   // Only automatic labels ("Speaker 1") are converted when the model writes them out. A name the user gave
@@ -84,7 +86,9 @@ export function tokenizeSpeakers(value, codeOf) {
   const fix = (s) => s
     // {S1}, [[S1]], {{ S1 }}, and a bare code word "S1"
     .replace(/\{\{\s*(S\d+)\s*\}\}|\{\s*(S\d+)\s*\}|\[\[\s*(S\d+)\s*\]\]/g, (m, a, b, c) => (codes.has(a || b || c) ? `{{${a || b || c}}}` : 'a speaker'))
-    .replace(/(?<![\p{L}\p{N}{])(S\d+)(?![\p{L}\p{N}}])/gu, (m, c) => (codes.has(c) ? `{{${c}}}` : m))
+    // a bare "S1" only where it plainly names a speaker ("S1:", "S1's", "S1 said", "by S1"): in content it can be
+    // a real term (the S1 heart sound, switch S1) and must stay as written
+    .replace(BARE_SPEAKER_RE, (m, a, b) => (codes.has(a || b) ? `{{${a || b}}}` : m))
     .replace(/(?<![\p{L}\p{N}])speaker \d+(?![\p{L}\p{N}])/giu, (m) => (labelCode.has(m.toLowerCase()) ? `{{${labelCode.get(m.toLowerCase())}}}` : m));
   const walk = (v, key) => {
     if (typeof v === 'string') return VERBATIM.has(key) ? v : fix(v);
@@ -165,13 +169,20 @@ export const sameBasis = (a, b) => !!a && !!b && a.n === b.n && a.text === b.tex
 // An Ask answer is stored as plain text, with no room for a speaker table. Its codes therefore follow each line's
 // ORIGINAL speaker label (segments keep it as `orig` through every rename, merge or reassignment), numbered in order
 // of first appearance — so the same codes can be rebuilt from the transcript at any time.
+// Stable: an automatic label "Speaker N" is always SN, whatever order the lines are in now (moving a paragraph
+// must not renumber the codes of answers saved earlier); any other original label (older saves) gets the next
+// free number, in order of first appearance.
 export function origCodes(segments) {
   const codeOf = new Map();
-  let n = 0;
+  const labels = [];
   for (const s of segments || []) {
     const o = String(s.orig || s.speaker || UNKNOWN);
-    if (o !== UNKNOWN && !codeOf.has(o)) codeOf.set(o, `S${++n}`);
+    if (o !== UNKNOWN && !labels.includes(o)) labels.push(o);
   }
+  const auto = (o) => /^speaker (\d+)$/i.exec(o);
+  let max = 0;
+  for (const o of labels) { const m = auto(o); if (m) { codeOf.set(o, `S${Number(m[1])}`); max = Math.max(max, Number(m[1])); } }
+  for (const o of labels) if (!codeOf.has(o)) codeOf.set(o, `S${++max}`);
   return codeOf;
 }
 // code -> the name most of that original speaker's lines carry now
@@ -194,5 +205,5 @@ export function origResolver(segments) {
 // text with {{S1}} codes -> current names; an unfinished code at the end of streaming text is hidden
 export const renderAskSpeakers = (text, segments) => {
   const resolve = origResolver(segments);
-  return String(text || '').replace(TOKEN_RE, (m, code) => resolve(code)).replace(/\{\{[^}]*$/, '');
+  return String(text || '').replace(TOKEN_RE, (m, code) => resolve(code)).replace(/\{\{?[^{}]*\}?$/, (m) => (/^\{\{?\s*S?\d*\s*\}?$/.test(m) ? '' : m));
 };

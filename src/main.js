@@ -873,7 +873,10 @@ function openReassignMenu(anchor, g) {
 function newSpeaker() {
   const id = `NEW_${state.nextId++}`;
   const n = realSpeakers().length;
-  state.speakers.set(id, { name: `Speaker ${n + 1}`, color: COLORS[n % COLORS.length], orig: `Speaker ${n + 1}` });
+  // the next "Speaker N" that no speaker (current name or original label) uses
+  const used = [...state.speakers.values()].flatMap((s) => [s.name, s.orig]).map((x) => /^speaker (\d+)$/i.exec(String(x || ''))).filter(Boolean).map((m) => Number(m[1]));
+  const k = Math.max(0, ...used) + 1;
+  state.speakers.set(id, { name: `Speaker ${k}`, color: COLORS[n % COLORS.length], orig: `Speaker ${k}` });
   return id;
 }
 

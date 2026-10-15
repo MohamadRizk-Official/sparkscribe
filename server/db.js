@@ -98,6 +98,10 @@ export function supabaseStore(sb) {
       if (previousVersion != null) patch.source_version = previousVersion;
       await sb.from('transcription_artifacts').update(patch).eq('id', id);
     },
+    // a result reused after a plain speaker rename is current for the new version too
+    async bumpInsightVersion(id, version) {
+      await sb.from('transcription_insights').update({ source_version: version }).eq('id', id).lt('source_version', version);
+    },
     async listQuestions(transcriptionId) {
       // the newest 100, oldest first (history shows them in order; follow-ups use the last three)
       const { data, error } = await sb.from('transcription_questions').select('id, question, answer, refs, found, source_version, created_at')

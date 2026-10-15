@@ -480,6 +480,8 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
       html += `</div>`;
     }
     p.innerHTML = html;
+    // results written with speaker codes already show current names: the old-label rename (watchNames) skips them
+    p.toggleAttribute('data-keep-names', [ov, st.insights.get(dk)].filter(Boolean).some((x) => x.content?.speakers));
     p.querySelector('[data-act="overview"]')?.addEventListener('click', () => generate('overview'));
     p.querySelector('[data-act="overview-retry"]')?.addEventListener('click', () => generate('overview', { force: true }));
     p.querySelector('[data-act="detailed"]')?.addEventListener('click', () => generate('detailed_summary'));
@@ -613,6 +615,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     }
     html += '</div>';
     p.innerHTML = html;
+    p.toggleAttribute('data-keep-names', [nt, ins].filter(Boolean).some((x) => x.content?.speakers));
     p.querySelector('[data-act="notes-make"]')?.addEventListener('click', () => missing.forEach((k) => generate(k)));
     p.querySelector('[data-act="notes-retry"]')?.addEventListener('click', () => errKinds.forEach((k) => generate(k, { force: true })));
     p.querySelector('[data-act="notes-update"]')?.addEventListener('click', () => stale.forEach((k) => generate(k, { force: true })));
@@ -622,9 +625,10 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   function answerHtml(q, byId) {
     // older answers may be the generic "not found" sentence; newer ones say what wasn't mentioned
     if (isNotFound(q.answer) || !q.answer) return `<div class="ask-a nf"><p>${esc(q.answer || "I couldn't find that in this recording.")}</p></div>`;
-    if (!q.found) return `<div class="ask-a">${rich(renderAskSpeakers(q.answer, ctx.getSegments()), byId)}</div>`;
+    const keep = /\{\{S\d+\}\}/.test(q.answer) ? ' data-keep-names' : '';
+    if (!q.found) return `<div class="ask-a"${keep}>${rich(renderAskSpeakers(q.answer, ctx.getSegments()), byId)}</div>`;
     const unsupported = !(q.refs || []).length;
-    return `<div class="ask-a">${rich(renderAskSpeakers(q.answer, ctx.getSegments()), byId)}${unsupported ? '<p class="ask-warn">No supporting passage was cited. Check the transcript before relying on this.</p>' : ''}${q.sourceVersion != null && st.contentVersion != null && q.sourceVersion < st.contentVersion ? '<p class="ask-warn">Answered before the transcript was last changed.</p>' : ''}</div>`;
+    return `<div class="ask-a"${keep}>${rich(renderAskSpeakers(q.answer, ctx.getSegments()), byId)}${unsupported ? '<p class="ask-warn">No supporting passage was cited. Check the transcript before relying on this.</p>' : ''}${q.sourceVersion != null && st.contentVersion != null && q.sourceVersion < st.contentVersion ? '<p class="ask-warn">Answered before the transcript was last changed.</p>' : ''}</div>`;
   }
   function renderAsk() {
     const p = panels.ask;
@@ -639,7 +643,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     const thread = st.questions.map((q) => `<div class="ask-turn"><div class="ask-q">${esc(q.question)}</div>${answerHtml(q, byId)}</div>`).join('');
     const live = pending ? `<div class="ask-turn"><div class="ask-q">${esc(pending.question)}</div>${
       pending.error ? `<div class="ask-a">${errorBox(pending.error, 'ask-retry', "The answer couldn't be generated.")}</div>`
-      : pending.text ? `<div class="ask-a streaming">${rich(renderAskSpeakers(pending.text, ctx.getSegments()), byId)}</div>`
+      : pending.text ? `<div class="ask-a streaming" data-keep-names>${rich(renderAskSpeakers(pending.text, ctx.getSegments()), byId)}</div>`
       : `<div class="ask-a thinking" role="status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${pending.status === 'searching' ? 'Finding the moments that answer this…' : 'Writing the answer…'}</span></div>`}</div>` : '';
     const empty = !(thread || live);
     p.innerHTML = `<div class="panel ins-card ask-card${empty ? ' is-empty' : ''}">
@@ -767,12 +771,13 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     const sources = [
       { id: 'transcript', group: 'Transcript', label: 'Original transcript', ready: segs.length > 0, blocks: () => transcriptBlocks(false) },
       { id: 'transcript_clean', group: 'Transcript', label: 'Clean transcript', ready: segs.length > 0, note: 'hesitations removed', blocks: () => transcriptBlocks(true) },
-      { id: 'summary', group: 'From this recording', label: 'Summary', ready: !!(ov || ds), note: ov ? outdated(ov) : '', blocks: () => [
+      // coded results (speaker codes resolved to current names) must not be renamed a second time
+      { id: 'summary', group: 'From this recording', label: 'Summary', ready: !!(ov || ds), coded: [ov, ds].filter(Boolean).every((x) => x.content?.speakers), note: ov ? outdated(ov) : '', blocks: () => [
         ...(ov ? [{ t: 'p', text: ov.content.short_summary }, ...(ov.content.key_points?.length ? [{ t: 'h', text: 'Key points' }, ...ov.content.key_points.map((k) => ({ t: 'li', text: k.text, time: timeOf(k.refs) }))] : []),
           ...(ov.content.chapters?.length ? [{ t: 'h', text: 'Chapters' }, ...ov.content.chapters.map((c) => ({ t: 'li', text: `${c.title} — ${c.summary}`, time: timeOf([c.start_ref]) }))] : [])] : []),
         ...(ds ? ds.content.sections.flatMap((s) => [{ t: 'h', text: s.heading }, ...s.points.map((pt) => ({ t: 'li', text: pt.text, time: timeOf(pt.refs) }))]) : []),
       ] },
-      { id: 'notes', group: 'From this recording', label: 'Notes', ready: !!(nt || ins), note: [nt, ins].filter(Boolean).map(outdated).find(Boolean) || '', blocks: () => {
+      { id: 'notes', group: 'From this recording', label: 'Notes', ready: !!(nt || ins), coded: [nt, ins].filter(Boolean).every((x) => x.content?.speakers), note: [nt, ins].filter(Boolean).map(outdated).find(Boolean) || '', blocks: () => {
         const topics = nt ? topicNotes(nt, t, both).flatMap((s) => [{ t: 'h', text: s.heading, time: timeOf([s.start_ref]) }, ...s.items.map((it) => ({ t: 'li', text: it.text, time: it.key ? timeOf(it.refs) : null }))]) : [];
         const structured = ins ? insightBlocks(ins.content, t, both) : [];
         return STRUCTURED_FIRST.has(t) ? [...structured, ...topics] : [...topics, ...structured];
@@ -783,7 +788,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     if (ov && ['podcast', 'interview', 'general'].includes(t)) {
       const takeaways = ins?.content?.key_takeaways?.length ? ins.content.key_takeaways : ov.content.key_points || [];
       const quotes = ins?.content?.notable_quotes || [];
-      sources.push({ id: 'episode_notes_export', group: 'From this recording', label: 'Episode notes', ready: true, note: 'from Summary and Notes', blocks: () => [
+      sources.push({ id: 'episode_notes_export', group: 'From this recording', label: 'Episode notes', ready: true, coded: [ov, ins].filter(Boolean).every((x) => x.content?.speakers), note: 'from Summary and Notes', blocks: () => [
         { t: 'h', text: 'Episode summary' }, { t: 'p', text: ov.content.short_summary },
         ...(ov.content.chapters?.length ? [{ t: 'h', text: 'Chapter outline' }, ...ov.content.chapters.map((c) => ({ t: 'li', text: `${c.title} — ${c.summary}`, time: timeOf([c.start_ref]) }))] : []),
         ...(takeaways.length ? [{ t: 'h', text: 'Key takeaways' }, ...takeaways.map((k) => ({ t: 'li', text: k.text, time: timeOf(k.refs) }))] : []),

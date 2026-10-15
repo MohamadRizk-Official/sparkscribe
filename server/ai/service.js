@@ -26,7 +26,7 @@ import { studyItems, studyGuide } from './studyrun.js';
 import { INSTRUCTIONS_MISSING } from '../../src/lib/tool-settings.js';
 import { selectContext, needsRetrieval, formatExcerpts } from './retrieve.js';
 import { segmentsFromRow, modelLine, estimateTokens, normalizeRecordingType, RECORDING_TYPES, isNotFound, refersToPlayback, isFollowUp, fmtClock } from '../../src/lib/segments.js';
-import { speakerTable, dominantSpeaker, codedLine, tokenizeSpeakers, transcriptBasis, sameBasis, renderSpeakers, origCodes, origResolver } from '../../src/lib/speaker-refs.js';
+import { speakerTable, dominantSpeaker, codedLine, tokenizeSpeakers, transcriptBasis, sameBasis, speakerResolver, renderSpeakers, origCodes, origResolver } from '../../src/lib/speaker-refs.js';
 
 const PART_TOKENS = 80_000;
 // A request that started a generation and then died (function timeout, closed tab) leaves the row "generating".
@@ -391,8 +391,9 @@ export async function gradeShortAnswer(db, { transcriptionId, artifactId, index,
   await reserveAi(db, meter, 600); // a bounded grading prompt (gradePromptFields)
   try {
     const ai = getProvider();
-    // a quiz from study engine 2 refers to speakers by code: grade with the names they had when it was written
-    const named = (t) => renderSpeakers(t, (code) => quiz.content.speakers?.[code]?.name || 'the speaker');
+    // a quiz from study engine 2 refers to speakers by code: grade with the names the learner sees now
+    const nowName = speakerResolver(quiz.content.speakers, segments);
+    const named = (t) => renderSpeakers(t, (code) => (quiz.content.speakers?.[code] ? nowName(code) : 'the speaker'));
     const qNamed = { ...q, question: named(q.question), answer: named(q.answer), explanation: named(q.explanation || ''), accept: (q.accept || []).map(named) };
     const r = await meter.call('grade', () => ai.complete({
       task: 'grade', ...taskConfig('grade'), system: GRADE_SYSTEM, schema: GRADE_SCHEMA,
@@ -422,7 +423,11 @@ export async function generate(db, { transcriptionId, kind, recordingType, force
   const basis = transcriptBasis(segments);
   if (existing) {
     const fresh = existing.source_version === version || sameBasis(existing.content?.basis, basis);
-    if (existing.status === 'ready' && fresh && !force) return fromStorage(existing);
+    if (existing.status === 'ready' && fresh && !force) {
+      // only speakers were renamed since: it is current for this version too (Ask context and Library search use the version)
+      if (existing.source_version !== version) await db.bumpInsightVersion?.(existing.id, version).catch(() => {});
+      return fromStorage(existing);
+    }
     if (existing.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < INSIGHT_TAKEOVER_MS) {
       return fromStorage(existing); // someone else is already generating it
     }

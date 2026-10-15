@@ -301,9 +301,20 @@ function initials(name) {
     setTimeout(() => document.addEventListener('pointerdown', outside, true), 0);
   }
   const askName = (title, value) => promptDialog({ title, label: 'Name', value, submit: (v) => v.trim().slice(0, 60) });
+  // the label a line's speaker had originally: moved lines take the target speaker's, so Ask attributes them to
+  // the person they were moved to; someone new gets a fresh "Speaker N" no line has used
+  function origFor(to) {
+    if (to === 'Unknown') return 'Unknown';
+    const counts = new Map();
+    for (const s of segments) if (s.speaker === to && s.orig) counts.set(s.orig, (counts.get(s.orig) || 0) + 1);
+    if (counts.size) return [...counts].sort((a, b) => b[1] - a[1])[0][0];
+    const used = segments.map((s) => /^speaker (\d+)$/i.exec(s.orig || s.speaker)).filter(Boolean).map((m) => Number(m[1]));
+    return `Speaker ${Math.max(0, ...used) + 1}`;
+  }
   function move(group, to) {
     if (!colorOf.has(to)) colorOf.set(to, to === 'Unknown' ? UNKNOWN_COLOR : nextColor());
-    for (const s of group) { s.orig ??= s.speaker; s.speaker = to; }
+    const orig = origFor(to);
+    for (const s of group) { s.orig = orig; s.speaker = to; }
     afterSpeakerChange(`Moved to ${to}`);
   }
   function rename(from, to) {

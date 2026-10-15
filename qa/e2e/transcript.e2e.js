@@ -43,11 +43,16 @@ export async function run() {
       await menu(gi); await pick(/^Maya$/);
       await waitFor(() => /Moved to Maya/.test(toastText()), { what: 'moved toast' });
       eq(row().segments[firstId].sp, 'Maya', 'moved line');
+      // Ask attributes lines by their original label: a moved line takes Maya's (the person it now belongs to)
+      const mayaOrig = row().segments.find((s, i) => i !== firstId && s.sp === 'Maya')?.o || 'Speaker 1';
+      eq(row().segments[firstId].o || row().segments[firstId].sp, mayaOrig, "moved line carries Maya's original label (Ask names her, not Speaker 2)");
       assert(row().segments.filter((s) => s.sp === 'Speaker 2').length < countBefore, 'only that group moved');
     }],
     ['someone new → a third name appears and is saved', async () => {
       await menu(groups().length - 1); await pick(/^Someone new/); await answerPrompt('Sam Ortiz');
       await waitFor(() => speakersInDb().includes('Sam Ortiz'), { what: 'new speaker saved' });
+      const sam = row().segments.find((s) => s.sp === 'Sam Ortiz');
+      assert(/^Speaker \d+$/.test(sam.o) && !row().segments.some((s) => s.sp !== 'Sam Ortiz' && (s.o || s.sp) === sam.o), `someone new gets an original label no other line uses (${sam.o})`);
     }],
     ['changes survive a reload (checked by re-reading the stored row)', async () => {
       const r = row();
