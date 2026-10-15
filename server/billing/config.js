@@ -109,7 +109,7 @@ export function appOrigin(req) {
   if (process.env.APP_URL && /^https:\/\/[a-z0-9.-]+$/i.test(process.env.APP_URL)) return process.env.APP_URL;
   const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim().toLowerCase();
   if (/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return `http://${host}`;
-  if (/^sparkscribe[a-z0-9-]*\.vercel\.app$/.test(host)) return `https://${host}`;
+  if (/^sparkscribe[a-z0-9-]*\.vercel\.app$/.test(host) || /^(www\.)?spark-scribe\.com$/.test(host)) return `https://${host}`;
   throw new BillingError('Billing is not available on this site.', { status: 400, code: 'bad_origin' });
 }
 

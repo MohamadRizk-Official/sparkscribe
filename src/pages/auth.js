@@ -24,14 +24,26 @@ if (!isConfigured) {
   init();
 }
 
+// The current session was started by a password-reset link in the last 15 minutes (the token records how it
+// was obtained: method "recovery").
+async function cameFromResetLink() {
+  try {
+    const { data } = await supabase.auth.getSession();
+    const claims = JSON.parse(atob(data.session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return (claims.amr || []).some((a) => a?.method === 'recovery' && Date.now() / 1000 - Number(a.timestamp) < 900);
+  } catch { return false; }
+}
+
 async function init() {
   const requested = params.get('mode');
   const session = await getUser(); // server-verified; clears a stale local session
   mountAccountMenu($('accountSlot'));
   if (requested === 'update') {
-    if (!session) {
+    // Setting a new password needs the reset link from the email: a session that merely exists (a shared
+    // computer, a stolen token) can't change the password and lock the owner out.
+    if (!session || !(await cameFromResetLink())) {
       setMode('forgot');
-      showMsg('That reset link has expired or was already used. Request a new one below.', 'error');
+      showMsg(session ? 'To set a new password, request a reset link below and open it from your email.' : 'That reset link has expired or was already used. Request a new one below.', 'error');
     } else setMode('update');
   } else if (session) {
     location.replace(next); // already signed in
@@ -143,6 +155,7 @@ async function submit(e) {
     } else if (mode === 'update') {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+      await supabase.auth.signOut({ scope: 'others' }).catch(() => {}); // anyone else signed in to this account is signed out
       showMsg('Password updated. Taking you to your library…', 'success');
       setTimeout(() => location.replace('/library'), 900);
     }

@@ -2,7 +2,7 @@
 // decides which rows exist for them, so nothing here can reach another user's data.
 // user_id is never sent from the browser — the database fills it from auth.uid().
 import { supabase } from './supabase.js';
-import { deleteAudio } from './audio-store.js';
+import { deleteAudio, PENDING_AUDIO_KEY } from './audio-store.js';
 
 const LIST_COLUMNS = 'id, title, status, duration_seconds, language, recording_type, created_at';
 
@@ -74,12 +74,14 @@ export function stashPending(payload, owner = null) {
 export function peekPending() {
   try {
     const p = JSON.parse(localStorage.getItem(PENDING_KEY) || 'null');
-    if (!p || Date.now() - p.at > PENDING_TTL) { localStorage.removeItem(PENDING_KEY); return null; }
+    if (!p || Date.now() - p.at > PENDING_TTL) { localStorage.removeItem(PENDING_KEY); deleteAudio(PENDING_AUDIO_KEY); return null; }
     return p;
   } catch { return null; }
 }
-export function clearPending() {
+// `keepAudio`: the parked audio is about to be re-keyed to the saved recording (main.js); otherwise it goes too
+export function clearPending({ keepAudio = false } = {}) {
   try { localStorage.removeItem(PENDING_KEY); } catch {}
+  if (!keepAudio) deleteAudio(PENDING_AUDIO_KEY);
 }
 
 // ---- display helpers shared by Library / detail pages ----

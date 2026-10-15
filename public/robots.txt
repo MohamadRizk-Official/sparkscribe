@@ -1,0 +1,6 @@
+# Private pages (library, transcripts, settings, account) are marked noindex in their own HTML; they are not
+# disallowed here, so crawlers can see that.
+User-agent: *
+Allow: /
+
+Sitemap: https://www.spark-scribe.com/sitemap.xml

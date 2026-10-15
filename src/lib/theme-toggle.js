@@ -14,8 +14,11 @@ export function mountThemeToggle(anchor) {
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'theme-btn';
+  // the browser's own UI color (address bar on phones) follows the theme
+  const meta = document.querySelector('meta[name="theme-color"]');
   const paint = () => {
     const dark = resolvedTheme() === 'dark';
+    if (meta) meta.content = dark ? '#04050d' : (getComputedStyle(document.body).backgroundColor || '#f6f7fb');
     btn.innerHTML = dark ? SUN : MOON;
     const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
     btn.setAttribute('aria-label', label);

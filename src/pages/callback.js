@@ -19,8 +19,16 @@ function fail(title, text) {
 (async () => {
   if (!isConfigured) return fail('Accounts aren\'t available', 'This copy of the site isn\'t connected to an account server.');
 
-  const errorText = params.get('error_description') || hash.get('error_description');
-  if (errorText) return fail("Couldn't sign you in", errorText.replace(/\+/g, ' '));
+  // only known errors are shown, in our words: a link can't put arbitrary text on this page
+  const code = params.get('error_code') || hash.get('error_code') || params.get('error') || hash.get('error');
+  if (code) {
+    const known = {
+      otp_expired: 'This link has expired or was already used. Request a new one from the sign-in page.',
+      access_denied: 'Sign-in was cancelled or the link is no longer valid. Try again from the sign-in page.',
+      email_not_confirmed: 'Confirm your email first: open the link we sent you.',
+    };
+    return fail("Couldn't sign you in", known[code] || 'Something went wrong with this link. Try signing in again.');
+  }
 
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session) {

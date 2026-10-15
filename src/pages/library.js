@@ -508,7 +508,11 @@ function bind() {
     if (!row) return;
     if (act === 'star') { e.preventDefault(); return toggleStar(row); }
     if (act === 'menu') { e.preventDefault(); return recordingMenu(row); }
-    if (st.selecting) { e.preventDefault(); toggleSelected(row.id); }
+    if (st.selecting) {
+      // the checkbox keeps its native toggle (cancelling the click would undo the tick); the card toggles it by hand
+      if (e.target.matches('.lib-check input')) { st.selected.has(row.id) !== e.target.checked && toggleSelected(row.id); return; }
+      e.preventDefault(); toggleSelected(row.id);
+    }
   });
   $('libMore').addEventListener('click', (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;

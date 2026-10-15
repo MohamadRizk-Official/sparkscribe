@@ -1,4 +1,4 @@
-import { decodeToMono16k, peaks } from './audio.js';
+import { decodeToMono16k, peaks, abortDecode } from './audio.js';
 import { nameMapFromSegments } from './lib/speaker-names.js';
 import { toggleDetails } from './lib/details-pop.js';
 import { relatedMaterialHtml, bindRelatedMaterial } from './lib/related-material.js';
@@ -12,7 +12,7 @@ import { sparkPulse } from './lib/brand.js';
 import { mountMascot } from './mascot/mascot.js';
 import { mascotSignal, mascotTravel } from './mascot/bus.js';
 import { confirmDialog } from './library/dialogs.js';
-import { putAudio, rekeyAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
+import { putAudio, rekeyAudio, deleteAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
 import { loadPlans, getBillingStatus, authorizeTranscription, startCheckout, allowanceLabel, usageText, usageLevel, durationText, dateText } from './lib/billing.js';
 
 const $ = (id) => document.getElementById(id);
@@ -294,6 +294,7 @@ function show(panel) {
 // The worker keeps the loaded models between recordings, so it is only restarted to stop a run in progress or
 // after an error; starting over from a finished result reuses it (no model reload).
 function reset({ restartWorker = !!run && !state?.lines } = {}) {
+  if (run && !state?.lines) abortDecode(); // a conversion in progress stops too, not only transcription
   if (restartWorker) {
     killWorker();
     getWorker().postMessage({ type: 'detect', forceCPU: FORCE_CPU });
@@ -491,7 +492,21 @@ function onDownload(p) {
   }
 }
 
+// what a file must be before anything is downloaded or decoded (a PDF or a screenshot gets a clear answer, not a
+// 31 MB converter download and "exit code 1")
+const MEDIA_EXT = /\.(m4a|mp3|mp4|wav|ogg|oga|opus|webm|aac|flac|mov|m4v|mkv|amr|3gp|wma|caf|aiff?)$/i;
+const MAX_FILE_BYTES = 4 * 1024 ** 3;
+function fileProblem(file) {
+  if (!file || !file.size) return 'That file is empty.';
+  const t = String(file.type || '');
+  if (!(t.startsWith('audio/') || t.startsWith('video/') || MEDIA_EXT.test(file.name || ''))) return `“${file.name}” isn’t an audio or video file. SparkScribe transcribes recordings like MP3, M4A, WAV, OGG/Opus, WebM or MP4.`;
+  if (file.size > MAX_FILE_BYTES) return `“${file.name}” is larger than 4 GB, which a browser tab can’t process. Export just the audio (for example as M4A or MP3) and try that.`;
+  return null;
+}
+
 async function start(file) {
+  const problem = fileProblem(file);
+  if (problem) return toast(problem, 7000);
   if (isConfigured && REQUIRE_ACCOUNT) {
     session = session ?? (await getSession());
     if (!session) return signInGate();
@@ -528,6 +543,7 @@ async function start(file) {
     const forceFFmpeg = new URLSearchParams(location.search).has('ffmpeg');
     decoded = await decodeToMono16k(file, onStatus, { forceFFmpeg });
   } catch (err) {
+    if (currentFile !== file || err?.code === 'cancelled') return; // cancelled (or started over) while converting
     showError(err?.code === 'converter_unavailable' ? err.message // a network problem, not a problem with the file
       : `Couldn't read "${file.name}". It may not contain audio, or the format isn't supported.\n\n${err.message || err}`);
     return;
@@ -1236,6 +1252,7 @@ const insights = mountInsights({
 // Park the transcript in this browser, sign in, then it's saved automatically on return.
 async function signInToSave(mode) {
   if (!stashPending(savePayload(), session?.user?.id ?? null)) return toast("Couldn't hold the transcript for sign-in. Export it first.");
+  await deleteAudio(PENDING_AUDIO_KEY); // never let an older parked file be attached to this transcript
   if (currentFile) await putAudio(PENDING_AUDIO_KEY, currentFile); // parked with the transcript; re-keyed once it is saved
   leavingOnPurpose = true;
   location.href = `/auth?${mode === 'signup' ? 'mode=signup&' : ''}next=${encodeURIComponent('/?save=pending')}`;
@@ -1412,7 +1429,7 @@ async function resumePendingSave(confirmed = false) {
     note.innerHTML = `<span class="spinner sm" aria-hidden="true"></span><span>Saving “${esc(pending.title)}” to My Library…</span>`;
     try {
       const id = await saveTranscript(pending);
-      clearPending();
+      clearPending({ keepAudio: true });
       await rekeyAudio(PENDING_AUDIO_KEY, id); // the parked audio now belongs to the saved recording
       location.replace(`/transcript?id=${encodeURIComponent(id)}`);
     } catch (err) {

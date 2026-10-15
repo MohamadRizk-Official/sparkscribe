@@ -35,8 +35,8 @@ function buttonFor(p) {
 // computed from the allowances. The full feature list lives once, in "Every plan includes".
 const CARD_COPY = {
   free: { tag: 'For getting started', items: ['Full AI workspace', 'Searchable private Library', 'Summaries, Notes & Ask', 'Study & productivity tools', 'Exports'] },
-  plus: { tag: 'For everyday use', badge: 'Recommended', items: ['Everything in {prev}', '{more}', 'Great for classes & meetings', 'Full Create tools', 'Cancel anytime'] },
-  pro: { tag: 'For heavy recording', items: ['Everything in {prev}', '{more}', 'Built for long lectures & meetings', 'Full AI workspace', 'Cancel anytime'] },
+  plus: { tag: 'For everyday use', badge: 'Recommended', items: ['Everything in {prev}', '{more}', 'Great for classes & meetings', 'Cancel anytime'] },
+  pro: { tag: 'For heavy recording', items: ['Everything in {prev}', '{more}', 'Built for long lectures & meetings', 'Cancel anytime'] },
 };
 
 // 3600 -> {num: "60", unit: "min"}, 72000 -> {num: "20", unit: "hr"}

@@ -5,7 +5,7 @@
 //     unpacks the entire file into raw memory at once, so it dies on long recordings and on
 //     codecs the browser doesn't ship.
 //  2. Robust path: FFmpeg compiled to WebAssembly. Handles every format and streams the
-//     conversion, so an hour-long voice message is fine. Costs a one-time download (~31 MB of WebAssembly, ~9 MB over the network compressed).
+//     conversion, so an hour-long voice message is fine. The file is mounted, not copied into memory. Costs a one-time download (~31 MB of WebAssembly, ~9 MB over the network compressed).
 import { fetchBlobURL, withTimeout, StallError } from './lib/fetch-progress.js';
 export const SAMPLE_RATE = 16000;
 
@@ -86,34 +86,64 @@ async function getFFmpeg(onStatus) {
   return ffmpegPromise;
 }
 
+// The FFmpeg worker that is converting right now (null when idle): cancelling stops it for real, rather than
+// letting a long conversion keep the CPU and memory busy behind the next file.
+let busyFF = null;
+export function abortDecode() {
+  if (!busyFF) return;
+  try { busyFF.terminate(); } catch { /* already gone */ }
+  busyFF = null;
+  ffmpegPromise = null; // a terminated worker can't be reused; the next file loads a fresh one (from the HTTP cache)
+}
+
 async function decodeWithFFmpeg(file, onStatus) {
   const ff = await getFFmpeg(onStatus);
   const ext = (file.name.match(/\.([a-z0-9]+)$/i)?.[1] || 'bin').toLowerCase();
-  const inName = `in.${ext}`;
   const outName = 'out.f32';
+  const dir = '/input';
+  let inName = null, mounted = false;
 
   let lastPct = -1;
   const onProgress = ({ progress }) => {
+    if (busyFF !== ff) return; // a cancelled conversion never updates the screen of the next file
     const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100);
     if (pct !== lastPct) { lastPct = pct; onStatus(`Converting audio… ${pct}%`); }
   };
   ff.on('progress', onProgress);
+  busyFF = ff;
   try {
     onStatus('Converting audio…');
-    await ff.writeFile(inName, new Uint8Array(await file.arrayBuffer()));
+    // The file is read by FFmpeg straight from disk (WORKERFS): a 1 GB video is not copied into memory first.
+    // Browsers without it get the old way (one in-memory copy).
+    try {
+      await ff.createDir(dir).catch(() => {});
+      await ff.mount('WORKERFS', { files: [file] }, dir);
+      mounted = true;
+      inName = `${dir}/${file.name}`;
+    } catch {
+      inName = `in.${ext}`;
+      await ff.writeFile(inName, new Uint8Array(await file.arrayBuffer()));
+    }
     // -vn: drop video, mono, 16 kHz, raw 32-bit float samples (no WAV header to parse)
     const code = await ff.exec(['-i', inName, '-vn', '-ac', '1', '-ar', String(SAMPLE_RATE), '-f', 'f32le', outName]);
+    if (busyFF !== ff) throw Object.assign(new Error('Cancelled.'), { code: 'cancelled' });
     if (code !== 0) throw new Error(`FFmpeg could not read this file (exit code ${code}).`);
     const data = await ff.readFile(outName);
     const bytes = data instanceof Uint8Array ? data : new TextEncoder().encode(data);
-    // Copy into a fresh buffer so the samples outlive FFmpeg's memory.
-    const samples = new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    // The worker hands over a buffer of its own: view it in place (no second ~230 MB-per-hour copy) when aligned.
+    const samples = bytes.byteOffset % 4 === 0 && bytes.byteLength % 4 === 0
+      ? new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4)
+      : new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength - (bytes.byteLength % 4)));
     if (!samples.length) throw new Error('FFmpeg produced no audio. Is there an audio track in this file?');
     return { samples, duration: samples.length / SAMPLE_RATE };
   } finally {
-    ff.off('progress', onProgress);
-    await ff.deleteFile(inName).catch(() => {});
-    await ff.deleteFile(outName).catch(() => {});
+    if (busyFF === ff) {
+      busyFF = null;
+      ff.off('progress', onProgress);
+      if (mounted) await ff.unmount(dir).catch(() => {});
+      else if (inName) await ff.deleteFile(inName).catch(() => {});
+      await ff.deleteFile(outName).catch(() => {});
+    }
   }
 }
 
