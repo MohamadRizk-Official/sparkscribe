@@ -247,6 +247,18 @@ ok((await db.query('select count(*)::int n from auth.users where id = $1', [user
 const late = await deliver(event('evt_late', 'customer.subscription.deleted', { id: 'sub_first' }));
 ok(late.statusCode === 200 && late.body.refused, 'Stripe’s later events for the deleted account are acknowledged and change nothing');
 
+// a test-mode server (Preview on the shared database) can't touch an account with real billing
+{
+  const realUser = await P.createUser('real@example.com');
+  await db.query(`insert into public.subscriptions (user_id, stripe_customer_id, livemode, plan, status) values ($1, 'cus_LIVE_real', true, 'plus', 'active')`, [realUser]);
+  const before = stripeCalls.length;
+  let err = null;
+  try { await service.createCheckout(fakeSb(realUser), { id: realUser, email: 'real@example.com' }, 'pro', 'http://localhost:5173'); } catch (e) { err = e; }
+  const row = (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [realUser])).rows[0];
+  ok(err?.code === 'live_account' && row.stripe_customer_id === 'cus_LIVE_real' && row.livemode === true && !stripeCalls.slice(before).includes('POST /v1/customers'),
+    'a test checkout never replaces a live customer link (the real subscription stays attached)');
+}
+
 delete process.env.STRIPE_WEBHOOK_SECRET;
 ok((await deliver(event('evt_x', 'customer.subscription.updated', { id: 'sub_qa_1' }))).statusCode === 503, 'webhook without its secret configured → 503 (nothing processed)');
 

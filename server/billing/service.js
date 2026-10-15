@@ -48,6 +48,11 @@ async function ensureCustomer(sb, user) {
   const live = isLiveMode();
   const { data: row } = await sb.from('subscriptions').select('stripe_customer_id, livemode').eq('user_id', user.id).maybeSingle();
   if (row?.stripe_customer_id && row.livemode === live) return row.stripe_customer_id;
+  // A test-mode server (a Preview sharing the production database) must never replace a real customer link:
+  // that would detach the person's live subscription from their account.
+  if (!live && row?.stripe_customer_id && row.livemode === true) {
+    throw new BillingError('Test payments are not available for an account with real billing.', { status: 409, code: 'live_account' });
+  }
   const created = await stripe.customers.create(
     { email: user.email || undefined, metadata: { supabase_user_id: user.id } },
     { idempotencyKey: `sparkscribe-customer-${user.id}-${live ? 'live' : 'test'}` },
