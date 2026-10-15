@@ -1,0 +1,15 @@
+# Cloudflare Workers configuration (proof of compatibility; not used by the current Vercel deployment).
+name = "sparkscribe"
+main = "worker.mjs"
+compatibility_date = "2025-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "../dist"
+binding = "ASSETS"
+html_handling = "auto-trailing-slash"   # /pricing -> pricing.html (Vercel's cleanUrls)
+not_found_handling = "404-page"
+run_worker_first = ["/api/*"]
+
+[observability]
+enabled = true

@@ -35,7 +35,7 @@ export default async function handler(req, res) {
   try {
     const body = await rawBody(req);
     // default tolerance: 5 minutes, so a captured request can't be replayed later
-    event = getStripe().webhooks.constructEvent(body, signature, secret);
+    event = await getStripe().webhooks.constructEventAsync(body, signature, secret); // async: also runs where only Web Crypto exists (Workers)
   } catch {
     billingLog('webhook_rejected', { reason: 'invalid_signature' });
     return reply(res, 400, { error: 'invalid_signature' });

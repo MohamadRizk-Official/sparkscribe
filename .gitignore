@@ -43,3 +43,8 @@ dist-eval-*
 
 # QA cycle outputs (logs, captured runs)
 qa/out/
+
+# Cloudflare Workers local state (wrangler dev)
+cloudflare/.wrangler
+cloudflare/node_modules
+cloudflare/.dev.vars

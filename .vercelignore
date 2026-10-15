@@ -13,3 +13,6 @@ dist-eval-*
 public/__*
 public/ns_*
 *.log
+cloudflare/.wrangler
+cloudflare/node_modules
+cloudflare/.dev.vars
