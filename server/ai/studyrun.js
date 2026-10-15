@@ -78,22 +78,52 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   const missing = selected.filter((s) => !c[key].some((x) => x.concept === s.id));
   if (missing.length && Date.now() - started < 140_000) { raw = [...raw, ...await write(missing)]; c = validate(raw); firstQuality = c.quality; }
 
-  // check every item against its own lines
+  // check every item against its own lines (and the concept's other lines, where its distractors may come from)
   const stats = {};
+  const byId = new Map(map.concepts.map((x) => [x.id, x]));
+  const blockOf = (it, i) => {
+    const con = byId.get(it.concept);
+    const lines = excerptIds([{ refs: [...new Set([...(it.refs || []), ...(con?.refs || [])])] }], segments, 2);
+    const fields = kind === 'quiz'
+      ? `Question (${it.type}): ${it.question}\n${it.options?.length ? `Options: ${it.options.map((o) => `[${o}]`).join(' ')}\n` : it.type === 'true_false' ? 'Options: [True] [False]\n' : ''}Answer: ${it.answer}`
+      : `Question: ${it.front}\nAnswer: ${it.back}`;
+    return `<item index="${i}">\n${fields}\nExplanation: ${it.explanation || '(none)'}\nPosition: ${con ? `${con.stance}${con.held_by ? `, held by ${con.held_by}` : ''}` : 'own'}\nLines:\n${excerpt(segments, lines, line)}\n</item>`;
+  };
+  // fixes are written with the speaker labels the model sees: turn them into speaker codes like everything else
+  const tokenized = (items) => tokenizeSpeakers({ [key]: items }, speakers.codeOf)[key] || [];
+  const addStats = (s) => { for (const [k, v] of Object.entries(s)) stats[k] = (stats[k] || 0) + v; };
   if (c[key].length && Date.now() - started < 200_000) {
-    const byId = new Map(map.concepts.map((x) => [x.id, x]));
-    const blocks = c[key].map((it, i) => {
-      const con = byId.get(it.concept);
-      const lines = excerptIds([{ refs: it.refs?.length ? it.refs : con?.refs || [] }], segments, 2);
-      const fields = kind === 'quiz'
-        ? `Question (${it.type}): ${it.question}\n${it.options?.length ? `Options: ${it.options.map((o) => `[${o}]`).join(' ')}\n` : ''}Answer: ${it.answer}`
-        : `Question: ${it.front}\nAnswer: ${it.back}`;
-      return `<item index="${i}">\n${fields}\nExplanation: ${it.explanation || '(none)'}\nPosition: ${con ? `${con.stance}${con.held_by ? `, held by ${con.held_by}` : ''}` : 'own'}\nLines:\n${excerpt(segments, lines, line)}\n</item>`;
-    });
-    const r = await call({ task: `${tool.task}:verify`, schema: VERIFY_SCHEMA, body: blocks.join('\n'), instructions: verifyInstructions(kind) });
-    const applied = applyChecks(kind, c[key], r.json?.checks || []);
-    Object.assign(stats, applied.stats);
-    c = validate(applied.items.map((x) => ({ ...x })));
+    let applied = null;
+    try {
+      const r = await call({ task: `${tool.task}:verify`, schema: VERIFY_SCHEMA, body: c[key].map(blockOf).join('\n'), instructions: verifyInstructions(kind) });
+      applied = applyChecks(kind, c[key], r.json?.checks || []);
+    } catch (err) {
+      // a failed check must not throw away the paid work, nor ship choices nobody checked: keep only items without options
+      console.warn('[study] verify failed:', err?.code || err?.name || 'error');
+      const keep = c[key].filter((it) => !(kind === 'quiz' && (it.type === 'multiple_choice' || it.type === 'true_false')));
+      applied = { items: keep, stats: { verify_failed: 1, ambiguous_dropped: c[key].length - keep.length }, recheck: [] };
+    }
+    addStats(applied.stats);
+    let items = tokenized(applied.items.map((x) => ({ ...x })));
+    // anything repaired is checked once more, with no further fixes allowed; no time left = not shipped
+    if (applied.recheck.length) {
+      const again = applied.recheck.map((i) => items[i]);
+      let final = null;
+      if (Date.now() - started < 240_000) {
+        try {
+          const r2 = await call({ task: `${tool.task}:recheck`, schema: VERIFY_SCHEMA, body: again.map(blockOf).join('\n'), instructions: verifyInstructions(kind, { final: true }) });
+          final = applyChecks(kind, again, r2.json?.checks || [], { final: true });
+        } catch (err) { console.warn('[study] recheck failed:', err?.code || err?.name || 'error'); }
+      }
+      const passed = new Set((final?.items || []));
+      if (final) { const { verify_dropped = 0, ambiguous_dropped = 0 } = final.stats; addStats({ recheck_dropped: verify_dropped + ambiguous_dropped }); }
+      else addStats({ recheck_dropped: again.length });
+      const kept = new Set(applied.recheck);
+      items = items.filter((it, i) => !kept.has(i)).concat(final ? final.items : []);
+      items.sort((a, b) => (a.refs?.[0] ?? 0) - (b.refs?.[0] ?? 0));
+      void passed;
+    }
+    c = validate(items);
   } else stats.verify_skipped = 1;
   // drop reasons from both rounds of checks; what is kept is the final count
   const quality = { ...firstQuality };

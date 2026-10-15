@@ -25,6 +25,11 @@ const TASKS = {
   quiz: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 24000, timeoutMs: 170_000 },
   // study engine 3: one call per section of the recording (in parallel), then merging the sections' maps
   studymap: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 16000, timeoutMs: 120_000 },
+  // checking written items: short prompts and outputs; a short timeout so a slow check can't outlive the function
+  'flashcards:verify': { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000, timeoutMs: 75_000 },
+  'quiz:verify': { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000, timeoutMs: 75_000 },
+  'flashcards:recheck': { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 6000, timeoutMs: 45_000 },
+  'quiz:recheck': { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 6000, timeoutMs: 45_000 },
   definitions: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 8000 },
   exam_points: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 8000 },
   meeting_recap: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000 },
@@ -39,7 +44,7 @@ const TASKS = {
 };
 
 export function taskConfig(task) {
-  const base = TASKS[task.split(':')[0]] || TASKS.insights;
+  const base = TASKS[task] || TASKS[task.split(':').slice(0, 2).join(':')] || TASKS[task.split(':')[0]] || TASKS.insights;
   return { model: process.env[base.env] || process.env.AI_MODEL || DEFAULT_MODEL, effort: base.effort, maxTokens: base.maxTokens, ...(base.timeoutMs && { timeoutMs: base.timeoutMs }) };
 }
 

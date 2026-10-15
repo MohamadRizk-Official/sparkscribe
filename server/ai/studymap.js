@@ -256,7 +256,8 @@ ${JSON.stringify(brief, null, 1)}
 ${kind === 'quiz' ? `- ${QUIZ_TYPES[settings?.types] || QUIZ_TYPES.mixed}
 - ${settings?.difficulty === 'harder' ? 'Challenge level: reasoning, application, distinction and misconception questions, with close distractors.' : 'Standard level: the important ideas, clearly asked.'}
 - Test understanding, reasoning, distinctions, cause and effect, application or misconceptions — not whether a sentence was said. "skill" says which.
-- multiple_choice: exactly 4 options and ONE unambiguously correct answer according to the lines. Distractors must be plausible to someone who half-understood: the other school's position on the same question, a reversed cause and effect, a related idea from elsewhere in the lecture, a common misconception. Never absurd, joking or obviously wrong options ("only experts are allowed to use the formula"); no "all/none of the above"; all options similar in length, detail and grammar; no word in the question that gives the answer away.
+- multiple_choice: exactly 4 options and ONE unambiguously correct answer according to the lines. Distractors must be plausible to someone who half-understood: the other school's position on the same question, a reversed cause and effect, a related idea from elsewhere in the lecture that does NOT answer this question, a common misconception. Every distractor must be clearly wrong for the question exactly as worded: never an option that is also true of the question's subject, in the lecture or in general (asked "what cannot replace exercise?", a balanced diet is also a correct answer). If the answer is one of several things that would fit, ask what the lecture specifically says about it instead (which example the lecturer gave, what the lecturer criticized, who claimed it). Never absurd, joking or obviously wrong options ("only experts are allowed to use the formula"); no "all/none of the above"; all options similar in length, detail and grammar; no word in the question that gives the answer away.
+- Keep qualifiers exactly as the lines have them (sometimes, often, may, might, must, always, never, only): never turn "may" into "must" or "often" into "always" in a question, an option or an answer.
 - explanation: the principle or reasoning behind the right answer, from the lines; one sentence for a simple point. Don't restate the option.`
     : `- front: one clear question about the concept. back: answers exactly that question with the actual knowledge and makes sense on its own; never circular.
 - ${FOCUS[settings?.focus] || FOCUS.balanced}
@@ -271,12 +272,16 @@ ${STYLE_RULES}${speakerNote({ dominant })}`;
 
 export const VERIFY_SCHEMA = obj({
   checks: list(obj({
-    index: int('The item number'),
+    index: int('The item\'s index attribute, exactly as given (it starts at 0)'),
     matches: bool('The answer responds to what the question actually asks'),
     supported: bool('The answer is stated or clearly established by the item\'s lines'),
     explanation_supported: bool('The explanation (if any) is supported by the lines; true when there is none'),
     attribution_ok: bool('Positions are attributed correctly: a school\'s / person\'s view is not stated as fact or as the lecturer\'s own; a criticized view is presented as criticized'),
     distractors_ok: bool('Multiple choice: the wrong options are plausible, not absurd, and do not give the answer away; true for other items'),
+    option_checks: list(obj({
+      option: str('The exact text of one option (true/false: "True" or "False")'),
+      fits: enumOf(['yes', 'arguably', 'no'], 'Is this option a correct answer to the question EXACTLY as worded? arguably = a careful student could defend it'),
+    }), 'Multiple choice and true/false: one entry for EVERY option, each judged on its own; empty for other items'),
     uncertain_terms: list(str(), 'Words or names in the item that look like transcription errors in the lines (keep their exact spelling); empty if none'),
     drop: bool('true when the item cannot be fixed from these lines'),
     fixed_question: nullableStr('A corrected question if needed; else null'),
@@ -286,46 +291,83 @@ export const VERIFY_SCHEMA = obj({
   })),
 });
 
-export function verifyInstructions(kind) {
+export function verifyInstructions(kind, { final = false } = {}) {
   return `Check each ${kind === 'quiz' ? 'quiz question' : 'flashcard'} above against its own transcript lines, as a careful teacher would before handing it to students.
 For each item return one check (same index):
 - matches: does the answer respond to what the question asks? A question about why answered with what, or about one thing answered with another, does not match.
 - supported: is the answer stated or clearly established in the lines?
 - explanation_supported: is every claim in the explanation supported by the lines?
 - attribution_ok: is each position attributed as in the lines (a school's or person's view not presented as fact or as the lecturer's own; a criticized view presented as criticized; the right participant named)?
-- distractors_ok (multiple choice): plausible wrong options, none absurd, none giving the answer away by length or wording, exactly one correct.
+- distractors_ok (multiple choice): plausible wrong options, none absurd, none giving the answer away by length or wording.
+- option_checks (multiple choice and true/false): act as a student arguing for a different answer. Take the question exactly as worded (its scope, any negation such as not / cannot / except, and qualifiers such as only / always / never / sometimes / may) and judge EVERY option on its own: fits = yes if the lines say or imply it answers the question, or if it is generally true of the question's subject (asked what cannot replace X, another option that also cannot replace X fits); arguably if a careful student could defend it; no otherwise. For this judgement only, you may use common knowledge.${final ? '' : `
+- If more than one option fits (or the keyed answer doesn't): give fixed_question, making the question specific to what the lines single out (for example "Which product did the lecturer criticize people for treating as a substitute for exercise?") so that only the keyed option fits; or give fixed_options that the lines clearly rule out for this question. If neither works, set drop = true.`}
 - uncertain_terms: words or names from the lines that look misrecognized by the automatic transcription and appear in the item. Never correct them.
-If an item can be fixed from the same lines, give only the corrected fields (keep the rest null / empty). If the lines don't support it, set drop = true. Plain, grammatical wording in any fix; never add facts that aren't in the lines.`;
+${final ? 'These items were already corrected once: do not fix anything (keep every fixed_ field null / empty); set drop = true if any check fails.' : 'If an item can be fixed from the same lines, give only the corrected fields (keep the rest null / empty). If the lines don\'t support it, set drop = true. Plain, grammatical wording in any fix; never add facts that aren\'t in the lines to an item (common knowledge may only be used to judge whether an option also fits).'}`;
 }
 
 // checks -> items with fixes applied, unfixable ones removed, cautions added; stats count what happened
-export function applyChecks(kind, items, checks) {
-  const byIndex = new Map((checks || []).map((c) => [Number(c.index), c]));
-  const stats = { verify_dropped: 0, verify_fixed: 0, explanation_unsupported: 0, weak_distractors: 0, cautions: 0 };
+// Multiple choice and true/false must have exactly ONE defensible answer: every option is judged on its own
+// (option_checks), and an item where another option also fits, or the key doesn't, never ships as it was. It is
+// re-worded or given new options (and then checked once more: `recheck`), or dropped. `final` (the re-check)
+// accepts no further fixes: anything still failing is dropped. Items the check didn't return are unverified.
+const optKey = (s) => String(s ?? '').toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const hasChoices = (kind, it) => kind === 'quiz' && (it.type === 'multiple_choice' || it.type === 'true_false');
+export function applyChecks(kind, items, checks, { final = false } = {}) {
+  let list = checks || [];
+  // a model that numbered the items from 1 instead of using their index attribute: realign rather than misapply
+  const idx = list.map((c) => Number(c.index));
+  if (items.length && idx.length === items.length && !idx.includes(0) && idx.every((n) => n >= 1 && n <= items.length)) list = list.map((c) => ({ ...c, index: Number(c.index) - 1 }));
+  const byIndex = new Map(list.map((c) => [Number(c.index), c]));
+  const stats = { verify_dropped: 0, verify_fixed: 0, explanation_unsupported: 0, weak_distractors: 0, cautions: 0, ambiguous_fixed: 0, ambiguous_dropped: 0, unverified: 0 };
   const out = [];
+  const recheck = []; // indexes into `out` that were repaired here and need one more check
   items.forEach((it, i) => {
     const c = byIndex.get(i);
-    if (!c) { out.push(it); return; }
-    const fixedQ = c.fixed_question && String(c.fixed_question).trim();
-    const fixedA = c.fixed_answer && String(c.fixed_answer).trim();
+    if (!c) {
+      if (final) { stats.ambiguous_dropped++; return; } // a repaired item the re-check didn't confirm
+      stats.unverified++; out.push(it); return;
+    }
+    const fixedQ = !final && c.fixed_question && String(c.fixed_question).trim();
+    const fixedA = !final && c.fixed_answer && String(c.fixed_answer).trim();
     if (c.drop || !c.supported || ((!c.matches || !c.attribution_ok) && !fixedQ && !fixedA)) { stats.verify_dropped++; return; }
     const next = { ...it };
+    let repaired = false;
     if (fixedQ) next[kind === 'quiz' ? 'question' : 'front'] = fixedQ;
     if (fixedA) next[kind === 'quiz' ? 'answer' : 'back'] = fixedA;
-    if (fixedQ || fixedA) stats.verify_fixed++;
-    if (!c.explanation_supported) { stats.explanation_unsupported++; next.explanation = c.fixed_explanation ? String(c.fixed_explanation).trim() : null; }
+    if (fixedQ || fixedA) { stats.verify_fixed++; repaired = true; }
+    if (!c.explanation_supported) { stats.explanation_unsupported++; next.explanation = !final && c.fixed_explanation ? String(c.fixed_explanation).trim() : null; }
+    let opts = null;
     if (kind === 'quiz' && next.type === 'multiple_choice') {
-      const opts = (c.fixed_options || []).map((o) => String(o).trim()).filter(Boolean);
-      if (opts.length >= 3 && opts.includes(next.answer)) { next.options = opts; if (!c.distractors_ok) stats.verify_fixed++; }
+      const fo = final ? [] : (c.fixed_options || []).map((o) => String(o).trim()).filter(Boolean);
+      if (fo.length >= 3 && fo.includes(next.answer)) { opts = fo; next.options = fo; repaired = true; if (!c.distractors_ok) stats.verify_fixed++; }
       else if (!c.distractors_ok) stats.weak_distractors++;
       if (!next.options.includes(next.answer)) { stats.verify_dropped++; return; }
+    }
+    if (hasChoices(kind, next)) {
+      const verdict = new Map((c.option_checks || []).map((o) => [optKey(o.option), o.fits]));
+      // judged against the options the check saw (the item's own), not replacement options it proposed
+      const options = next.type === 'true_false' ? ['True', 'False'] : it.options || [];
+      const fits = (o) => ['yes', 'arguably'].includes(verdict.get(optKey(o)));
+      const others = options.filter((o) => optKey(o) !== optKey(next.answer) && fits(o));
+      const keyFits = fits(next.answer);
+      const complete = options.every((o) => verdict.has(optKey(o)));
+      // new options replace the ones judged: the fitting distractors must be gone from them
+      const fixedByOptions = opts && others.every((o) => !opts.some((x) => optKey(x) === optKey(o)));
+      if (complete && (others.length || !keyFits)) {
+        if (final || !(fixedQ || fixedByOptions)) { stats.ambiguous_dropped++; return; }
+        stats.ambiguous_fixed++; repaired = true;
+      } else if (!complete) {
+        if (final) { stats.ambiguous_dropped++; return; }
+        repaired = true; // options the check didn't judge: judge them in the re-check
+      }
     }
     const text = `${next.front || next.question || ''} ${next.back || next.answer || ''} ${next.explanation || ''} ${(next.options || []).join(' ')}`;
     const terms = [...new Set((c.uncertain_terms || []).map((t) => String(t).trim()).filter((t) => t && text.includes(t)))];
     if (terms.length) { next.caution = cautionFor(terms); stats.cautions++; }
+    if (repaired && !final) recheck.push(out.length);
     out.push(next);
   });
-  return { items: out, stats };
+  return { items: out, stats, recheck };
 }
 
 export const cautionFor = (terms) => `Check the recording: ${terms.map((t) => `“${t}”`).join(', ')} may be misheard in the automatic transcript.`;

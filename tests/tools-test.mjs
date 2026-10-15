@@ -73,6 +73,15 @@ const vf = await svc.generateArtifact(db, { transcriptionId: T3, kind: 'flashcar
 process.env.AI_MOCK_VERIFY = '';
 ok(vd.artifact.content.quality.verify_dropped === 1 && vd.artifact.content.cards.length === 1, 'verification: an unsupported item is removed');
 ok(vf.artifact.content.quality.verify_fixed === 1 && vf.artifact.content.cards[0].back.startsWith('[Mock] A corrected answer'), 'verification: a mismatched answer is corrected from the same lines');
+// a multiple-choice question with a second defensible answer never ships as it was
+process.env.AI_MOCK_VERIFY = 'ambig0';
+const qa = await svc.generateArtifact(db, { transcriptionId: T3, kind: 'quiz', settings: { size: 'more', types: 'multiple_choice' }, force: true });
+process.env.AI_MOCK_VERIFY = 'ambig0fix';
+const qf = await svc.generateArtifact(db, { transcriptionId: T3, kind: 'quiz', settings: { size: 'more', types: 'multiple_choice' }, force: true });
+process.env.AI_MOCK_VERIFY = '';
+const qaq = qa.artifact.content.quality, qfq = qf.artifact.content.quality;
+ok(qaq.ambiguous_dropped >= 1 && !qa.artifact.content.questions.some((q) => q.question.startsWith('[Mock] Which example')), `verification: an ambiguous question with no fix is dropped (${JSON.stringify({ dropped: qaq.ambiguous_dropped })})`);
+ok(qfq.ambiguous_fixed >= 1 && qf.artifact.content.questions.some((q) => q.question.startsWith('[Mock] Which example')) && !qfq.recheck_dropped, `verification: re-worded to the lecture's own example, re-checked once, then kept (${JSON.stringify({ fixed: qfq.ambiguous_fixed, recheck_dropped: qfq.recheck_dropped })})`);
 
 // a size too small for every major topic says so
 const T4 = '66666666-6666-4666-8666-666666666666';

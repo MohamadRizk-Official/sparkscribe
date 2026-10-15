@@ -166,7 +166,8 @@ ${STYLE_RULES}${speakerNote({ dominant })}`;
 // ---------------- checks ----------------
 const STOP = new Set(('a an the of to in on for and or is are was were be been being by with that this these those it its as at from into than then so such '
   + 'what which who whom whose why how when where does did do according lecture lecturer speaker recording said says explained explain described '
-  + 'there their they them he she his her we our you your i not no can could would should may might will shall about also only just very').split(' '));
+  + 'there their they them he she his her we our you your i about also just very').split(' '));
+// (not / no / can / cannot / may / must / only / always / never stay: "X can replace Y" and "X cannot replace Y" are different questions)
 const stem = (w) => w.replace(/(ing|ed|es|s|ly|ment|ness|ion|ions)$/, '').slice(0, 7);
 export const contentWords = (s) => String(s || '').toLowerCase().normalize('NFKC').replace(/\{\{s\d+\}\}/g, ' ')
   .replace(/[^\p{L}\p{N}]+/gu, ' ').split(' ').filter((w) => w.length > 1 && !STOP.has(w)).map(stem);
@@ -200,7 +201,8 @@ export function dropNeedlessAttribution(text, dominant) {
   if (!dominant) return text;
   const tok = `\\{\\{${dominant}\\}\\}`;
   let t = String(text)
-    .replace(new RegExp(`^according to ${tok},?\\s*`, 'i'), '')
+    // the scope stays ("according to the lecturer"): a question about what this lecture says is not a general-truth question
+    .replace(new RegExp(`^according to ${tok},?\\s*`, 'i'), 'According to the lecturer, ')
     .replace(new RegExp(`,?\\s*(?:according to|as (?:explained|described|stated|said) by) ${tok}(?=[?.!,]|$)`, 'gi'), '')
     .replace(new RegExp(`\\b(?:as|what) ${tok} (?:said|explained|described)\\b`, 'gi'), (m) => (/^what/i.test(m) ? 'what the lecturer explained' : 'as the lecturer explained'))
     .replace(new RegExp(tok, 'g'), 'the lecturer');

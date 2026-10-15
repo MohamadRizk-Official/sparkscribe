@@ -86,6 +86,31 @@ const mcq = { concept: 'c1', type: 'multiple_choice', question: 'Q?', answer: 'B
 const weak = M.applyChecks('quiz', [mcq], [{ ...base, index: 0, distractors_ok: false, fixed_options: ['B', 'Plausible 1', 'Plausible 2', 'Plausible 3'] }]);
 ok(weak.items[0].options.includes('Plausible 1') && weak.items[0].options.includes('B'), 'weak distractors are replaced when the check offers better ones');
 ok(M.applyChecks('quiz', [mcq], [{ ...base, index: 0, fixed_answer: 'Z' }]).items.length === 0, 'a "fixed" answer that is not among the options is not accepted');
+// ---------- exactly one defensible answer ----------
+const mcq2 = { concept: 'c1', type: 'multiple_choice', question: 'What cannot replace exercise?', answer: 'Energy drinks', options: ['A balanced diet', 'Energy drinks', 'Enough sleep', 'Stretching'], refs: [1] };
+const verdicts = (fitting) => mcq2.options.map((o) => ({ option: o, fits: fitting.includes(o) ? 'yes' : 'no' }));
+const amb = M.applyChecks('quiz', [mcq2], [{ ...base, index: 0, option_checks: verdicts(['Energy drinks', 'A balanced diet']) }]);
+ok(amb.items.length === 0 && amb.stats.ambiguous_dropped === 1, 'a question with a second defensible option (a balanced diet also cannot replace exercise) is dropped when no fix is offered');
+const scoped = M.applyChecks('quiz', [mcq2], [{ ...base, index: 0, option_checks: verdicts(['Energy drinks', 'A balanced diet']), fixed_question: 'Which product did the lecturer criticize people for treating as a substitute for exercise?' }]);
+ok(scoped.items.length === 1 && /lecturer criticize/.test(scoped.items[0].question) && scoped.recheck.join() === '0' && scoped.stats.ambiguous_fixed === 1, '…re-worded to what the lecture singles out, it is kept and sent for one more check');
+const newOpts = M.applyChecks('quiz', [mcq2], [{ ...base, index: 0, option_checks: verdicts(['Energy drinks', 'A balanced diet']), fixed_options: ['Energy drinks', 'Sleeping in', 'Shopping', 'Travelling'] }]);
+ok(newOpts.items.length === 1 && !newOpts.items[0].options.includes('A balanced diet') && newOpts.recheck.length === 1, '…or given options without the defensible one, and re-checked');
+const stillThere = M.applyChecks('quiz', [mcq2], [{ ...base, index: 0, option_checks: verdicts(['Energy drinks', 'A balanced diet']), fixed_options: ['Energy drinks', 'A balanced diet', 'Shopping', 'Travelling'] }]);
+ok(stillThere.items.length === 0, '…but "new" options that still contain the defensible distractor do not count as a fix');
+const keyWrong = M.applyChecks('quiz', [mcq2], [{ ...base, index: 0, option_checks: verdicts(['A balanced diet']) }]);
+ok(keyWrong.items.length === 0, 'when the keyed answer itself does not fit the question, the item is dropped');
+const clean = M.applyChecks('quiz', [mcq2], [{ ...base, index: 0, option_checks: verdicts(['Energy drinks']) }]);
+ok(clean.items.length === 1 && clean.recheck.length === 0, 'one fitting option (the key): kept as it is, no re-check');
+const partial = M.applyChecks('quiz', [mcq2], [{ ...base, index: 0, option_checks: verdicts(['Energy drinks']).slice(0, 2) }]);
+ok(partial.items.length === 1 && partial.recheck.length === 1, 'options the check did not judge are judged in the re-check');
+const finalFail = M.applyChecks('quiz', [mcq2], [{ ...base, index: 0, option_checks: verdicts(['Energy drinks', 'A balanced diet']), fixed_question: 'x?' }], { final: true });
+ok(finalFail.items.length === 0, 'the re-check accepts no further fixes: still ambiguous means dropped');
+ok(M.applyChecks('quiz', [mcq2], [], { final: true }).items.length === 0, 'a repaired item the re-check did not return is not shipped');
+const tf = { concept: 'c1', type: 'true_false', question: 'A balanced diet can replace exercise.', answer: 'False', options: ['True', 'False'], refs: [1] };
+ok(M.applyChecks('quiz', [tf], [{ ...base, index: 0, option_checks: [{ option: 'True', fits: 'arguably' }, { option: 'False', fits: 'yes' }] }]).items.length === 0, 'true/false that could be argued either way is dropped too');
+const oneBased = M.applyChecks('flashcards', [items[0], items[1]], [{ ...base, index: 1, supported: false }, { ...base, index: 2 }]);
+ok(oneBased.items.length === 1 && oneBased.items[0].front === 'Q2?', 'checks numbered from 1 instead of the index attribute are realigned, not misapplied');
+ok(M.applyChecks('flashcards', [items[0]], []).stats.unverified === 1, 'an item the check did not return is counted as unverified');
 
 // ---------- names the transcript doesn't contain ----------
 const words = M.transcriptWordSet([{ text: "Al-Kaldoon said the cycle repeats. The Keynesians and O'Neill's followers disagree; Adam Smith said look at what was said." }]);

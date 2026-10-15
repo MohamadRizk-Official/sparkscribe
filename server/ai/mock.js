@@ -180,11 +180,23 @@ function studyEngine3(base, step, text) {
       { concept: att.id, type: 'short_answer', skill: 'recall', question: `What does the Mock School call the idea about ${w}?`, options: [], answer: words(ev(1))[0] || 'x', accept: [], explanation: null, refs: [] });
     return { questions };
   }
-  if (step === 'verify') {
+  if (step === 'verify' || step === 'recheck') {
     const n = [...text.matchAll(/<item index="(\d+)">/g)].length;
     // AI_MOCK_VERIFY=drop0: the check rejects the first item; =fix0: it rewrites its answer
     const mode = process.env.AI_MOCK_VERIFY || '';
-    return { checks: Array.from({ length: n }, (_, i) => ({ index: i, matches: true, supported: !(mode === 'drop0' && i === 0), explanation_supported: true, attribution_ok: true, distractors_ok: true, uncertain_terms: [], drop: false, fixed_question: null, fixed_answer: mode === 'fix0' && i === 0 ? '[Mock] A corrected answer that matches the question.' : null, fixed_explanation: null, fixed_options: [] })) };
+    // =ambig0: another option of the first item also fits (=ambig0fix: and the check re-words the question)
+    const blocks = [...text.matchAll(/<item index="(\d+)">([\s\S]*?)<\/item>/g)].map((m) => m[2]);
+    const optionChecks = (b, i) => {
+      const opts = [...((b.match(/^Options: (.*)$/m) || [, ''])[1].matchAll(/\[([^\]]*)\]/g))].map((m) => m[1]);
+      const ans = (b.match(/^Answer: (.*)$/m) || [, ''])[1].trim();
+      let other = false;
+      return opts.map((o) => {
+        const isKey = o.trim() === ans;
+        const fits = isKey ? 'yes' : (!other && i === 0 && /^ambig0/.test(mode) && !text.includes('already corrected once')) ? ((other = true), 'yes') : 'no';
+        return { option: o, fits };
+      });
+    };
+    return { checks: Array.from({ length: n }, (_, i) => ({ index: i, matches: true, supported: !(mode === 'drop0' && i === 0), explanation_supported: true, attribution_ok: true, distractors_ok: true, option_checks: optionChecks(blocks[i] || '', i), uncertain_terms: [], drop: false, fixed_question: mode === 'ambig0fix' && i === 0 && !text.includes('already corrected once') ? '[Mock] Which example did the lecturer specifically give?' : null, fixed_answer: mode === 'fix0' && i === 0 ? '[Mock] A corrected answer that matches the question.' : null, fixed_explanation: null, fixed_options: [] })) };
   }
   return {};
 }
@@ -206,7 +218,7 @@ export function mockProvider() {
       }
       let json;
       const [base, step] = String(task).split(':');
-      if (base === 'studymap' || ['write', 'verify', 'compose'].includes(step)) json = studyEngine3(base, step, text);
+      if (base === 'studymap' || ['write', 'verify', 'recheck', 'compose'].includes(step)) json = studyEngine3(base, step, text);
       else if (step === 'fill') {
         // coverage pass: items for exactly the concepts it was asked about
         const ids = new Set([...((text.match(/<concepts>([\s\S]*?)<\/concepts>/) || [, '[]'])[1].matchAll(/"id": "([^"]+)"/g))].map((m) => m[1]));

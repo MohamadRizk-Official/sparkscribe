@@ -66,7 +66,7 @@ ok(S.isCircular('What did the author say to look at instead of who wrote somethi
 ok(!S.isCircular('What is the distinction between mitosis and meiosis as explained in the lecture?', 'Mitosis makes two identical cells; meiosis makes four cells with half the chromosomes, for reproduction.'), 'a real answer is not circular');
 ok(!S.isCircular('Which rule says a composite index only serves queries on its leading columns?', 'The leftmost prefix rule'), 'a short term answer is not circular');
 ok(S.vagueStart('What did he say about it?') && S.vagueStart('It refers to what?') && !S.vagueStart('What is the difference between X and Y?'), 'vague pronoun questions detected');
-ok(S.dropNeedlessAttribution('According to {{S1}}, which is better: saving early, or saving more later?', 'S1') === 'Which is better: saving early, or saving more later?', '"According to Speaker 1, …" dropped when one speaker gives the lecture');
+ok(S.dropNeedlessAttribution('According to {{S1}}, which is better: saving early, or saving more later?', 'S1') === 'According to the lecturer, which is better: saving early, or saving more later?', '"According to Speaker 1, …" becomes "According to the lecturer, …" (the scope stays) when one speaker gives the lecture');
 ok(S.dropNeedlessAttribution('Why does {{S2}} object to X?', 'S1') === 'Why does {{S2}} object to X?', 'another speaker\'s contribution keeps its attribution');
 ok(S.dropNeedlessAttribution('What is X, as explained by {{S1}}?', 'S1') === 'What is X?' && S.lecturerWord('{{S1}} argues X.', 'S1') === 'the lecturer argues X.', 'other forms become "the lecturer" or disappear');
 const school = { stance: 'attributed', held_by: 'Keynesian school' };
