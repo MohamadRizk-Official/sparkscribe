@@ -1,11 +1,10 @@
-# SparkScribe Privacy Policy — DRAFT
+# SparkScribe Privacy Policy
 
-> **Draft for review, not legal advice.** **[LEGAL REVIEW]** marks wording a lawyer should check (especially children's and
-> teen privacy, US state privacy laws, EU/UK GDPR if offered there, and recording-consent laws). **[CONFIRM]** marks facts
-> only the owner can supply. Everything else describes how SparkScribe works today (2026-10-15).
+> **Draft for review, not legal advice.** **[CONFIRM]** marks the last details for the owner to confirm before
+> publication. Everything else describes how SparkScribe works today (2026-10-15). It has not been reviewed by a lawyer.
 
-**Effective date:** [DATE] **[CONFIRM]**
-**Who we are:** SparkScribe is a product operated by HRstudios LLC, [POSTAL ADDRESS] **[CONFIRM]** ("we", "us").
+**Effective date:** the date of publication **[CONFIRM: filled in when published]**
+**Who we are:** SparkScribe is a product operated by HRstudios LLC **[CONFIRM: postal address, optional]** ("we", "us").
 Contact: contact.hrstudios@gmail.com
 
 ## 1. The short version
@@ -50,7 +49,7 @@ address, browser type). Our own log lines contain your account ID and a recordin
 - the speech-recognition models (downloaded once; not personal).
 
 We use your browser's local storage and IndexedDB for these and for keeping you signed in. We don't set advertising or
-analytics cookies. **[LEGAL REVIEW: cookie/local-storage notice requirements]**
+analytics cookies.
 
 **What we don't collect:** your audio or video files (they stay on your device), your contacts, or your location.
 
@@ -58,33 +57,37 @@ analytics cookies. **[LEGAL REVIEW: cookie/local-storage notice requirements]**
 - To provide the service: transcribe on your device, save and show your library, and run the AI features you ask for.
 - To provide subscriptions: apply your plan's allowance, show your usage, and keep your plan in sync with Stripe.
 - To keep accounts secure: sign-in, password reset, email confirmation, fraud and abuse prevention, usage limits.
+- To charge for subscriptions and meet tax and accounting obligations (Stripe uses your billing address to calculate any
+  sales tax).
 - To keep costs sustainable: fair-use limits on AI features per account and a service-wide daily cap.
 - To support you when you contact us, and to fix problems.
 - We don't use your transcripts to train AI models, and our AI provider doesn't either (see section 5).
 
-**[LEGAL REVIEW]** Legal bases if GDPR applies: performance of a contract (providing the service), legitimate interests
+**If the EU or UK GDPR applies to you,** our legal bases are: performance of a contract (providing the service), legitimate interests
 (security, abuse prevention, cost limits), legal obligation (accounting and tax), consent (optional AI processing, where
 required).
 
 ## 4. Who processes it for us (service providers)
 | Provider | What for | Data | Location |
 |---|---|---|---|
-| Vercel **[CONFIRM: or the hosting provider chosen at launch]** | hosting the website and server functions | request data; the transcript text and questions passing through AI requests | United States |
+| Vercel | hosting the website and server functions | request data; the transcript text and questions passing through AI requests | United States |
 | Supabase | accounts, authentication, database | account and saved content, usage and subscription records | United States (us-east-1) |
 | Anthropic | AI features | transcript text and your question for each AI request | United States |
 | Stripe | payments and subscriptions | name, email, card details (entered directly with Stripe), billing address | United States |
-| [EMAIL PROVIDER] **[CONFIRM]** | sign-up confirmation and password-reset emails | email address, message content | United States |
+| Resend **[CONFIRM: email provider]** | sign-up confirmation and password-reset emails | email address, message content | United States |
 | Hugging Face; jsDelivr | delivering the speech-recognition model and runtime files to your browser | your IP address (standard web request); no content | global CDNs |
 | Google Fonts | delivering the website's fonts | your IP address (standard web request) | global |
 
-We don't sell or share personal information for cross-context advertising. **[LEGAL REVIEW: US state privacy law wording]**
-**International transfers:** **[LEGAL REVIEW: if offered to EU/UK users, describe the safeguards for transfers to the US.]**
+We don't sell personal information, and we don't share it for cross-context behavioral advertising.
+**International transfers:** we and our providers are based in the United States, and your information is stored and
+processed there. If you use SparkScribe from outside the US, your information is transferred to the US, where data
+protection laws may differ from those where you live.
 
 ## 5. AI processing
 When you use an AI feature, we send the transcript text it needs (lines with speaker names and timestamps; for Ask, your
 question and the most relevant lines) to Anthropic's API. We never send audio. Anthropic processes it under its
-commercial terms, which don't allow training on API data and keep inputs and outputs only for a limited period (up to 30
-days, longer only if flagged for a usage-policy review) **[CONFIRM against Anthropic's current commercial terms]**. AI
+commercial terms, which don't allow training on API data and keep inputs and outputs only for a limited period, longer
+only where needed to enforce its usage policy or required by law. AI
 results are stored in your account until you delete them or your account. AI output can be wrong: check important details
 against the transcript and the recording.
 
@@ -92,9 +95,10 @@ against the transcript and the recording.
 - Saved transcripts and AI results: until you delete them or your account.
 - Account: until you delete it.
 - Usage and subscription records: with your account; billing records Stripe keeps are governed by Stripe's own policies.
-- Payment and tax records: as long as accounting and tax rules require **[LEGAL REVIEW]**.
-- Logs: they expire automatically at our providers within [PERIOD] **[CONFIRM by plan]**.
-- Backups: [none / up to 7 days] **[CONFIRM: depends on the Supabase plan]**.
+- Payment and tax records: Stripe keeps them, and we keep invoices and payment records, as long as accounting and tax
+  rules require.
+- Logs: they expire automatically at our providers, generally within a few days.
+- Backups: our database provider may keep backups for up to 7 days; deleted data disappears from them when they expire.
 - Audio kept in your browser: until you remove it (Settings → Privacy), delete the recording or your account in that
   browser, or clear the browser's site data.
 
@@ -104,16 +108,16 @@ against the transcript and the recording.
   recordings can be deleted in My Library.
 - **Access and export:** you can view everything in the app and export each transcript and AI result (TXT, Markdown,
   Word, PDF, subtitles). For a full copy of your account data, email contact.hrstudios@gmail.com; we reply within
-  [30] days **[CONFIRM]**.
+  30 days.
 - **Correct:** edit speaker names and recording details in the app, or contact us.
 - **AI features are optional:** transcription works without them.
 - Depending on where you live, you may have more rights (access, portability, objection, restriction, complaint to a
-  supervisory authority). **[LEGAL REVIEW]**
+  supervisory authority). Email us to use them; we may need to verify that the request comes from you.
 
 ## 8. Recording other people
 Recordings often contain other people's voices and personal information, such as teachers, classmates or colleagues.
 You're responsible for having the right to record and transcribe them, including any consent your local law, your school
-or your workplace requires. **[LEGAL REVIEW: one- vs all-party consent jurisdictions]**
+or your workplace requires. Some places require everyone in a conversation to agree before it is recorded.
 
 ## 9. Security
 Your audio stays on your device. Data in transit is encrypted (HTTPS), and stored data is protected by per-account access
@@ -125,11 +129,11 @@ SparkScribe is for people aged **13 and older**. We don't knowingly allow accoun
 from, children under 13. If you believe a child under 13 has created an account, contact us and we'll delete it.
 If you are 13 to 17, use SparkScribe with your parent's or guardian's permission; a Plus or Pro subscription must be
 purchased by a parent, guardian or another adult. We don't share a teen's transcripts with anyone, including whoever pays
-for the subscription. **[LEGAL REVIEW: COPPA, state teen-privacy laws, and parent/guardian purchasing]**
+for the subscription.
 
 ## 11. Changes
 If we make material changes, we'll update the date above and tell signed-in users in the app or by email before they
 take effect.
 
 ## 12. Contact
-HRstudios LLC (operator of SparkScribe), [POSTAL ADDRESS] **[CONFIRM]** · contact.hrstudios@gmail.com
+HRstudios LLC (operator of SparkScribe) · contact.hrstudios@gmail.com

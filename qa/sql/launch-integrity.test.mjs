@@ -1,4 +1,4 @@
-// SQL tests of the PROPOSED launch-integrity migration (supabase/proposed/20261015100000_launch_integrity.sql) on an
+// SQL tests of the launch-integrity migration (supabase/migrations/20261015100000_launch_integrity.sql) on an
 // isolated Postgres with every production migration applied, then its rollback. No network, no production data.
 //   node qa/sql/launch-integrity.test.mjs
 import assert from 'node:assert/strict';

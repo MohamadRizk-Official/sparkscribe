@@ -49,6 +49,7 @@ const stripeCalls = [];
 const subs = new Map();
 let nextId = 1;
 const openSessions = new Map();      // checkout session id -> customer
+let lastCheckout = null;             // the form of the last Checkout session created
 const invoices = new Map();          // invoice id -> { id, subscription, amount_paid, status, pi }
 const refunds = [];
 const deletedCustomers = [];
@@ -68,6 +69,7 @@ const fake = http.createServer(async (req, res) => {
   if (path === '/v1/checkout/sessions' && req.method === 'POST') {
     const id = `cs_test_${nextId++}`;
     openSessions.set(id, form.get('customer'));
+    lastCheckout = form;
     return send({ id, object: 'checkout.session', url: `https://checkout.stripe.test/${id}`, body });
   }
   const exp = /^\/v1\/checkout\/sessions\/(cs_[a-z0-9_]+)\/expire$/.exec(path);
@@ -126,6 +128,11 @@ const c2 = await tryCheckout('plus');
 ok(c2.url !== c.url && openSessions.size === 1 && !openSessions.has(c.url.split('/').pop()), 'a second Checkout (another tab, double click) closes the first one: only one can be paid');
 const linked = (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [user])).rows[0];
 ok(linked?.stripe_customer_id?.startsWith('cus_') && linked.livemode === false, 'the Stripe customer is linked to this account (test mode)');
+ok(!lastCheckout.has('automatic_tax[enabled]') && !lastCheckout.has('billing_address_collection'), 'Stripe Tax off by default: Checkout adds no tax and asks for no address');
+process.env.STRIPE_AUTOMATIC_TAX = '1';
+const taxed = await tryCheckout('plus');
+ok(taxed.url && lastCheckout.get('automatic_tax[enabled]') === 'true' && lastCheckout.get('billing_address_collection') === 'required' && lastCheckout.get('customer_update[address]') === 'auto', 'STRIPE_AUTOMATIC_TAX=1: Checkout collects the billing address and adds the tax Stripe calculates');
+delete process.env.STRIPE_AUTOMATIC_TAX;
 const bad = await tryCheckout('enterprise');
 ok(bad.code === 'bad_plan', 'only known paid plan keys are accepted');
 

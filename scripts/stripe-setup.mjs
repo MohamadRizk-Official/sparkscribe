@@ -10,6 +10,8 @@
 //   * optionally a webhook endpoint; its signing secret is written only to --secret-out (mode 600). Its events use
 //     the same Stripe API version as the server's library. A Vercel protection-bypass query (?x-vercel-protection-bypass=…)
 //     may be appended to the URL when the deployment is protected; the URL is never printed.
+//   * products carry the Stripe Tax code for SaaS (personal use); new prices are tax-exclusive (tax added at Checkout
+//     when STRIPE_AUTOMATIC_TAX=1 on the server)
 //   * --legal-base: adds <base>/terms and <base>/privacy to the Customer Portal (needed before live payments)
 // Prints the IDs to put in the server environment (STRIPE_<PLAN>_PRICE_ID, STRIPE_PORTAL_CONFIGURATION_ID).
 import Stripe from 'stripe';
@@ -28,6 +30,8 @@ const legalBase = arg('--legal-base');
 if (legalBase && !/^https:\/\/[a-z0-9.-]+$/i.test(legalBase)) { console.error('--legal-base must be https://<host>'); process.exit(1); }
 
 const stripe = new Stripe(key);
+// Stripe Tax product tax code: "Software as a service (SaaS) - personal use" (SparkScribe is sold to individuals)
+const TAX_CODE = 'txcd_10103000';
 const sbUrl = env.NEXT_PUBLIC_SUPABASE_URL, sbKey = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const plans = await (await fetch(`${sbUrl}/rest/v1/billing_plans?select=*&active=eq.true&order=sort_order`, { headers: { apikey: sbKey } })).json();
 const paid = plans.filter((p) => p.billing_interval);
@@ -44,9 +48,10 @@ for (const p of paid) {
       name: `SparkScribe ${p.name}`,
       description: `${Math.round(p.monthly_seconds / 3600)} hours of transcription per month`,
       metadata: { sparkscribe_plan: p.key },
+      tax_code: TAX_CODE,
     });
     price = await stripe.prices.create({
-      product: product.id, currency: p.currency, unit_amount: p.price_cents,
+      product: product.id, currency: p.currency, unit_amount: p.price_cents, tax_behavior: 'exclusive',
       recurring: { interval: p.billing_interval }, lookup_key: lookup, nickname: `SparkScribe ${p.name} monthly`,
       metadata: { sparkscribe_plan: p.key },
     });
@@ -56,6 +61,10 @@ for (const p of paid) {
     console.log(`found   ${p.name}: ${price.product.id} / ${price.id}`);
   }
   if (price.unit_amount !== p.price_cents || price.currency !== p.currency) { console.error(`Price mismatch for ${p.key}`); process.exit(1); }
+  // Stripe Tax: products are classified as SaaS for personal use; tax is added on top of the listed price
+  const productId = typeof price.product === 'string' ? price.product : price.product.id;
+  if ((typeof price.product === 'string' ? null : price.product.tax_code?.id ?? price.product.tax_code) !== TAX_CODE) await stripe.products.update(productId, { tax_code: TAX_CODE });
+  if (price.tax_behavior === 'unspecified') console.log(`  note: ${p.name} price has no tax behavior; Stripe Tax uses the account default (set it to "exclusive" in Tax settings)`);
   out[`STRIPE_${p.key.toUpperCase()}_PRICE_ID`] = price.id;
   prices.push({ product: typeof price.product === 'string' ? price.product : price.product.id, prices: [price.id] });
 }

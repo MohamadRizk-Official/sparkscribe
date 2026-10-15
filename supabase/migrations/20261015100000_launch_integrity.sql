@@ -1,4 +1,5 @@
--- PROPOSED (not applied): launch integrity fixes. Additive and backward compatible; no data is changed.
+-- Applied to production 2026-10-15 (owner-approved for launch). Rollback: supabase/proposed/rollback/20261015100000_launch_integrity.down.sql
+-- launch integrity fixes. Additive and backward compatible; no data is changed.
 --
 -- 1. A saved recording can't be duplicated by a retried save: the browser chooses the recording's id once
 --    (crypto.randomUUID) and sends it with every attempt; a retry after a lost response hits the primary key

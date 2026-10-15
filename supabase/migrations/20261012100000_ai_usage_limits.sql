@@ -1,4 +1,5 @@
--- PROPOSED (not applied): per-user AI usage limits, enforced in the database. Requires the Phase 6 billing schema.
+-- Applied to production 2026-10-15 (owner-approved for launch). Rollback: supabase/proposed/rollback/20261012100000_ai_usage_limits.down.sql
+-- per-user AI usage limits, enforced in the database. Requires the Phase 6 billing schema.
 --
 -- Why in the database: the server talks to Postgres AS the signed-in user, so anything the server can write, the
 -- browser can write too. A limit kept in ordinary rows can be reset or evaded (deleting results, regenerating the

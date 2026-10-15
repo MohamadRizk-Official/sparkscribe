@@ -1,4 +1,4 @@
-// SQL-level tests of the PROPOSED AI usage limits (supabase/proposed/*_ai_usage_limits.sql) on an isolated Postgres
+// SQL-level tests of the AI usage limits (supabase/migrations/*_ai_usage_limits.sql) on an isolated Postgres
 // with every production migration applied. No network, no production data.   node qa/sql/ai-limits.test.mjs
 import assert from 'node:assert/strict';
 import { freshDb } from './pg.mjs';

@@ -1,11 +1,11 @@
-# SparkScribe Terms of Service — DRAFT
+# SparkScribe Terms of Service
 
-> **Draft for review, not legal advice.** **[LEGAL REVIEW]** sections need a lawyer (liability, governing law, consumer
-> subscriptions, minors). **[CONFIRM]** marks business decisions only the owner can make. It describes SparkScribe as built
-> today (2026-10-15): Free, Plus and Pro plans.
+> **Draft for review, not legal advice.** **[CONFIRM]** marks the last details for the owner to confirm before
+> publication. It describes SparkScribe as built today (2026-10-15): Free, Plus and Pro plans. It has not been reviewed by
+> a lawyer.
 
-**Effective date:** [DATE] **[CONFIRM]** · **Operator:** HRstudios LLC, [POSTAL ADDRESS] **[CONFIRM]** ·
-**Contact:** contact.hrstudios@gmail.com
+**Effective date:** the date of publication **[CONFIRM: filled in when published]** · **Operator:** HRstudios LLC
+**[CONFIRM: postal address, optional]** · **Contact:** contact.hrstudios@gmail.com
 
 ## 1. Agreement
 SparkScribe is a product operated by HRstudios LLC. By creating an account or using SparkScribe you agree to these Terms and
@@ -13,7 +13,7 @@ the Privacy Policy. If you use SparkScribe for an organisation, you confirm you 
 
 **Age.** You must be at least 13 years old. If you are 13 to 17, you may use SparkScribe only with your parent's or
 guardian's permission, and a Plus or Pro subscription must be purchased by a parent, guardian or another adult, who agrees
-to these Terms for that purchase. **[LEGAL REVIEW]**
+to these Terms for that purchase.
 
 ## 2. The service
 SparkScribe turns audio and video files into transcripts in your browser (your audio isn't uploaded) and, if you choose,
@@ -28,7 +28,8 @@ allowance below is not affected by them.
 
 ## 3. Plans and subscriptions
 - **Plans:** Free ($0, 60 minutes of transcription a month), Plus ($7.99 a month, 20 hours) and Pro ($14.99 a month,
-  50 hours). Prices are in US dollars [plus applicable taxes] **[CONFIRM: tax handling]**.
+  50 hours). Prices are in US dollars. Where we're required to collect sales tax or a similar tax, it is calculated at
+  checkout based on your billing address and added to the price; you'll see the total before you pay.
 - **What the allowance counts:** the length of recordings you transcribe and save. AI features, exports and opening
   saved recordings don't use it. Free resets each calendar month; Plus and Pro reset at each renewal. Unused time
   doesn't carry over.
@@ -37,18 +38,21 @@ allowance below is not affected by them.
 - **Upgrades** (Plus to Pro) take effect immediately; the prorated difference for the rest of the current period is
   charged at once.
 - **Downgrades** (Pro to Plus) take effect immediately; the unused part of the higher price is credited to your next
-  payment. **[CONFIRM: keep immediate downgrades, or change to the end of the period]**
+  payment.
 - **Cancellation:** at any time in Plan & usage → Manage Billing. Your plan stays active until the end of the period
   you've paid for, then you return to Free and no further payments are taken. Nothing in your library is deleted.
-- **Failed payments:** if a renewal payment fails, Stripe retries it over about two weeks and we email you how to update
-  your card; you keep your plan during that time. If payment still can't be collected, the subscription ends and you
-  return to Free. **[CONFIRM: grace period]**
-- **Refunds:** [REFUND POLICY] **[CONFIRM + LEGAL REVIEW]**. Duplicate charges and charges made after an account was
-  deleted are refunded automatically.
-- **Price changes:** at least [30] days' notice by email before the renewal they apply to; you can cancel before then
-  **[CONFIRM]**.
-- **Deleting your account** cancels any subscription immediately, so you are never charged again. [The unused part of
-  the current period is not refunded.] **[CONFIRM]**
+- **Failed payments:** if a renewal payment fails, Stripe retries it several times over about two weeks and you'll be
+  asked to update your card; you keep your plan during that time. If payment still can't be collected, the subscription
+  ends and you return to Free.
+- **Refunds:** payments are non-refundable, including for partly used periods, except: duplicate or mistaken charges,
+  charges for a period in which a service failure on our side prevented you from using SparkScribe, and where the law
+  requires a refund. Duplicate charges and charges made after an account was deleted are refunded automatically; for
+  anything else, email contact.hrstudios@gmail.com. Canceling stops future payments, and your plan stays active until
+  the end of the period you've paid for.
+- **Price changes:** at least 30 days' notice by email before the renewal they apply to; you can cancel before then.
+  **[CONFIRM: 30 days]**
+- **Deleting your account** cancels any subscription immediately, so you are never charged again. The unused part of
+  the current period is not refunded.
 
 ## 4. Your account
 Keep your password secure and your email address current. You're responsible for activity in your account. You can
@@ -60,7 +64,7 @@ permission to store, process and transmit your content only as needed to provide
 transcript text to our AI provider when you use AI features. We don't use your content to train AI models.
 
 You're responsible for your content and for having the right to record, upload and transcribe it, including consent from
-the people recorded where the law, your school or your workplace requires it. **[LEGAL REVIEW]**
+the people recorded where the law, your school or your workplace requires it.
 
 ## 6. Acceptable use
 Don't use SparkScribe to: break the law or others' rights (including privacy and recording-consent laws); record people
@@ -76,24 +80,28 @@ medical, financial or academic decisions.
 
 ## 8. Availability and changes
 We provide SparkScribe "as is" and "as available". We work to keep it running and your data safe, but we don't guarantee
-uninterrupted service, and AI features may be paused at busy times. Export anything you can't afford to lose.
-**[LEGAL REVIEW]**
+uninterrupted service, and AI features may be paused at busy times. Export anything you can't afford to lose. To the
+extent the law allows, we disclaim all implied warranties, including merchantability, fitness for a particular purpose
+and non-infringement.
 
 ## 9. Suspension and termination
 We may suspend or close accounts that break these Terms or put the service or other users at risk; where reasonable,
 we'll tell you why first. You may stop using SparkScribe and delete your account at any time.
 
 ## 10. Liability
-**[LEGAL REVIEW: entire section]** To the extent the law allows, we aren't liable for indirect or consequential losses,
-or for loss of data you didn't export, and our total liability is limited to [LIABILITY CAP]. Nothing in these Terms
+To the extent the law allows, we aren't liable for indirect, incidental, special or consequential losses, or for loss of
+data you didn't export, and our total liability for any claim relating to SparkScribe is limited to the greater of the
+amount you paid us in the 12 months before the claim and US$50. **[CONFIRM: liability cap]** Nothing in these Terms
 limits liability that can't be limited by law, or your statutory consumer rights.
 
 ## 11. Governing law and disputes
-These Terms are governed by the laws of [STATE/COUNTRY]. Disputes go to the courts of [VENUE], unless your local
-consumer law gives you other rights. **[CONFIRM + LEGAL REVIEW]**
+Please contact us first; most concerns can be resolved quickly. These Terms are governed by the laws of the State of
+Michigan, USA, without regard to its conflict-of-laws rules. Disputes go to the state or federal courts located in
+Michigan, unless your local consumer law gives you the right to bring a claim where you live.
+**[CONFIRM: the state HRstudios LLC is registered in]**
 
 ## 12. Changes to these Terms
-We'll give at least [14] days' notice of material changes in the app or by email **[CONFIRM]**. Continuing to use
+We'll give at least 14 days' notice of material changes in the app or by email. Continuing to use
 SparkScribe after they take effect means you accept them.
 
 ## 13. Contact

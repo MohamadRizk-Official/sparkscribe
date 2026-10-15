@@ -8,7 +8,7 @@
 //   createPortal()       Stripe Customer Portal for the signed-in user's own customer
 //   handleEvent()        a verified Stripe webhook event -> synchronized subscription state
 //   deleteAccount()      stop billing in Stripe, then delete the account (nobody keeps paying for a deleted account)
-import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured } from './config.js';
+import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured, automaticTax } from './config.js';
 
 const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
 const ACTIVE = (s) => PAID_STATUSES.has(s.status);
@@ -120,6 +120,7 @@ export async function createCheckout(sb, user, planKey, origin) {
     success_url: `${origin}/account?checkout=success`,
     cancel_url: `${origin}/pricing?checkout=canceled`,
     allow_promotion_codes: false,
+    ...(automaticTax() && { automatic_tax: { enabled: true }, billing_address_collection: 'required', customer_update: { address: 'auto', name: 'auto' } }),
   });
   billingLog('checkout_session', { user: user.id, plan: plan.key });
   return { url: session.url, kind: 'checkout' };

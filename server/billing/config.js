@@ -45,6 +45,10 @@ export function portalAllowed(env = process.env) {
   if (!/^(sk|rk)_(test|live)_/.test(key)) return false;
   return /^(sk|rk)_live_/.test(key) ? env.BILLING_LIVE_APPROVED === '1' : true;
 }
+// Stripe Tax (STRIPE_AUTOMATIC_TAX=1): Checkout collects the billing address and adds the tax Stripe calculates for
+// the places where the business is registered to collect it (registrations are made in the Stripe Dashboard, not
+// here). Prices stay $7.99 / $14.99 with tax added on top and shown before payment. Off by default.
+export const automaticTax = (env = process.env) => env.STRIPE_AUTOMATIC_TAX === '1';
 export function assertPaymentsEnabled() {
   if (!paymentsEnabled()) throw new BillingError("Paid plans aren't available yet. Nothing was charged.", { status: 503, code: 'payments_unavailable' });
 }
