@@ -1312,12 +1312,14 @@ if (isConfigured) {
 
 function resetSave() {
   clearTimeout(save.timer);
-  Object.assign(save, { id: null, status: 'idle', error: '', timer: null, gen: save.gen + 1, editedWhileSaving: false });
+  Object.assign(save, { id: null, clientId: null, status: 'idle', error: '', timer: null, gen: save.gen + 1, editedWhileSaving: false });
   els.saveBar?.classList.add('hidden');
 }
 
+// one id per transcript, kept across retries and the sign-in round trip (lib/transcripts.js saveTranscript)
+const saveId = () => (save.clientId ||= (crypto.randomUUID?.() || null));
 const savePayload = () => ({
-  title: base(), durationSeconds: state.duration, language: state.language, text: toTxt('original'),
+  id: saveId(), title: base(), durationSeconds: state.duration, language: state.language, text: toTxt('original'),
   segments: segmentsPayload(), recordingType: state.recordingType || null,
 });
 

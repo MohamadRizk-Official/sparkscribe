@@ -121,8 +121,12 @@
         if (K.saveDelayMs) await sleep(K.saveDelayMs);
         if (K.failSave) return json({ message: 'QA: insert failed' }, 500);
         if (K.quotaSave) return json({ code: 'P0001', message: 'quota_exceeded', hint: 'This transcription is longer than the time left on your plan this month.' }, 400);
+        // a chosen id that exists is refused like the primary key does (launch-integrity migration)
+        if (body?.id && db.rows.some((r) => r.id === body.id)) return json({ code: '23505', message: 'duplicate key value violates unique constraint "transcriptions_pkey"' }, 409);
         const row = { id: crypto.randomUUID(), user_id: USER.id, created_at: new Date().toISOString(), updated_at: new Date().toISOString(), content_version: 1, is_favorite: false, last_opened_at: null, ...body };
         db.rows.push(row); persist(); await mirror(row);
+        // loseSaveResponse: the row is saved but the answer never arrives (a flaky mobile network)
+        if (K.loseSaveResponse) throw new TypeError('Failed to fetch');
         return out([{ id: row.id }]);
       }
       if (method === 'PATCH') {

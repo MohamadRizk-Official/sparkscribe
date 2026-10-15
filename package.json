@@ -11,7 +11,7 @@
     "eval:serve": "vite preview --outDir dist-eval --port 4174 --strictPort",
     "accuracy:score": "node accuracy/score.mjs",
     "test": "node tests/metrics-test.mjs && node tests/service-test.mjs && node tests/tools-test.mjs && node tests/study-test.mjs && node tests/studymap-test.mjs && node tests/export-test.mjs && node tests/ai-limits-test.mjs && node tests/http-test.mjs && node tests/fetch-progress-test.mjs && node tests/compat-test.mjs && node tests/legal-guard-test.mjs",
-    "test:sql": "node qa/sql/ai-limits.test.mjs && node qa/sql/account-deletion.test.mjs && node qa/sql/rollback.test.mjs && node qa/sql/billing.test.mjs && node qa/sql/billing-server.test.mjs && node qa/sql/concurrency.test.mjs"
+    "test:sql": "node qa/sql/ai-limits.test.mjs && node qa/sql/account-deletion.test.mjs && node qa/sql/rollback.test.mjs && node qa/sql/billing.test.mjs && node qa/sql/billing-server.test.mjs && node qa/sql/concurrency.test.mjs && node qa/sql/launch-integrity.test.mjs"
   },
   "devDependencies": {
     "vite": "^8.3.0"

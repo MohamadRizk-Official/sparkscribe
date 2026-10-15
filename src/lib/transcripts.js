@@ -8,10 +8,30 @@ const LIST_COLUMNS = 'id, title, status, duration_seconds, language, recording_t
 
 // segments: line-level transcript [{ s, e, sp, t }] (see lib/segments.js) so summaries and answers can
 // point at exact moments. recordingType: one of RECORDING_TYPES, or null when the user didn't choose.
-export async function saveTranscript({ title, durationSeconds, language, text, segments = null, recordingType = null }) {
-  const { data, error } = await supabase
+// `id`: chosen once per transcript by the page (crypto.randomUUID). A retry after a lost response then can't create
+// a second copy (or count the minutes twice): the database already has that id, and it is treated as saved.
+// Databases without the launch-integrity migration don't accept an id; the save then goes ahead without one.
+export async function saveTranscript({ id = null, title, durationSeconds, language, text, segments = null, recordingType = null }) {
+  if (id) {
+    const r = await insertTranscript({ id, title, durationSeconds, language, text, segments, recordingType });
+    if (!r.error) return r.data.id;
+    if (r.error.code === '23505') { // this transcript was saved by an earlier attempt whose answer never arrived
+      const { data } = await supabase.from('transcriptions').select('id').eq('id', id).maybeSingle();
+      if (data?.id) return data.id;
+      throw r.error;
+    }
+    if (r.error.code !== '42501' && !/permission denied/i.test(r.error.message || '')) throw r.error;
+  }
+  const { data, error } = await insertTranscript({ title, durationSeconds, language, text, segments, recordingType });
+  if (error) throw error;
+  return data.id;
+}
+
+function insertTranscript({ id = null, title, durationSeconds, language, text, segments = null, recordingType = null }) {
+  return supabase
     .from('transcriptions')
     .insert({
+      ...(id && { id }),
       title: (title || 'Untitled transcript').slice(0, 300),
       status: 'completed',
       duration_seconds: Number.isFinite(durationSeconds) ? Math.round(durationSeconds) : null,
@@ -22,8 +42,6 @@ export async function saveTranscript({ title, durationSeconds, language, text, s
     })
     .select('id')
     .single();
-  if (error) throw error;
-  return data.id;
 }
 
 // Speaker renames / reassignments. The database bumps content_version when text or segments change,
