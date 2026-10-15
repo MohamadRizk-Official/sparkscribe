@@ -39,8 +39,9 @@ async function post(apiKey, body, timeoutMs = TIMEOUT_MS) {
       });
     } catch (err) {
       lastErr = new AIError(err.name === 'TimeoutError' ? 'The analysis took too long.' : 'Could not reach the analysis service.', { status: 504 });
-      // a long call that timed out is not repeated: a second try wouldn't fit the time left and would be paid twice
-      if (err.name === 'TimeoutError' && timeoutMs > TIMEOUT_MS) break;
+      // a call that timed out is never repeated: the second try would not fit in the function's time limit
+      // (60 s for summaries / Ask, 300 s for Create) and could be billed without ever reaching the user
+      if (err.name === 'TimeoutError') break;
       continue;
     }
     if (res.ok) return res;

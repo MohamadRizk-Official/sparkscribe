@@ -42,7 +42,8 @@ const EXPECTED_OUTPUT_TOKENS = { ask: 400, overview: 900, detailed_summary: 1800
 export function estimateMicrousd(feature, promptTokens) {
   // Haiku 5.5 base rates: $0.10 / M input = 0.1 µ$ per token, $0.50 / M output = 0.5 µ$ per token
   const [head, tool] = String(feature).split(':');
-  const kind = head === 'tool' ? 'tool' : head;
+  const last = String(feature).split(':').pop();
+  const kind = head === 'tool' ? 'tool' : EXPECTED_OUTPUT_TOKENS[last] != null ? last : head; // e.g. quiz:grade -> grade
   // study engine 2 writes a knowledge map before the cards / questions (measured: ~5–9k output tokens)
   const out = head === 'tool' && (tool === 'flashcards' || tool === 'quiz') ? 9000 : EXPECTED_OUTPUT_TOKENS[kind] ?? 3000;
   return Math.round(Math.max(0, promptTokens) * 0.1 + out * 0.5);

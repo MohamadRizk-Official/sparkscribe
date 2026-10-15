@@ -33,14 +33,14 @@ try {
 
   // a variant of ai_reserve to show what the advisory lock prevents: same body, optionally without the lock,
   // with a short pause between the count and the insert (widens the race window so the test is not luck-based)
-  const { rows: [{ src }] } = await admin.query(`select pg_get_functiondef('public.ai_reserve(text,integer)'::regprocedure) src`);
+  const { rows: [{ src }] } = await admin.query(`select pg_get_functiondef('public.ai_reserve(text,integer,text)'::regprocedure) src`);
   const variant = (name, keepLock) => src
     .replace('public.ai_reserve(', `public.${name}(`)
     .replace(/perform pg_advisory_xact_lock\([^;]*;/, keepLock ? '$&' : '-- (lock removed for the negative control)')
     .replace(/(if enforced and lim\.plan is not null then)/, 'perform pg_sleep(0.02);\n  $1');
   await admin.query(variant('qa_reserve_slow_locked', true));
   await admin.query(variant('qa_reserve_slow_unlocked', false));
-  await admin.query('grant execute on function public.qa_reserve_slow_locked(text, integer), public.qa_reserve_slow_unlocked(text, integer) to authenticated');
+  await admin.query('grant execute on function public.qa_reserve_slow_locked(text, integer, text), public.qa_reserve_slow_unlocked(text, integer, text) to authenticated');
   const newUser = async (email) => (await admin.query('insert into auth.users (email) values ($1) returning id', [email])).rows[0].id;
   const rowsOf = async (uid) => (await admin.query('select count(*)::int n from public.ai_usage where user_id = $1', [uid])).rows[0].n;
   admin.release();
@@ -52,7 +52,7 @@ try {
       await c.query('begin');
       await c.query('set local role authenticated');
       await c.query(`select set_config('request.jwt.claims', $1, true)`, [JSON.stringify({ sub: uid, role: 'authenticated' })]);
-      const r = (await c.query(`select public.${fn}('ask', $1) r`, [est])).rows[0].r;
+      const r = (await c.query(`select public.${fn}('ask', $1, 'qa-secret') r`, [est])).rows[0].r; // the server passes its secret
       await c.query('commit');
       return r;
     } catch (e) { await c.query('rollback'); throw e; } finally { c.release(); }

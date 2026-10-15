@@ -99,10 +99,11 @@ export function supabaseStore(sb) {
       await sb.from('transcription_artifacts').update(patch).eq('id', id);
     },
     async listQuestions(transcriptionId) {
+      // the newest 100, oldest first (history shows them in order; follow-ups use the last three)
       const { data, error } = await sb.from('transcription_questions').select('id, question, answer, refs, found, source_version, created_at')
-        .eq('transcription_id', transcriptionId).order('created_at', { ascending: true }).limit(100);
+        .eq('transcription_id', transcriptionId).order('created_at', { ascending: false }).limit(100);
       check(error, 'load questions');
-      return data;
+      return data.reverse();
     },
     async findAnswer(transcriptionId, normalized, version, norm) {
       const { data, error } = await sb.from('transcription_questions').select('id, question, answer, refs, found, created_at')
@@ -126,7 +127,7 @@ export function supabaseStore(sb) {
       }
       let data, error;
       try {
-        ({ data, error } = await sb.rpc('ai_reserve', { p_feature: String(feature).slice(0, 80), p_estimate_microusd: estimateMicrousd | 0 }));
+        ({ data, error } = await sb.rpc('ai_reserve', { p_feature: String(feature).slice(0, 80), p_estimate_microusd: estimateMicrousd | 0, p_secret: process.env.AI_DB_SECRET || process.env.BILLING_DB_SECRET || null }));
       } catch (e) { error = { code: e?.name || 'exception' }; }
       if (error) {
         const notInstalled = ['PGRST202', '42883'].includes(error.code);

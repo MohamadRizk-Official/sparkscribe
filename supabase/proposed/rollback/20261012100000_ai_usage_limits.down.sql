@@ -5,7 +5,7 @@
 -- Drops the AI usage history (ai_usage). No user content is touched.
 update public.billing_settings set enforce_ai_limits = false;
 drop function if exists public.ai_settle(text, bigint, boolean, integer, integer, integer);
-drop function if exists public.ai_reserve(text, integer);
+drop function if exists public.ai_reserve(text, integer, text);
 drop function if exists private.ai_limits_enforced();
 drop table if exists public.ai_usage;
 drop table if exists public.ai_plan_limits;

@@ -73,8 +73,11 @@ end;
 $$;
 
 -- Reserve one AI action for the signed-in user. Never takes a user id. p_estimate_microusd = the server's estimate
--- of this call's cost (counted until the call is settled; a user calling this directly only uses their own quota).
-create or replace function public.ai_reserve(p_feature text, p_estimate_microusd integer default 0)
+-- of this call's cost (counted until the call is settled). The estimate is trusted only with the server's secret
+-- (p_secret, same as the billing functions) and is capped per action: a user calling this directly over the API is
+-- counted as an action with a zero estimate, so nobody can fill the service-wide daily total and pause the AI for
+-- everyone.
+create or replace function public.ai_reserve(p_feature text, p_estimate_microusd integer default 0, p_secret text default null)
 returns json language plpgsql security definer set search_path = '' as $$
 declare
   uid uuid := auth.uid();
@@ -86,8 +89,14 @@ declare
   daily_budget integer;
   spent_today bigint;
   new_id bigint;
+  secret_hash bytea;
+  est integer := 0;
 begin
   if uid is null then raise exception 'not signed in' using errcode = '42501'; end if;
+  select hash into secret_hash from private.billing_secrets where name = 'server';
+  if secret_hash is not null and p_secret is not null and extensions.digest(p_secret, 'sha256') = secret_hash then
+    est := least(greatest(coalesce(p_estimate_microusd, 0), 0), 250000); -- at most $0.25 per action
+  end if;
   if p_feature is null or length(p_feature) = 0 or length(p_feature) > 80 then raise exception 'bad feature' using errcode = '22023'; end if;
   -- one reservation at a time per user: concurrent requests queue here instead of all passing the check
   perform pg_advisory_xact_lock(hashtextextended('sparkscribe:ai:' || uid::text, 0));
@@ -108,7 +117,7 @@ begin
   if daily_budget is not null then
     select coalesce(sum(coalesce(cost_microusd, estimate_microusd)), 0) into spent_today from public.ai_usage
      where created_at > now() - interval '24 hours';
-    if spent_today + greatest(coalesce(p_estimate_microusd, 0), 0) > daily_budget then
+    if spent_today + est > daily_budget then
       return json_build_object('allowed', false, 'reason', 'paused');
     end if;
   end if;
@@ -123,18 +132,18 @@ begin
           (select min(created_at) from (select created_at from public.ai_usage where user_id = uid and created_at > now() - interval '1 hour' order by created_at desc limit lim.actions_per_hour) x)
           + interval '1 hour' - now())))::int));
     end if;
-    if spent + greatest(p_estimate_microusd, 0) > lim.monthly_budget_microusd then
+    if spent + est > lim.monthly_budget_microusd then
       return json_build_object('allowed', false, 'reason', 'monthly', 'plan', e.plan, 'period_end', e.period_end);
     end if;
   end if;
-  insert into public.ai_usage (user_id, feature, estimate_microusd) values (uid, p_feature, greatest(coalesce(p_estimate_microusd, 0), 0))
+  insert into public.ai_usage (user_id, feature, estimate_microusd) values (uid, p_feature, est)
   returning id into new_id;
   return json_build_object('allowed', true, 'id', new_id, 'enforced', enforced, 'plan', e.plan,
     'hour_used', hour_count + 1, 'hour_limit', lim.actions_per_hour, 'spent_microusd', spent, 'budget_microusd', lim.monthly_budget_microusd);
 end;
 $$;
-revoke all on function public.ai_reserve(text, integer) from public, anon;
-grant execute on function public.ai_reserve(text, integer) to authenticated;
+revoke all on function public.ai_reserve(text, integer, text) from public, anon;
+grant execute on function public.ai_reserve(text, integer, text) to authenticated;
 
 -- Record the real usage of a reserved action. Server only (secret). A failed call keeps its row and its real cost
 -- (for the service-wide total and your accounting) and still counts toward the hourly limit, but not toward the

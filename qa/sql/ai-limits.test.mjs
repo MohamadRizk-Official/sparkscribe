@@ -14,7 +14,8 @@ const SECRET = 'qa-server-secret';
 await db.query(`insert into private.billing_secrets (name, hash) values ('server', sha256(convert_to($1, 'UTF8')))`, [SECRET]);
 await db.query(`update public.billing_settings set metering_starts_at = now() - interval '1 day'`);
 const a = await P.createUser('free@example.com'), b = await P.createUser('other@example.com'), plus = await P.createUser('plus@example.com');
-const reserve = (uid, feature = 'ask', est = 0) => P.asUser(uid, async (d) => (await d.query('select public.ai_reserve($1, $2) r', [feature, est])).rows[0].r);
+// the server always passes its secret; a direct call from a browser can't (tested below)
+const reserve = (uid, feature = 'ask', est = 0, secret = SECRET) => P.asUser(uid, async (d) => (await d.query('select public.ai_reserve($1, $2, $3) r', [feature, est, secret])).rows[0].r);
 const count = async (uid) => (await db.query('select count(*)::int n from public.ai_usage where user_id = $1', [uid])).rows[0].n;
 
 // ---- off by default: nothing is refused, but every action is recorded ----
@@ -134,6 +135,15 @@ ok(tripped.allowed === false && tripped.reason === 'paused', 'over the daily ser
 await db.query(`update public.billing_settings set ai_daily_budget_microusd = null`);
 ok((await reserve(h, 'ask', 900)).allowed === true, 'breaker switched off (null): allowed again');
 await db.query(`update public.billing_settings set ai_daily_budget_microusd = 5000000`);
+{ // a signed-in user calling ai_reserve directly (no server secret) can't pause the AI for everyone
+  const attacker = await P.createUser('attacker@example.com'), victim = await P.createUser('victim@example.com');
+  const direct = await reserve(attacker, 'x', 4999999, null);
+  const row = (await db.query('select estimate_microusd from public.ai_usage where id = $1', [direct.id])).rows[0];
+  ok(direct.allowed === true && row.estimate_microusd === 0, 'a direct call without the server secret is recorded with a zero estimate');
+  ok((await reserve(victim, 'ask', 900)).allowed === true, '…so it cannot trip the service-wide breaker for other users');
+  const capped = await reserve(attacker, 'x', 99999999);
+  ok((await db.query('select estimate_microusd from public.ai_usage where id = $1', [capped.id])).rows[0].estimate_microusd === 250000, 'a trusted estimate is capped at $0.25 per action');
+}
 
 // ---- account deletion removes the ledger ----
 await db.query('delete from auth.users where id = $1', [b]);

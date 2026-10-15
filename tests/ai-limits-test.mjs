@@ -56,6 +56,7 @@ ok(last.feature.startsWith('tool:flashcards') && last.status === 'failed' && las
 const old = memoryStore(); delete old.reserveAi; delete old.settleAi;
 old.seed({ id: T, title: 'No ledger', duration_seconds: 120, transcript_text: 'x', segments: lines });
 ok((await svc.generate(old, { transcriptionId: T, kind: 'overview' })).insight.status === 'ready', 'without the ledger functions (migration not applied) everything runs unlimited');
+ok(svc.estimateMicrousd('quiz:grade', 600) === 135 && svc.estimateMicrousd('notes:lecture', 1000) === 1200, 'grading is reserved at the grade estimate (150 output tokens), not the generic 3,000');
 ok(svc.estimateMicrousd('ask', 3000) === 500 && svc.estimateMicrousd('tool:study_guide', 3000) === 1800 && svc.estimateMicrousd('tool:quiz:g2', 3000) === 4800, 'estimates follow Haiku base rates (input 0.1 µ$/token + expected output; flashcards and quizzes write more)');
 
 // ---- the usage check fails closed (server/db.js reserveAi against a fake Supabase client) ----

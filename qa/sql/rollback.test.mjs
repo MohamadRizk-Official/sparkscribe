@@ -12,7 +12,7 @@ const P = await freshDb({ proposed: true });
 const { db } = P;
 const exists = async (sql) => (await db.query(`select ${sql} as x`)).rows[0].x;
 const objects = async () => ({
-  reserve: await exists(`to_regprocedure('public.ai_reserve(text,integer)') is not null`),
+  reserve: await exists(`to_regprocedure('public.ai_reserve(text,integer,text)') is not null`),
   usage: await exists(`to_regclass('public.ai_usage') is not null`),
   col: await exists(`exists (select 1 from information_schema.columns where table_name = 'billing_settings' and column_name = 'enforce_ai_limits')`),
   del: await exists(`to_regprocedure('public.delete_my_account(text)') is not null`),
