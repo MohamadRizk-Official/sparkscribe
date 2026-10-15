@@ -60,6 +60,7 @@ function render(plans) {
       <div class="plan-allow"><span class="num">${esc(a.num)}</span><span class="unit">${esc(a.unit)}</span><span class="of">/ month</span></div>
       <ul class="plan-list">${items.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>
       <div class="plan-cta">${buttonFor(p)}</div>
+      ${p.billing_interval && PAID_PLANS ? '<p class="plan-terms">Renews monthly until you cancel · cancel any time in Manage Billing · under 18? a parent or guardian must buy it · <a href="/terms">Terms</a></p>' : ''}
     </article>`;
   }).join('');
   $('plans').querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => upgrade(b.dataset.plan, plans)));

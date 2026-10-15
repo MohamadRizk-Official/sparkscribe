@@ -108,7 +108,9 @@ if (FINAL) {
   for (const f of ['04-privacy-policy-DRAFT.md', '05-terms-of-service-DRAFT.md']) {
     const t = src(f);
     const notes = (t.match(/\[(CONFIRM|LEGAL REVIEW)[^\]]*\]/g) || []).length;
-    const blanks = (t.match(/\[(DATE|LLC NAME[^\]]*|POSTAL ADDRESS|ADDRESS|COUNTRY\/STATE|STATE\/COUNTRY|VENUE|LEGAL ENTITY NAME[^\]]*)\]/g) || []).length;
+    // any other [bracketed choice or blank] (not a Markdown link) is still a decision to make: [30], [REFUND POLICY]…
+    const blanks = (t.replace(/\[(CONFIRM|LEGAL REVIEW)[^\]]*\]/g, '').match(/\[[^\]\n]+\](?!\()/g) || []).length;
+    if (/—\s*DRAFT/.test(t)) open.push(`${f}: the title still says DRAFT`);
     if (notes || blanks) open.push(`${f}: ${notes} review note(s), ${blanks} placeholder(s)`);
   }
   if (open.length) { console.error(`Not final yet:\n  ${open.join('\n  ')}`); process.exit(1); }

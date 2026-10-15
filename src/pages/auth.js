@@ -79,6 +79,7 @@ function setMode(m) {
   $('forgotLink').classList.toggle('hidden', m !== 'signin');
   $('confirmField').classList.toggle('hidden', !(m === 'signup' || m === 'update'));
   $('authLegal')?.classList.toggle('hidden', m !== 'signup');
+  $('ageField').classList.toggle('hidden', m !== 'signup');
   $('password').autocomplete = m === 'signin' ? 'current-password' : 'new-password';
   $('backToSignin').classList.toggle('hidden', m !== 'forgot');
   hideMsg();
@@ -134,6 +135,7 @@ async function submit(e) {
   if (mode !== 'update' && !/^\S+@\S+\.\S+$/.test(email)) return showMsg('Enter a valid email address.', 'error');
   if ((mode === 'signin' || mode === 'signup' || mode === 'update') && password.length < 8) return showMsg('Passwords need at least 8 characters.', 'error');
   if ((mode === 'signup' || mode === 'update') && password !== confirm) return showMsg("The two passwords don't match.", 'error');
+  if (mode === 'signup' && !$('ageOk').checked) return showMsg('Please confirm you’re 13 or older and agree to the Terms to create an account.', 'error');
 
   busy(true);
   try {
@@ -142,7 +144,9 @@ async function submit(e) {
       if (error) throw error;
       location.replace(next);
     } else if (mode === 'signup') {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: callbackUrl(next) } });
+      // what the person confirmed, and when (kept with the account)
+      const agreed = new Date().toISOString();
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: callbackUrl(next), data: { age_13_plus_confirmed_at: agreed, terms_accepted_at: agreed } } });
       if (error) throw error;
       if (data.session) return location.replace(next); // email confirmation is off
       // With confirmation on, Supabase deliberately gives the same answer for new and existing emails.
@@ -168,6 +172,8 @@ async function submit(e) {
 
 async function google() {
   hideMsg();
+  // creating an account with Google needs the same confirmation (signing in to an existing one doesn't)
+  if (mode === 'signup' && !$('ageOk').checked) return showMsg('Please confirm you’re 13 or older and agree to the Terms first.', 'error');
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callbackUrl(next) } });
   if (error) showMsg(explain(error), 'error');
 }

@@ -19,9 +19,10 @@ const d = () => frame.contentDocument;
 const at = () => w().location.pathname + w().location.search;
 const signOutLocally = () => { knobs({ signedOut: true }); localStorage.removeItem(TOKEN); sessionStorage.setItem('__signedOut', '1'); };
 const signInLocally = () => { knobs({ signedOut: false }); sessionStorage.removeItem('__signedOut'); };
-async function fill(email, password, confirm) {
+async function fill(email, password, confirm, { age = true } = {}) {
   const $ = (id) => d().getElementById(id);
   $('email').value = email; $('password').value = password; if (confirm != null) $('confirm').value = confirm;
+  if ($('ageOk')) $('ageOk').checked = age;
   $('authForm').requestSubmit();
 }
 const msg = () => (d().getElementById('authMsg')?.textContent || '').trim();
@@ -73,6 +74,15 @@ export async function run() {
       d().querySelector('#authMsg .auth-resend').click();
       await waitFor(() => /couldn.t send the email just now/i.test(msg()), { what: 'send failure message' });
       knobs({ failResend: false });
+    }],
+    ['sign up needs the age (13+) and Terms confirmation; nothing is sent without it', async () => {
+      signOutLocally();
+      await open('/auth?mode=signup');
+      assert(!d().getElementById('ageField').classList.contains('hidden'), 'the confirmation shows on sign-up');
+      await fill('teen@example.com', 'a-good-password', 'a-good-password', { age: false });
+      await waitFor(() => /13 or older/i.test(msg()), { what: 'age message' });
+      d().querySelector('#authTabs [data-mode="signin"]').click();
+      assert(d().getElementById('ageField').classList.contains('hidden'), 'not asked when signing in');
     }],
     ['sign up: mismatched passwords are caught before any request', async () => {
       await open('/auth?mode=signup');
