@@ -32,6 +32,10 @@
         {
           "key": "Permissions-Policy",
           "value": "camera=(), geolocation=(), payment=()"
+        },
+        {
+          "key": "Content-Security-Policy-Report-Only",
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-vC2IJHOO2XorMcre/xDq/BnSIVIrJN16llSxDJhWx20=' blob: https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://*.googleusercontent.com; media-src 'self' blob:; connect-src 'self' https://strkrrdndoofpcenopxk.supabase.co wss://strkrrdndoofpcenopxk.supabase.co https://huggingface.co https://*.huggingface.co https://*.hf.co https://cdn.jsdelivr.net blob: data:; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
         }
       ]
     },
