@@ -2,6 +2,8 @@
 import { supabase, isConfigured } from './supabase.js';
 import { adoptAccountPrefs } from './prefs.js';
 import { getBillingStatus, usageText, deleteAccountOnServer } from './billing.js';
+import { mountThemeToggle } from './theme-toggle.js';
+import { clearAllAudio, deleteAudio, PENDING_AUDIO_KEY } from './audio-store.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -49,6 +51,7 @@ export async function requireUser() {
 export async function signOut() {
   if (!isConfigured) return;
   try { localStorage.removeItem('sparkscribe.pendingSave'); } catch {} // an unsaved transcript parked for sign-in (lib/transcripts.js)
+  deleteAudio(PENDING_AUDIO_KEY); // ...and its audio
   await supabase.auth.signOut();
 }
 
@@ -60,6 +63,7 @@ export function forgetThisBrowser() {
     for (const k of Object.keys(localStorage)) if (k.startsWith('sparkscribe') && !KEEP_ON_DEVICE.has(k)) localStorage.removeItem(k);
     for (const k of Object.keys(sessionStorage)) if (k.startsWith('sparkscribe')) sessionStorage.removeItem(k);
   } catch {}
+  clearAllAudio(); // original recordings kept on this device for playback (lib/audio-store.js)
 }
 
 // Permanently delete the signed-in account. The password (null for accounts without one) is checked by signing in again (the database refuses
@@ -109,6 +113,7 @@ function initialsOf(nameOrEmail) {
 
 // Renders "Sign in" or the avatar menu into `slot`, and keeps it in sync with auth changes.
 export function mountAccountMenu(slot, { onChange } = {}) {
+  mountThemeToggle(slot); // the Light / Dark switch sits in every header, signed in or not
   if (!slot || !isConfigured) return;
   slot.classList.add('account');
   slot.innerHTML = '<span class="acct-skel" aria-hidden="true"></span>';

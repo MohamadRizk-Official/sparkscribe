@@ -1169,6 +1169,14 @@ mark.cur { background: var(--k-fbbf24-60); }
   color: var(--text); font: 600 12.5px var(--mono); box-shadow: 0 0 18px -6px var(--violet);
 }
 .acct-btn:hover, .acct-btn:focus-visible { border-color: var(--cyan); outline: none; }
+/* Light / Dark switch, in every header next to the account button */
+.theme-btn {
+  width: 34px; height: 34px; border-radius: 50%; padding: 0; cursor: pointer; display: grid; place-items: center; flex: none;
+  border: 1px solid var(--line-2); background: var(--k-0a0c1a-55); color: var(--muted); backdrop-filter: blur(10px);
+}
+.theme-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.theme-btn:hover, .theme-btn:focus-visible { color: var(--text); border-color: var(--cyan); outline: none; }
+.theme-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .acct-btn img { width: 100%; height: 100%; object-fit: cover; }
 .acct-menu {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; min-width: 230px; padding: 6px;
@@ -1454,7 +1462,9 @@ dialog.confirm p { margin: 0 0 20px; color: var(--muted); line-height: 1.5; font
   background: var(--k-0a0d1c-90); backdrop-filter: blur(20px); box-shadow: 0 18px 60px var(--k-000000-60);
 }
 .attach-bar audio { flex: 1; min-width: 0; height: 40px; }
+.attach-bar .pb-chip { flex: none; }
 body.has-attach .app { padding-bottom: 100px; }
+@media (max-width: 640px) { .attach-bar { gap: 6px; padding: 6px 8px; bottom: 10px; } .attach-bar audio { height: 36px; } }
 label.btn { display: inline-flex; align-items: center; }
 .seg.flash { animation: flash 1.6s ease-out; }
 @keyframes flash { 0%, 30% { background: var(--k-22d3ee-22); box-shadow: inset 2px 0 0 var(--cyan); } 100% { background: transparent; } }
@@ -1491,6 +1501,10 @@ label.btn { display: inline-flex; align-items: center; }
   .lib-icon { display: none; }
   .lib-head .btn { width: 100%; text-align: center; }
   .topbar { padding-left: 16px; padding-right: 16px; }
+  /* one row on phones: the device chip keeps only its status dot (its tooltip still opens on tap) */
+  .topbar-right { flex-wrap: nowrap; gap: 6px; align-items: center; }
+  .chip-device { width: 34px; height: 34px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+  .chip-device svg { display: none; }
   /* five tabs: keep them readable and let the row scroll sideways instead of squeezing them */
   .tabs { width: 100%; scroll-snap-type: x proximity; scroll-padding: 4px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); }
   .tabs:has(.tab:last-child.on) { -webkit-mask-image: none; mask-image: none; }
@@ -2087,6 +2101,10 @@ dialog.sheet p.dlg-dim, .dlg-dim { color: var(--dim); font-size: 13px; margin: 0
 .set-modes li.on { color: var(--muted); border-color: var(--k-22d3ee-22); background: var(--k-22d3ee-05); }
 .set-modes li.on b { color: var(--text); }
 .set-note { margin: 0; font-size: 13.5px; color: var(--dim); }
+.set-audio { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); }
+.set-audio .set-note { margin-top: 8px; }
+.set-audio-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+@media (max-width: 640px) { .set-audio-actions { align-items: stretch; width: 100%; } }
 .set-note:empty { display: none; }
 .set-danger { flex-basis: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 6px; padding-top: 16px; border-top: 1px solid var(--line); }
 .set-danger h3 { margin: 0 0 3px; font-size: 15px; }

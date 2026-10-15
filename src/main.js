@@ -12,6 +12,7 @@ import { sparkPulse } from './lib/brand.js';
 import { mountMascot } from './mascot/mascot.js';
 import { mascotSignal, mascotTravel } from './mascot/bus.js';
 import { confirmDialog } from './library/dialogs.js';
+import { putAudio, rekeyAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
 import { loadPlans, getBillingStatus, authorizeTranscription, startCheckout, allowanceLabel, usageText, usageLevel, durationText, dateText } from './lib/billing.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1193,7 +1194,7 @@ els.exportBtn.addEventListener('click', () => insights.openExport(state.view ===
 let session = null;
 // gen identifies the transcript on screen: a save or sync that finishes after the user started over belongs to the
 // previous transcript and must never be adopted (its id would make the next transcript overwrite that recording).
-const save = { id: null, status: 'idle', error: '', timer: null, gen: 0, editedWhileSaving: false };
+const save = { id: null, status: 'idle', error: '', timer: null, gen: 0, editedWhileSaving: false, audioKept: false };
 const CLOUD = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 9a4.5 4.5 0 0 1-.5 9z"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17l9-10"/></svg>';
 const WARN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4 2.5 20h19L12 4Z"/><path d="M12 10v4m0 3v.01"/></svg>';
@@ -1230,8 +1231,9 @@ const insights = mountInsights({
 });
 
 // Park the transcript in this browser, sign in, then it's saved automatically on return.
-function signInToSave(mode) {
+async function signInToSave(mode) {
   if (!stashPending(savePayload(), session?.user?.id ?? null)) return toast("Couldn't hold the transcript for sign-in. Export it first.");
+  if (currentFile) await putAudio(PENDING_AUDIO_KEY, currentFile); // parked with the transcript; re-keyed once it is saved
   leavingOnPurpose = true;
   location.href = `/auth?${mode === 'signup' ? 'mode=signup&' : ''}next=${encodeURIComponent('/?save=pending')}`;
 }
@@ -1310,11 +1312,14 @@ async function doSave() {
   if (save.id) return syncNow();
   if (save.status === 'saving') return; // one insert per transcript (Retry while saving would create a duplicate)
   const gen = save.gen;
+  const file = currentFile;
   save.status = 'saving';
   save.editedWhileSaving = false;
   renderSaveBar();
   try {
     const id = await saveTranscript(savePayload());
+    // the original audio stays on this device (IndexedDB, never uploaded) so the saved copy can play along later
+    if (file) putAudio(id, file).then((ok) => { if (ok && save.id === id) { save.audioKept = true; renderSaveBar(); } });
     if (gen !== save.gen) return; // the user started over: that recording is saved; nothing on screen belongs to it
     save.id = id;
     save.status = 'saved';
@@ -1368,7 +1373,7 @@ function renderSaveBar() {
     saving: ['busy', CLOUD, 'Saving to My Library…', ''],
     pending: ['busy', CLOUD, 'Saving your changes…', ''],
     syncing: ['busy', CLOUD, 'Saving your changes…', ''],
-    saved: ['ok', CHECK, 'Saved to My Library <span class="save-note">· transcript text only, audio stays on this device</span>', `<a class="btn btn-ghost btn-sm" href="/transcript?id=${encodeURIComponent(save.id || '')}">Open saved copy</a>`],
+    saved: ['ok', CHECK, `Saved to My Library <span class="save-note">· ${save.audioKept ? 'audio kept on this device so you can play along later' : 'transcript text only, audio stays on this device'}</span>`, `<a class="btn btn-ghost btn-sm" href="/transcript?id=${encodeURIComponent(save.id || '')}">Open saved copy</a>`],
     error: ['bad', WARN, `Couldn't save to your library: ${esc(save.error)}. Your transcript is still here, and you can export it.`, '<button class="btn btn-ghost btn-sm" type="button" data-act="retry">Retry</button>'],
     quota: ['bad', WARN, 'Not saved: this recording is longer than the transcription time left on your plan. It’s still here, and you can export it.', '<a class="btn btn-ghost btn-sm" href="/pricing">See plans</a>'],
     'sync-error': ['bad', WARN, `Couldn't save your latest edits: ${esc(save.error)}`, '<button class="btn btn-ghost btn-sm" type="button" data-act="retry">Retry</button>'],
@@ -1405,6 +1410,7 @@ async function resumePendingSave(confirmed = false) {
     try {
       const id = await saveTranscript(pending);
       clearPending();
+      await rekeyAudio(PENDING_AUDIO_KEY, id); // the parked audio now belongs to the saved recording
       location.replace(`/transcript?id=${encodeURIComponent(id)}`);
     } catch (err) {
       if (/quota_exceeded/.test(err?.message || '')) {

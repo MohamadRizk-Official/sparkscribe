@@ -82,7 +82,7 @@ export async function run() {
       const pop = await waitFor(() => $('.details-pop'), { what: 'details popover' });
       const t = pop.innerText;
       for (const k of ['Length', 'Speakers', 'Recording type', 'Words', 'Saved', 'Audio']) assert(t.includes(k), `Details shows ${k}`);
-      assert(/Stays on your device/.test(t), 'audio statement');
+      assert(/(Not on|On) this device/.test(t) && /never uploaded|attach the original file/.test(t), 'audio statement: whether this device has the recording, and that it is never uploaded');
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
       await waitFor(() => !$('.details-pop'), { what: 'closed with Escape' });
     }],

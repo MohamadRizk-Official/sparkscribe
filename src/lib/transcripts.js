@@ -2,6 +2,7 @@
 // decides which rows exist for them, so nothing here can reach another user's data.
 // user_id is never sent from the browser — the database fills it from auth.uid().
 import { supabase } from './supabase.js';
+import { deleteAudio } from './audio-store.js';
 
 const LIST_COLUMNS = 'id, title, status, duration_seconds, language, recording_type, created_at';
 
@@ -56,6 +57,7 @@ export async function deleteTranscript(id) {
   const { data, error } = await supabase.from('transcriptions').delete().eq('id', id).select('id');
   if (error) throw error;
   if (!data.length) throw new Error("This transcript couldn't be deleted (it may already be gone).");
+  deleteAudio(id); // the original audio kept on this device goes with it
 }
 
 // ---- hand-off when someone signs in *after* transcribing ----

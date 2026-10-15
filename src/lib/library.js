@@ -2,6 +2,7 @@
 // Supabase; Row Level Security decides what exists for them, and the database functions (library_list,
 // search_library, library_stats) are SECURITY INVOKER, so they see exactly the same rows. No AI is used here.
 import { supabase } from './supabase.js';
+import { deleteAudio } from './audio-store.js';
 
 export const PAGE_SIZE = 24;
 export const SEARCH_PAGE_SIZE = 10;
@@ -55,6 +56,7 @@ export async function deleteTranscripts(ids) {
   ids = [].concat(ids);
   const { data, error } = await supabase.from('transcriptions').delete().in('id', ids).select('id');
   raise(error);
+  deleteAudio(data.map((r) => r.id)); // the original audio kept on this device goes with it
   return data.length;
 }
 

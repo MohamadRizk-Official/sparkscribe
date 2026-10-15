@@ -12,6 +12,7 @@ import { segmentsFromRow, segmentsToStored, fmtClock, RECORDING_TYPES, RECORDING
 import { toggleDetails } from '../lib/details-pop.js';
 import { relatedMaterialHtml, bindRelatedMaterial } from '../lib/related-material.js';
 import { cleanText } from '../lib/clean.js';
+import { getAudio, putAudio, keepAudioPref } from '../lib/audio-store.js';
 import { mountInsights } from '../insights/insights.js';
 
 const $ = (id) => document.getElementById(id);
@@ -89,7 +90,7 @@ function initials(name) {
       row.language && ['Language', langName(row.language)],
       ['Words', words.toLocaleString()],
       ['Saved', fmtDate(row.created_at)],
-      ['Audio', 'Stays on your device', 'only the transcript text is saved'],
+      ['Audio', audioSource ? 'On this device' : 'Not on this device', audioSource ? 'never uploaded; used only to play along' : 'attach the original file to play along'],
     ]));
   }
   renderHeader();
@@ -130,28 +131,86 @@ function initials(name) {
     renderTranscript();
   });
 
-  // ---- optional "play along": the user opens the original audio from their device (never uploaded) ----
+  // ---- play along: the original recording, kept on this device when it was transcribed (lib/audio-store.js) ----
+  // It is never uploaded. If this device doesn't have it (another device, a cleared browser, an older save), the
+  // user can attach the original file; it is then kept here for next time. Clicking a line plays from there.
   const player = $('attachPlayer');
+  const SPEEDS = [1, 1.25, 1.5, 1.75, 2, 0.75];
+  let audioSource = null; // 'stored' (on this device) | 'attached' (this visit only) | null
+  let following = true;
+  let lastUserScroll = 0;
   player.addEventListener('play', () => mascotSignal('audio-play'));
   player.addEventListener('pause', () => mascotSignal('audio-pause'));
-  $('attachInput').addEventListener('change', () => {
-    const f = $('attachInput').files[0];
-    if (!f) return;
+  player.addEventListener('error', () => { if (player.getAttribute('src')) toast("This audio couldn't be played in this browser. The transcript is still here.", 6000); });
+  function paintAudioButton() {
+    const b = $('audioBtn');
+    b.hidden = false;
+    if (!audioSource) {
+      b.textContent = 'Attach original audio';
+      b.title = 'Play along: choose the original recording from this device. It is not uploaded, and it is kept on this device for next time.';
+    } else if ($('attachBar').classList.contains('hidden')) {
+      b.textContent = 'Play audio';
+      b.title = audioSource === 'stored' ? 'The original recording is on this device (never uploaded)' : 'Play the attached recording';
+    } else {
+      b.textContent = 'Play audio';
+      b.title = 'Play from the start, or click any line of the transcript';
+    }
+  }
+  function openAudio(blob, source) {
     if (player.src) URL.revokeObjectURL(player.src);
-    player.src = URL.createObjectURL(f);
+    player.src = URL.createObjectURL(blob);
+    audioSource = source;
     if (startAt != null && !player.dataset.started) { player.dataset.started = '1'; player.currentTime = startAt; }
     $('attachBar').classList.remove('hidden');
     document.body.classList.add('has-attach');
+    paintAudioButton();
     renderTranscript();
+  }
+  $('audioBtn').addEventListener('click', () => {
+    if (!audioSource) return $('attachInput').click();
+    if ($('attachBar').classList.contains('hidden')) { $('attachBar').classList.remove('hidden'); document.body.classList.add('has-attach'); paintAudioButton(); renderTranscript(); }
+    player.play().catch(() => {});
+    player.focus();
+  });
+  $('attachInput').addEventListener('change', () => {
+    const f = $('attachInput').files[0];
+    $('attachInput').value = '';
+    if (!f) return;
+    openAudio(f, 'attached');
+    player.addEventListener('loadedmetadata', async function once() {
+      player.removeEventListener('loadedmetadata', once);
+      // the wrong file would not line up with the transcript: say so instead of keeping it
+      const d = player.duration, expected = Number(row.duration_seconds) || 0;
+      if (Number.isFinite(d) && expected && Math.abs(d - expected) > Math.max(3, expected * 0.03)) {
+        toast(`This file is ${fmtDuration(d)} long, but this recording is ${fmtDuration(expected)}, so the timestamps won't line up.`, 8000);
+        return;
+      }
+      if (keepAudioPref() && (await putAudio(row.id, f))) { audioSource = 'stored'; paintAudioButton(); renderHeader(); toast('Audio kept on this device, so it plays along next time too.'); }
+    });
   });
   $('attachClose').addEventListener('click', () => {
     player.pause();
-    if (player.src) URL.revokeObjectURL(player.src);
-    player.removeAttribute('src');
     $('attachBar').classList.add('hidden');
     document.body.classList.remove('has-attach');
+    paintAudioButton();
     renderTranscript();
+    $('audioBtn').focus();
   });
+  $('attachSpeed').addEventListener('click', () => {
+    const i = (SPEEDS.indexOf(player.playbackRate) + 1) % SPEEDS.length;
+    player.playbackRate = SPEEDS[i];
+    $('attachSpeed').textContent = `${SPEEDS[i]}×`;
+    $('attachSpeed').setAttribute('aria-label', `Playback speed ${SPEEDS[i]}×`);
+  });
+  $('attachFollow').addEventListener('click', () => {
+    following = !following;
+    $('attachFollow').classList.toggle('on', following);
+    $('attachFollow').setAttribute('aria-pressed', String(following));
+    if (following) { lastUserScroll = 0; showActiveLine(true); }
+  });
+  // scrolling by hand pauses auto-follow for a few seconds (a scroll the page made itself doesn't count)
+  for (const ev of ['wheel', 'touchmove']) window.addEventListener(ev, () => { lastUserScroll = performance.now(); }, { passive: true });
+  window.addEventListener('keydown', (e) => { if (/^(ArrowUp|ArrowDown|PageUp|PageDown|Home|End)$/.test(e.key) && !player.contains(e.target)) lastUserScroll = performance.now(); });
   $('transcript').addEventListener('click', (e) => {
     const who = e.target.closest('.who[data-g]');
     if (who) { openSpeakerMenu(who, Number(who.dataset.g)); return; }
@@ -161,23 +220,29 @@ function initials(name) {
     player.play().catch(() => {});
   });
   let lastActive = null;
-  player.addEventListener('timeupdate', () => {
+  function showActiveLine(force) {
     const t = player.currentTime;
     let cur = null;
     for (const s of segments) { if (s.start <= t + 0.05) cur = s; else break; }
     const el = cur && $('transcript').querySelector(`.seg[data-i="${cur.id}"]`);
-    if (el === lastActive) return;
-    lastActive?.classList.remove('active');
-    el?.classList.add('active');
-    lastActive = el;
-  });
+    if (el !== lastActive) {
+      lastActive?.classList.remove('active');
+      el?.classList.add('active');
+      lastActive = el;
+    } else if (!force) return;
+    if (el && following && (force || (!player.paused && performance.now() - lastUserScroll > 4000))) {
+      const r = el.getBoundingClientRect();
+      if (force || r.top < 80 || r.bottom > innerHeight - 120) el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }
+  player.addEventListener('timeupdate', () => showActiveLine(false));
 
   // Timestamps in Summary / Notes / Ask / Insights: play from there if the audio is open, otherwise show the line.
+  // `instant` (opening a link into the recording) positions without starting playback.
   function seekTo(seconds, ref, { instant = false } = {}) {
     if (player.getAttribute('src')) {
       player.currentTime = seconds;
-      player.play().catch(() => {});
-      return;
+      if (!instant) { player.play().catch(() => {}); return; }
     }
     ui.showTab('transcript');
     const el = $('transcript').querySelector(`.seg[data-i="${ref}"]`) || [...$('transcript').querySelectorAll('.seg')].find((p) => segments[Number(p.dataset.i)].start >= seconds);
@@ -315,6 +380,10 @@ function initials(name) {
   });
   ui.setTranscription();
   renderTranscript();
+  // the original audio, if this device kept it when the recording was transcribed
+  const stored = segments.length ? await getAudio(row.id) : null;
+  if (stored) openAudio(stored.blob, 'stored');
+  if (segments.length) { paintAudioButton(); renderHeader(); }
   if (coarse && segments.length) {
     $('transcript').insertAdjacentHTML('beforebegin', '<p class="hint coarse-note">Saved before line-level timestamps were added, so links point to the start of each paragraph.</p>');
   }

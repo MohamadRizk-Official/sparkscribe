@@ -4,6 +4,7 @@ import { mountAccountMenu, getSession, signOut, esc, deleteMyAccount } from '../
 import { makeDialog } from '../library/dialogs.js';
 import { getMascotPref, setMascotPref, getThemePref, setThemePref } from '../lib/prefs.js';
 import { mountMascot } from '../mascot/mascot.js';
+import { keepAudioPref, setKeepAudioPref, audioStorageInfo, clearAllAudio, fmtBytes } from '../lib/audio-store.js';
 
 const $ = (id) => document.getElementById(id);
 let signedIn = false;
@@ -133,6 +134,39 @@ themeSeg.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); chooseTheme(THEMES[(i + 2) % 3], true); }
 });
 paintTheme(getThemePref());
+
+// ---------- privacy: original audio kept on this device (lib/audio-store.js) ----------
+const audioSeg = $('audioSeg');
+function paintAudio(on) {
+  audioSeg.querySelectorAll('[role="radio"]').forEach((b) => { const sel = (b.dataset.v === 'on') === on; b.setAttribute('aria-checked', String(sel)); b.tabIndex = sel ? 0 : -1; });
+}
+async function showAudioInfo() {
+  const i = await audioStorageInfo();
+  $('audioInfo').textContent = !i.available ? 'This browser can’t keep audio (private window or storage turned off). Recordings can still be attached to play along.'
+    : i.count ? `${i.count} recording${i.count === 1 ? '' : 's'} on this device · ${fmtBytes(i.bytes)}` : 'No recordings kept on this device yet.';
+  $('audioClear').disabled = !i.count;
+}
+audioSeg.addEventListener('click', (e) => {
+  const b = e.target.closest('[role="radio"]');
+  if (!b) return;
+  setKeepAudioPref(b.dataset.v === 'on');
+  paintAudio(b.dataset.v === 'on');
+  showSaved(true);
+});
+audioSeg.addEventListener('keydown', (e) => {
+  if (!/^Arrow/.test(e.key)) return;
+  e.preventDefault();
+  const on = !keepAudioPref();
+  setKeepAudioPref(on); paintAudio(on); showSaved(true);
+  audioSeg.querySelector(`[data-v="${on ? 'on' : 'off'}"]`)?.focus();
+});
+$('audioClear').addEventListener('click', async () => {
+  $('audioClear').disabled = true;
+  await clearAllAudio();
+  await showAudioInfo();
+});
+paintAudio(keepAudioPref());
+showAudioInfo();
 
 // ---------- start ----------
 mountAccountMenu($('accountSlot'), { onChange: (s) => renderAccount(s) });
