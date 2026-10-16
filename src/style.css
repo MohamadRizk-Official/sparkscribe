@@ -3871,7 +3871,9 @@ html.bg-paused .bg *, html.bg-paused .bg { animation-play-state: paused !importa
 
 /* ---------- Free: restrained cyan; the partial block is visibly half ---------- */
 .pz-meter i.part { background: linear-gradient(90deg, var(--acc) var(--p), var(--bar) var(--p)); outline: 1px solid rgba(var(--glow), .5); outline-offset: -1px; }
-.pz-legend { flex-wrap: wrap; text-align: center; }
+.pz-legend { flex-wrap: wrap; text-align: center; gap: 4px 16px; }
+.pz-legend-item { display: inline-flex; align-items: center; gap: 8px; }
+.pz-legend-half { margin-left: 0; }
 .pz-legend-half { width: 10px; height: 9px; margin-left: 6px; border-radius: 2px; outline: 1px solid var(--c-cyan); outline-offset: -1px;
   background: linear-gradient(90deg, var(--c-cyan) 50%, transparent 50%); }
 @media (prefers-reduced-motion: reduce) { .faq-item::details-content, .faq-item summary, .faq-ic, .faq-ic::before, .faq-ic::after { transition: none; } }
