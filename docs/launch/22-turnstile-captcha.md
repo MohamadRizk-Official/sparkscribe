@@ -33,6 +33,15 @@ SparkScribe sends a Cloudflare Turnstile token with every Supabase Auth request 
 - The **Secret Key** goes only into Supabase → Authentication → Attack Protection → CAPTCHA (Turnstile). It never appears in this repository, the browser, or logs.
 - **Content Security Policy.** The report-only policy in `vercel.json` allows `https://challenges.cloudflare.com` for scripts and frames, which Turnstile needs.
 
+## Status (2026-10-16)
+
+- **Site Keys:**
+  - Vercel Production holds your real Site Key (set by you).
+  - The Preview (`release/four-tier`) now uses the same real key; the test key is removed.
+  - The deployed Preview bundle (`919f044`) contains the real key and not the test key.
+- **Hostnames:** on the Preview the real widget returns Cloudflare **error 110200 (domain not allowed)**. `sparkscribe-git-release-four-tier-moerizz.vercel.app` is not yet on the widget's hostname list. Production hostnames can't be checked until the release, since today's live site has no widget.
+- **Lockout:** none. The Preview's forgot-password form still completed in 1.5 s with the widget blocked (no token sent; Supabase CAPTCHA is off).
+
 ## Activation order
 
 The Preview and Production share **one Supabase project**. Turning CAPTCHA on there applies to every deployment at once, including today's live site, which has no widget. Turning it on before Production sends tokens would stop everyone from signing in or signing up on the live site.
@@ -42,7 +51,7 @@ The Preview and Production share **one Supabase project**. Turning CAPTCHA on th
    - add each Preview host you test on, for example `sparkscribe-git-release-four-tier-moerizz.vercel.app`;
    - add `localhost` if you test locally with the real key.
 2. **Vercel → Settings → Environment Variables:** set `VITE_TURNSTILE_SITE_KEY` to your **Site Key**, for Preview (`release/four-tier`) and later for Production. Then redeploy.
-   - The Preview currently has Cloudflare's always-pass **test** key `1x00000000000000000000AA`. That proves the integration, but Supabase would reject its tokens once CAPTCHA is on, so replace it with your Site Key first.
+   - Done for the Preview and Production (2026-10-16).
 3. **Check the Preview with your key:** sign up, sign in, wrong password then the right one, forgot password, and Google. Every flow should work as before, and Supabase's logs show no CAPTCHA errors.
 4. **Release to Production** with the Site Key set (part of the release in docs/launch/21-release-runbook.md, after your approval). Verify sign-in on www.spark-scribe.com.
 5. **Only then:** Supabase → Authentication → Attack Protection → enable CAPTCHA protection, provider Turnstile, and paste the **Secret Key** there yourself.
