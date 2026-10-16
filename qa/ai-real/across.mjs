@@ -1,4 +1,4 @@
-// Budgeted REAL-model check of Master Phase 2 (Haiku via server/ai/*), on the synthetic recordings in
+// Budgeted REAL-model check of Master Phases 2–3 (Haiku via server/ai/*), on the synthetic recordings in
 // qa/fixtures/across.mjs, with the in-memory store: no Supabase, no production data, no private recordings.
 // Reads ANTHROPIC_API_KEY from .env.local into this process only (never printed or written).
 //   node qa/ai-real/across.mjs            → qa/out/across-real.json (answers, citations, tokens, cost, latency)
@@ -26,6 +26,7 @@ const MAX_CALLS = 60;
 const guard = () => { if (calls.length > MAX_CALLS) throw new Error(`call budget exceeded (${calls.length})`); };
 
 const db = memoryStore({ userId: F.ALL[0].user_id });
+db.plan = 'thunder'; // the cross-recording features are Thunder's
 for (const r of F.ALL) db.seed({ ...r });
 const idOf = (r) => r.id;
 const lineText = (rec, line) => rec.segments[line]?.t || '';
@@ -34,18 +35,28 @@ const recById = new Map(F.ALL.map((r) => [r.id, r]));
 const out = { asks: [], guide: null, followups: null, totals: null };
 async function ask(name, recs, question, expect) {
   const before = calls.length, t0 = Date.now();
-  const r = await svc.askAcrossRecordings(db, { ids: recs.map(idOf), question, userId: 'qa' });
+  const r0 = await svc.askAcrossRecordings(db, { ids: recs.map(idOf), question, userId: 'qa' });
+  // the answer as shown (tokens resolved to current names) and as stored (tokens only)
+  const r = { ...r0.item.content, recordings: r0.item.recordings, usage: r0.usage, stored: db._x.find((x) => x.id === r0.item.id)?.content.answer || '' };
+  expect = { ...expect, ...TOKEN_CHECKS };
   const mine = calls.slice(before);
   const cost = mine.reduce((s, c) => s + (c.actualCostUsd ?? c.estimatedCostUsd ?? 0), 0);
   const cites = r.refs.map((x) => ({ rec: x.title, line: x.line, text: lineText(recById.get(x.transcriptionId), x.line) }));
   const checks = Object.fromEntries(Object.entries(expect).map(([k, fn]) => [k, !!fn(r, cites)]));
   const removed = mine.find((c) => c.task === 'across:ask')?.droppedItems ?? null; // citations of lines it wasn't given
-  out.asks.push({ name, question, recordings: recs.map((x) => x.title), answer: r.answer, citations: cites, checks, invalidCitationsRemoved: removed, ms: Date.now() - t0, inputTokens: r.usage.input, outputTokens: r.usage.output, costUsd: Number(cost.toFixed(6)), mode: r.mode });
+  out.asks.push({ name, question, recordings: recs.map((x) => x.title), answer: r.answer, stored: r.stored, citations: cites, checks, invalidCitationsRemoved: removed, ms: Date.now() - t0, inputTokens: r.usage.input, outputTokens: r.usage.output, costUsd: Number(cost.toFixed(6)), mode: r.mode });
   log0(`${Object.values(checks).every(Boolean) ? 'PASS' : 'CHECK'} ${name}: ${JSON.stringify(checks)} · ${r.usage.input}+${r.usage.output} tok · $${cost.toFixed(5)} · ${Date.now() - t0} ms`);
   guard();
   return r;
 }
 const cited = (r, title) => r.refs.some((x) => x.title === title);
+// Phase 3: recordings and speakers are stored as tokens and shown with their current names
+const TOKEN_CHECKS = {
+  savedToAccount: (r) => r.stored.length > 0,
+  shownWithoutTokensOrLabels: (r) => !/\{\{|\}\}/.test(r.answer) && !/(?<![\w[])R\d+\b(?!:\d)/.test(r.answer.replace(/\[[^\]]*\]/g, '')),
+  noMetaTalk: (r) => !/speaker (?:list|code|label)|\bcodes?\b|\blabel(?:s|led)?\b|Speaker Speaker/i.test(r.answer),
+  noUnknownToken: (r) => !/\ba (?:recording|speaker)\b/.test(r.answer) || /\ba (?:recording|speaker)\b/.test(r.question || ''),
+};
 
 // overviews first (as the page does for recordings without one): one call each, stored with the recording
 for (const r of F.ALL) await svc.generate(db, { transcriptionId: r.id, kind: 'overview', recordingType: 'general', userId: 'qa' });
@@ -106,12 +117,32 @@ await ask('long collection (retrieval mode)', LONG, 'Does osmosis require energy
   noFillerCited: (r) => r.refs.every((x) => !FILLER.some((f) => (recById.get(x.transcriptionId).segments[x.line]?.t || '').startsWith(f))),
 });
 
+// ---------- speakers: named in one meeting only; a later rename shows up in the saved answer without regenerating
+{
+  const named = { ...F.SYNC_2, segments: F.SYNC_2.segments.map((x) => (x.sp === 'Speaker 3' ? { ...x, sp: 'Maya', o: 'Speaker 3' } : x)) };
+  db.seed(named);
+  const r = await ask('speakers kept per recording', F.MEETINGS, 'Who is responsible for the pricing table, and did they deliver it?', {
+    namesMayaFromTheNamedMeeting: (x) => /Maya/.test(x.answer),
+    storedAsSpeakerCodes: (x) => /\{\{R\d\.S\d+\}\}/.test(x.stored),
+    noRepeatedName: (x) => !/\b(\w+) \(\1\)/.test(x.answer) && !/identified (?:by name )?as/i.test(x.answer),
+  });
+  const X = await imp('server/ai/across.js');
+  db.seed({ ...F.SYNC_1, segments: F.SYNC_1.segments.map((x) => (x.sp === 'Speaker 3' ? { ...x, sp: 'Maya Chen', o: 'Speaker 3' } : x)) });
+  const again = (await X.threadFor(db, F.MEETINGS.map(idOf))).items.find((i) => i.id === r.id || i.question === 'Who is responsible for the pricing table, and did they deliver it?');
+  out.speakerRename = { before: r.answer, after: again?.content.answer, storedUnchanged: db._x.find((x) => x.question === 'Who is responsible for the pricing table, and did they deliver it?')?.content.answer === r.stored };
+  const ok = again && (/Maya Chen/.test(again.content.answer) || !/\{\{R1\.S3\}\}/.test(r.stored)) && out.speakerRename.storedUnchanged;
+  log0(`${ok ? 'PASS' : 'CHECK'} speaker rename after saving: ${JSON.stringify({ shownAfterRename: again?.content.answer?.slice(0, 160) })}`);
+  db.seed(F.SYNC_1); db.seed(F.SYNC_2);
+}
+
 // ---------- combined study guide (3 lectures): each lecture's own study guide first (stored maps), then one call
 const g0 = calls.length, gt = Date.now();
 for (const r of F.LECTURES) await svc.generateArtifact(db, { transcriptionId: r.id, kind: 'study_guide', userId: 'qa' });
 const mapCost = calls.slice(g0).reduce((s, c) => s + (c.actualCostUsd ?? c.estimatedCostUsd ?? 0), 0);
 const g1 = calls.length, gt1 = Date.now();
-const gd = await svc.guideAcrossRecordings(db, { ids: F.LECTURES.map(idOf), focus: 'exam', userId: 'qa' });
+const gd0 = await svc.guideAcrossRecordings(db, { ids: F.LECTURES.map(idOf), focus: 'exam', userId: 'qa' });
+const gd = { content: gd0.item.content, dropped: gd0.dropped, usage: gd0.usage };
+const guideText = JSON.stringify(gd.content);
 const guideCost = calls.slice(g1).reduce((s, c) => s + (c.actualCostUsd ?? c.estimatedCostUsd ?? 0), 0);
 out.guide = {
   themes: gd.content.themes.map((t) => ({ title: t.title, recordings: t.recordings, summary: t.summary, comparison: t.comparison, sources: t.sources.map((s) => `${s.title} · ${s.concept}`) })),
@@ -121,6 +152,8 @@ out.guide = {
     osmosisRecurs: gd.content.themes.some((t) => /osmosis|water/i.test(t.title + t.summary) && t.recordings.length >= 2),
     notesTheCorrection: gd.content.themes.some((t) => /ATP|energy|passive/i.test(`${t.summary} ${t.comparison || ''}`)),
     everyItemSourced: [...gd.content.themes, ...gd.content.definitions, ...gd.content.distinctions, ...gd.content.self_check].every((x) => x.sources.length),
+    shownWithoutTokens: !/\{\{|\}\}/.test(guideText),
+    storedWithoutTitles: !/Biology Lecture \d/.test(JSON.stringify({ ...db._x.at(-1).content, themes: db._x.at(-1).content.themes.map((t) => ({ ...t, sources: [] })), definitions: [], distinctions: [], self_check: [] })),
   },
   mapsCostUsd: Number(mapCost.toFixed(6)), mapsMs: gt1 - gt, guideCostUsd: Number(guideCost.toFixed(6)), guideMs: Date.now() - gt1,
   guideTokens: gd.usage,

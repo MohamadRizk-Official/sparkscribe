@@ -190,7 +190,9 @@ Answering:
 - Start with the direct answer. Never talk about "excerpts", "passages" or "the context provided". Plain text; a short "- " list when the answer is a list. No headings, no markdown tables. Write in the language of the question.
 - Keep recordings apart. Say which recording each point comes from (e.g. "In {{R2}}, …"). Never merge two recordings' statements into one claim, and never attribute something to a recording it didn't come from.
 - Naming recordings: write the recording's label in double braces, like {{R2}}; the app shows the recording's current title there. Never write a title yourself. You may add its date when it helps ("{{R2}} (Oct 6)"). Never mention what you were given (transcripts, passages, orientation, labels); just answer.
-- Naming speakers: lines show each speaker as a code scoped to its recording (R2.S1 = a speaker of R2; the <speakers> list gives the name each code has now). When you refer to a speaker, write their code in double braces, like {{R2.S1}}; the app shows their current name there. Never write a speaker's name yourself.
+- Naming speakers: lines show each speaker as a code scoped to its recording (R2.S1 = a speaker of R2; the <speakers> list gives the name each code has now). Whenever you refer to a speaker, write their code in double braces, like {{R2.S1}}; the app shows their current name there. This applies to every speaker, including unnamed ones: write {{R1.S3}}, never "Speaker 3", and never a name from the <speakers> list.
+- Never mention codes, labels, the speaker list or this naming system in your answer (no "the speaker code is…", no "listed as"): just use the braces where a name would go, without the word "Speaker" in front. Treat who each code is as something you already know: never explain where a name comes from (no "named … in the speaker list", no "identified as …"), and don't repeat the name next to the code (the app already shows it there).
+- People across recordings: say two recordings involve the same person only when the recordings themselves make it clear (for example, someone is addressed by the same name in both). Otherwise refer to each by their own code and don't discuss whether they are the same person.
 - Chronology: recordings are listed oldest first (R1 is the earliest). When something changes between recordings, say what the earlier one said and what the later one said, in that order.
 - Disagreement: when recordings (or speakers) say different or contradictory things, say so plainly and cite both sides. Don't decide who is right unless a later recording explicitly corrects the earlier one; then say that it does.
 - Frequency: say a topic "came up in every recording" or "in several recordings" only if you cite it from each of them. If something appears in only one recording, say so. If you were only given part of a recording, don't claim it is absent from that recording: say it didn't come up in what you could see.
@@ -206,7 +208,12 @@ const speakerCode = (r, s) => { const c = r.codeOf.get(s.orig || s.speaker); ret
 const speakerLegend = (r) => (r.speakers.size ? `<speakers>${[...r.speakers].map(([code, name]) => `${code} = "${name.replace(/"/g, "'")}"`).join('; ')}</speakers>\n` : '');
 // the snapshot saved with a result: which recording each label was, and its version (to flag later edits/deletions)
 const snapshotOf = (recs) => recs.map((r) => ({ id: r.id, label: r.label, title: r.title, createdAt: r.createdAt, version: r.version, basis: r.basis, speakers: Object.fromEntries(r.speakers) }));
-const tokenOpts = (recs) => ({ labels: new Set(recs.map((r) => r.label)), speakers: new Set(recs.flatMap((r) => [...r.speakers.keys()])), titles: new Map(recs.map((r) => [r.label, r.title])) });
+const tokenOpts = (recs) => ({
+  labels: new Set(recs.map((r) => r.label)), speakers: new Set(recs.flatMap((r) => [...r.speakers.keys()])), titles: new Map(recs.map((r) => [r.label, r.title])),
+  // automatic labels ("Speaker 3") as each recording's speakers are named now, for sentences about one recording
+  autoNames: new Map(recs.map((r) => [r.label, new Map([...r.speakers].filter(([, n]) => /^speaker \d+$/i.test(n)).map(([c, n]) => [n.toLowerCase(), c]))])),
+  names: new Map(recs.flatMap((r) => [...r.speakers])),
+});
 const namesOf = (recs) => ({ titles: Object.fromEntries(recs.map((r) => [r.label, r.title])), speakers: Object.fromEntries(recs.flatMap((r) => [...r.speakers])) });
 
 function promptOf({ recs, digests, sel, question }) {
@@ -304,7 +311,7 @@ Write ONE combined study guide for these recordings together, using only these m
 - definitions, distinctions: the important ones, briefly.
 - self_check: questions that check understanding, especially of ideas that connect recordings${focus === 'exam' ? '; favour what a student would most likely be examined on, without claiming anything will be on an exam' : ''}.
 - Every item lists the concept references it rests on, exactly as given. Never add facts the maps don't contain. Be concise: a study guide, not a set of summaries.
-- In every text field, refer to a recording by its label in double braces, like {{R2}} (the app shows its current title there), never by its title; refer to a speaker by their code in double braces exactly as in the maps, like {{R2.S1}}, never by name. Never write concept references (R2.c5) in text: they belong only in the concepts lists.`;
+- In every text field, refer to a recording by its label in double braces, like {{R2}} (the app shows its current title there), never by its title; refer to a speaker by their code in double braces exactly as in the maps, like {{R2.S1}}, never by name or as "Speaker 1". Never write concept references (R2.c5) in text: they belong only in the concepts lists, and never mention codes or labels.`;
 }
 
 /**

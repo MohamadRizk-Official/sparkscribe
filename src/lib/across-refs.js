@@ -19,9 +19,24 @@ export function acrossSpeakers(label, segments) {
   return new Map([...codes.values()].map((c) => [`${label}.${c}`, now(c)]));
 }
 
+// An automatic label written out ("Speaker 3") belongs to whichever recording the sentence is about. When a sentence
+// cites or names exactly one recording and that recording has a speaker currently called that, it becomes that
+// speaker's code; otherwise it is left as written (never guessed). Names users gave are never searched for.
+function scopeAutoLabels(text, names) {
+  return text.split('\n').map((line) => line.split(/(?<=[.!?])(\s+)/).map((sentence) => {
+    if (!/\bspeaker \d+\b/i.test(sentence)) return sentence;
+    const labels = new Set([...sentence.matchAll(/\bR(\d+):\d+|\{\{R(\d+)(?:\.S\d+)?\}\}/g)].map((m) => `R${m[1] || m[2]}`));
+    if (labels.size !== 1) return sentence;
+    const map = names.get([...labels][0]);
+    return map ? sentence.replace(/(?<![\p{L}\p{N}{.])speaker (\d+)(?![\p{L}\p{N}}])/giu, (m) => (map.has(m.toLowerCase()) ? `{{${map.get(m.toLowerCase())}}}` : m)) : sentence;
+  }).join('')).join('\n');
+}
+
 // Model output -> stored form. Brace variants and bare codes become {{R2}} / {{R2.S1}}; a label the model wasn't
 // given becomes "a recording" / "a speaker". Citations ([R2:45]) and concept references (R2.c5) are left alone.
-export function tokenizeAcross(text, { labels, speakers, titles = new Map() }) {
+// autoNames (optional): Map(label -> Map("speaker 3" -> "R2.S3")) of automatic labels as the speakers are named now.
+// names (optional): Map(code -> current name), to drop a name the model repeated right after its code ("{{R2.S3}} (Maya)").
+export function tokenizeAcross(text, { labels, speakers, titles = new Map(), autoNames = null, names = null }) {
   const lab = (l) => (labels.has(l) ? `{{${l}}}` : 'a recording');
   const spk = (c) => (speakers.has(c) ? `{{${c}}}` : 'a speaker');
   return String(text || '')
@@ -40,12 +55,20 @@ export function tokenizeAcross(text, { labels, speakers, titles = new Map() }) {
     // "Lecture 5 (R2)" -> "Lecture 5"
     .replace(/\s*\((R\d+)\)/g, (m, l) => (labels.has(l) ? '' : m))
     // a bare label, but never one inside a citation ("R2:45"), a concept reference ("R2.c5") or a token
-    .replace(/(?<![\w{.])(R\d+)\b(?![:.]\w|\})/g, (m, l) => (labels.has(l) ? `{{${l}}}` : m));
+    .replace(/(?<![\w{.])(R\d+)\b(?![:.]\w|\})/g, (m, l) => (labels.has(l) ? `{{${l}}}` : m))
+    .replace(/^[\s\S]*$/, (all) => (autoNames ? scopeAutoLabels(all, autoNames) : all))
+    // "Speaker {{R1.S1}}" would show as "Speaker Speaker 1" (or "Speaker Maya"): the token is the name
+    .replace(/(?<!\b(?:the|a|an|another|each|one|that|this|which)\s)\bspeaker\s+(?=\{\{R\d+\.S\d+\}\})/gi, '')
+    // the same name again in brackets right after the code: once is enough
+    .replace(/(\{\{(R\d+\.S\d+)\}\})\s*\(([^()]{1,60})\)/g, (m, tok, code, inner) => (names?.get(code) && inner.trim().toLowerCase() === names.get(code).toLowerCase() ? tok : m));
 }
 
 // Stored form -> text to show. names = { title(label), speaker(code) }; an unknown token shows a neutral word.
 export function renderAcross(text, { title, speaker }) {
-  return String(text ?? '').replace(TOKEN, (m, l, s) => (s ? speaker(`${l}.${s}`) || 'a speaker' : title(l) || 'a recording'));
+  return String(text ?? '')
+    // "{{R1}} (Oct 6)" when the title already says "Oct 6": the title alone
+    .replace(/\{\{\s*(R\d+)\s*\}\} \(([^)]{1,40})\)/g, (m, l, inner) => (String(title(l) || '').toLowerCase().includes(inner.trim().toLowerCase()) ? `{{${l}}}` : m))
+    .replace(TOKEN, (m, l, s) => (s ? speaker(`${l}.${s}`) || 'a speaker' : title(l) || 'a recording'));
 }
 // while an answer is streaming: tokens with the names sent at the start, and an unfinished token at the end hidden
 export function renderAcrossStreaming(text, names) {

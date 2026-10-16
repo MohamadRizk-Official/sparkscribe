@@ -21,6 +21,12 @@ ok(t === 'In {{R2}}, {{R1.S1}} said X [R1:4]. {{R2}} (Oct 8) corrects {{R1}}. Le
 const shown = R.renderAcross(t, { title: (l) => ({ R1: 'Bio 2', R2: 'Bio 5' })[l], speaker: (c) => ({ 'R1.S1': 'Dr. Lee', 'R2.S1': 'Speaker 1' })[c] });
 ok(shown.startsWith('In Bio 5, Dr. Lee said X [R1:4]. Bio 5 (Oct 8) corrects Bio 2.') && shown.includes('Speaker 1 and Speaker 1 agree'), 'tokens → current titles and names; R1.S1 and R2.S1 resolve separately');
 ok(R.renderAcrossStreaming('Hello {{R1', { title: () => 'X', speaker: () => 'Y' }) === 'Hello ', 'an unfinished token at the end of a streaming answer is hidden');
+const auto = new Map([['R1', new Map([['speaker 3', 'R1.S3']])], ['R2', new Map([['speaker 1', 'R2.S1']])]]);
+const ta = R.tokenizeAcross('In {{R1}}, Speaker 3 said X [R1:2]. Speaker 1 asked [R2:2]. Speaker 1 and Speaker 3 differ [R1:0, R2:1]. Speaker 3 again.', { ...opts, speakers: new Set(['R1.S3', 'R2.S1']), autoNames: auto });
+ok(ta === 'In {{R1}}, {{R1.S3}} said X [R1:2]. {{R2.S1}} asked [R2:2]. Speaker 1 and Speaker 3 differ [R1:0, R2:1]. Speaker 3 again.', `"Speaker N" written out becomes a code only when its sentence is about one recording; otherwise left as written (${ta})`);
+ok(R.tokenizeAcross('Speaker {{R1.S1}} agreed; the speaker {{R2.S1}} did not.', opts) === '{{R1.S1}} agreed; the speaker {{R2.S1}} did not.', '"Speaker {{R1.S1}}" loses the extra word (it would read "Speaker Speaker 1"); "the speaker …" stays');
+ok(R.tokenizeAcross('{{R1.S1}} (Maya) agreed; {{R2.S1}} (the host) did not.', { ...opts, names: new Map([['R1.S1', 'Maya'], ['R2.S1', 'Sam']]) }) === '{{R1.S1}} agreed; {{R2.S1}} (the host) did not.', 'a name repeated in brackets after its own code is dropped; other brackets stay');
+ok(R.renderAcross('{{R1}} (Oct 6) and {{R2}} (week 2)', { title: (l) => ({ R1: 'Team sync — Oct 6', R2: 'Lecture' })[l], speaker: () => '' }) === 'Team sync — Oct 6 and Lecture (week 2)', 'a date the title already contains is not repeated');
 
 // ---------- a Thunder account with three recordings ----------
 const U = '11111111-1111-4111-8111-111111111111';
