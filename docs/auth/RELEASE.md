@@ -87,3 +87,25 @@ If any critical check in stages 4, 7 or 9 fails: undo that stage, as in the tabl
 * Emails already sent before the template switch use Supabase's link: same browser only, and scanners can use them up.
 * No age/Terms step in Production until the legal pages are approved (owner decision).
 * Supabase sends HTML-only email (no plain-text part).
+
+## Production log
+| Date (UTC) | Commit on `main` | What | Vercel deployment |
+|---|---|---|---|
+| before 2026-10-16 | 95bf377 | previous Production (old auth flow, older UI) | `sparkscribe-qsrx6784n` |
+| 2026-10-16 23:20 | 48db417 | auth release (this document) | `sparkscribe-812xrc4fs` |
+| 2026-10-17 | 0e0b514 | newer UI ported onto the auth release (branch `release/ui`, see below) | `sparkscribe-cqyjlfs49` |
+| 2026-10-17 | 12f461d | phone header fits at 320–400 px (no sideways scroll) | `sparkscribe-1k37eybrr` |
+
+Rollback: `vercel promote <deployment>` with the row you want back, e.g. `sparkscribe-812xrc4fs-moerizz.vercel.app`
+(auth release without the UI port) or `sparkscribe-qsrx6784n-moerizz.vercel.app` (before both). Then revert `main` to match.
+
+### The UI port (why Production looked older)
+The auth release did not revert any design: it changed 8 lines of CSS. The newer UI had never been on `main`; it lived
+on `homepage-v2` (4 commits on top of the old Production) and in later commits on the `release/four-tier` lineage.
+`release/ui` = Production + `homepage-v2` merged + only the visual parts of a0872f4 (light default, light-mode colours,
+Google button, sign-in prompt, timeline, ripples, processing mascot), 92b1b5f, 743e741, 721dbee (CSS) and the theme
+toggle from 2cc8c22. Left out on purpose: pricing, billing, legal pages, the age/Terms step, the "Add slides or PDF"
+entry points and the Details popover (they depend on the unreleased speaker-identity work), audio playback storage,
+account deletion, AI limits, study engines 2/3, Focused Review / Across. The home page keeps its labelled
+"Bring the slides too — Coming soon" section (part of Home v2). Auth suites on `release/ui`: recovery 17/17,
+auth 12/12, captcha 12/12 (mocked Supabase).
