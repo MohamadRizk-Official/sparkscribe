@@ -2,6 +2,7 @@
 import { supabase, isConfigured } from './supabase.js';
 import { adoptAccountPrefs } from './prefs.js';
 import { guardRecovery, currentSession } from './recovery.js';
+import { mountThemeToggle } from './theme-toggle.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -72,6 +73,7 @@ function initialsOf(nameOrEmail) {
 
 // Renders "Sign in" or the avatar menu into `slot`, and keeps it in sync with auth changes.
 export function mountAccountMenu(slot, { onChange } = {}) {
+  mountThemeToggle(slot); // the Light / Dark switch sits in every header, signed in or not
   if (!slot || !isConfigured) return;
   slot.classList.add('account');
   slot.innerHTML = '<span class="acct-skel" aria-hidden="true"></span>';

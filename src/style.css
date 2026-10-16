@@ -487,7 +487,7 @@
   --k-7c5cff-70: rgba(38, 0, 194, 0.7);
   --k-7c5cff-75: rgba(38, 0, 194, 0.75);
   --k-7c5cff-80: rgba(38, 0, 194, 0.8);
-  --k-7f89af: #707ba6;
+  --k-7f89af: #5a648e;   /* tertiary text in light: 5.3:1 on the page (was 3.8:1) */
   --k-7f8ab5: #6f7cac;
   --k-8296ff-04: rgba(0, 25, 156, 0.045);
   --k-8a93b9: #3b4991;
@@ -1168,6 +1168,14 @@ mark.cur { background: var(--k-fbbf24-60); }
   color: var(--text); font: 600 12.5px var(--mono); box-shadow: 0 0 18px -6px var(--violet);
 }
 .acct-btn:hover, .acct-btn:focus-visible { border-color: var(--cyan); outline: none; }
+/* Light / Dark switch, in every header next to the account button */
+.theme-btn {
+  width: 34px; height: 34px; border-radius: 50%; padding: 0; cursor: pointer; display: grid; place-items: center; flex: none;
+  border: 1px solid var(--line-2); background: var(--k-0a0c1a-55); color: var(--muted); backdrop-filter: blur(10px);
+}
+.theme-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.theme-btn:hover, .theme-btn:focus-visible { color: var(--text); border-color: var(--cyan); outline: none; }
+.theme-btn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .acct-btn img { width: 100%; height: 100%; object-fit: cover; }
 .acct-menu {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; min-width: 230px; padding: 6px;
@@ -1494,6 +1502,10 @@ label.btn { display: inline-flex; align-items: center; }
   .lib-icon { display: none; }
   .lib-head .btn { width: 100%; text-align: center; }
   .topbar { padding-left: 16px; padding-right: 16px; }
+  /* one row on phones: the device chip keeps only its status dot (its tooltip still opens on tap) */
+  .topbar-right { flex-wrap: nowrap; gap: 6px; align-items: center; }
+  .chip-device { width: 34px; height: 34px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
+  .chip-device svg { display: none; }
   /* five tabs: keep them readable and let the row scroll sideways instead of squeezing them */
   .tabs { width: 100%; scroll-snap-type: x proximity; scroll-padding: 4px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); }
   .tabs:has(.tab:last-child.on) { -webkit-mask-image: none; mask-image: none; }
@@ -1672,12 +1684,13 @@ dialog.sheet p.dlg-dim, .dlg-dim { color: var(--dim); font-size: 13px; margin: 0
 .title-row .icon-btn svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 
 @media (max-width: 640px) {
-  .lib-toolbar { flex-direction: column; align-items: stretch; gap: 10px; }
+  .lib-toolbar { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; } /* a wrapping column sizes children to their content, not the screen */
   .type-filter { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
   .type-filter::-webkit-scrollbar { display: none; }
   .type-filter .type-chip { flex: none; }
-  .lib-controls { margin-left: 0; }
-  .lib-controls .lib-select { flex: 1; min-width: 0; }
+  .lib-controls { margin-left: 0; flex-wrap: wrap; min-width: 0; }
+  /* two selects + Select fit one row from ~360 px; narrower phones wrap instead of widening the page */
+  .lib-controls .lib-select { flex: 1 1 110px; min-width: 0; }
   .lib-card-main { padding: 14px 0 14px 14px; }
   .lib-card-actions { padding: 8px 6px 0 0; }
   .lib-card-actions .icon-btn { width: 40px; height: 40px; }
@@ -2728,7 +2741,7 @@ button.grp-time:hover { color: var(--k-67e8f9); background: var(--k-22d3ee-10); 
   --pop: #161c3c;                 /* opaque: popovers over text */
 }
 :root[data-theme="light"] {
-  --ink: #12183a; --ink-2: #3c4470; --ink-3: #66709a;
+  --ink: #12183a; --ink-2: #3c4470; --ink-3: #5a648e;
   --hair: rgba(70, 80, 160, .14); --hair-2: rgba(70, 80, 160, .26);
   --card: linear-gradient(180deg, rgba(255, 255, 255, .92), rgba(250, 250, 255, .86));
   --card-hover: linear-gradient(180deg, #fff, rgba(252, 252, 255, .96));
@@ -3227,3 +3240,9 @@ html.bg-paused .bg *, html.bg-paused .bg { animation-play-state: paused !importa
   .dz-orbit span { animation: none; opacity: .18; }
   .dz-orbit span:nth-child(1) { transform: scale(.36); } .dz-orbit span:nth-child(2) { transform: scale(.58); } .dz-orbit span:nth-child(3) { transform: scale(.82); opacity: .1; }
 }
+:root[data-theme="light"] .segctl [aria-checked="true"] { color: #0b1030; }
+
+/* Light theme: the speaker / accent colours are bright tones made for the dark background. As TEXT on the light page
+   they fall to 1.4–2.8:1 contrast (speaker names were 1.66:1). Text keeps the hue, mixed 50% toward black
+   (5.0–8.1:1 for every palette colour, WCAG AA). Icons and tinted backgrounds keep the bright colour. */
+:root[data-theme="light"] :is(.who, .avatar, .spk-name, .peek-outline, .pa-a .mono, .v-outline b, .va-a) { color: color-mix(in srgb, var(--c) 50%, #000); }
