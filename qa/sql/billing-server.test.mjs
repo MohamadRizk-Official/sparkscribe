@@ -176,7 +176,7 @@ ok((await deliver(event('evt_a', 'customer.subscription.updated', { id: 'sub_qa_
 ok((await statusOf(user)).plan === 'free', '…and none of those changed anything');
 
 subs.set('sub_qa_1', subscription());
-const r1 = await deliver(event('evt_checkout', 'checkout.session.completed', { id: 'cs_test_1', mode: 'subscription', subscription: 'sub_qa_1', customer, client_reference_id: user, metadata: { supabase_user_id: user, plan: 'flash', intro: '1' }, total_details: { amount_discount: 499 } }));
+const r1 = await deliver(event('evt_checkout', 'checkout.session.completed', { id: 'cs_test_1', mode: 'subscription', subscription: 'sub_qa_1', customer, client_reference_id: user, metadata: { supabase_user_id: user, plan: 'flash', intro: '1' }, total_details: { amount_discount: 499 }, payment_status: 'paid' }));
 ok(r1.statusCode === 200 && (await statusOf(user)).plan === 'flash', 'checkout.session.completed (valid signature) → Flash, from Stripe’s own subscription record');
 const promo = (await db.query(`select promo, checkout_session from private.billing_promotions where user_id = $1`, [user])).rows;
 ok(promo.length === 1 && promo[0].promo === 'flash_intro' && promo[0].checkout_session === 'cs_test_1' && (await statusOf(user)).introEligible === false, 'the $1 offer is recorded as used when that Checkout completes; the account is no longer eligible');
@@ -228,6 +228,13 @@ const returning = await P.createUser('returning@example.com');
 await db.query(`insert into private.billing_paid_history (user_id, livemode, first_plan) values ($1, false, 'flash')`, [returning]);
 const ret = await tryCheckoutFor(returning, 'flash');
 ok(ret.url && !lastCheckout.has('discounts[0][coupon]') && (await statusOf(returning)).introEligible === false, 'a returning customer (had Flash before) gets the regular $5.99, and the page is told so (introEligible: false)');
+// a Checkout that completes unpaid (a delayed payment method) doesn't use the offer
+const pending = await P.createUser('pending@example.com');
+await tryCheckoutFor(pending, 'flash');
+const pcust = (await db.query('select stripe_customer_id from public.subscriptions where user_id = $1', [pending])).rows[0].stripe_customer_id;
+subs.set('sub_pending', subscription({ id: 'sub_pending', customer: pcust, status: 'incomplete', metadata: { supabase_user_id: pending } }));
+await deliver(event('evt_pending', 'checkout.session.completed', { id: 'cs_pending', mode: 'subscription', subscription: 'sub_pending', customer: pcust, client_reference_id: pending, metadata: { supabase_user_id: pending, plan: 'flash', intro: '1' }, total_details: { amount_discount: 499 }, payment_status: 'unpaid' }));
+ok((await statusOf(pending)).introEligible === true, 'a Checkout that completes unpaid (delayed payment) does not use up the offer');
 const declined = await P.createUser('declined@example.com');
 const dc = await tryCheckoutFor(declined, 'flash');
 const dcust = (await db.query('select stripe_customer_id from public.subscriptions where user_id = $1', [declined])).rows[0].stripe_customer_id;

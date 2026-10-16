@@ -51,9 +51,11 @@ and added to the price; you'll see the total before you pay.
 - **Payment and renewal:** payments are handled by Stripe; we never see your full card details. Paid plans renew
   automatically every month on the same date until you cancel. You'll see the price and renewal terms before you pay.
 - **Upgrades** (to a plan with more time or features) take effect immediately; the prorated difference for the rest of the
-  current period is charged at once. **[CONFIRM: upgrading during the $1 Flash month, see the billing report]**
+  current period is charged at once. If you upgrade during your $1 Flash month, you're credited for the unused part of
+  what you actually paid and charged the new plan's price for the rest of the period. **[CONFIRM: upgrade during the
+  $1 month]**
 - **Downgrades** (to a plan with less time or features) take effect at the end of the current period; until then you keep
-  the plan you paid for. **[CONFIRM: downgrade timing — end of period (recommended) or immediately with a prorated credit]**
+  the plan you paid for, and the lower price applies from your next renewal.
 - **Cancellation:** at any time in Plan & usage → Manage Billing. Your plan stays active until the end of the period
   you've paid for, then you return to Free and no further payments are taken. Nothing in your library is deleted.
 - **When a plan ends or changes:** your recordings, transcripts, notes, quizzes, review progress and practice questions

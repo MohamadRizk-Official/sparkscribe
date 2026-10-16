@@ -45,7 +45,7 @@ Status 2026-10-16. Stripe is in **test mode only**. No live key exists anywhere,
 | `qa/sql/flash-intro.test.mjs` | 17/17 |
 | `qa/sql/billing.test.mjs`, `four-tier.test.mjs` | 43/43, 54/54 |
 | Deployed Preview | webhook: unsigned 400, forged 400; billing API signed-out 401; pricing page shows "Get Flash for $1" / "Choose Bolt" / "Get Thunder" through sign-in |
-| **Real Stripe test mode** (`qa/sql/stripe-real.test.mjs`, 20 scenarios) | **not run yet** (see A1) |
+| **Real Stripe test mode** (`qa/sql/stripe-real.test.mjs`, 20 scenarios) | **32/32 checks, all 20 scenarios** (2026-10-16, after A1). Everything it created in Stripe was deleted. |
 
 The real Stripe runner drives the 20 required scenarios against the real sandbox, using test clocks for renewals, with the real server code and an isolated database.
 - **Scenarios:** $1 then $5.99 renewal; returning customer at $5.99; Bolt and Thunder; Flash to Bolt during the promo; Bolt to Thunder; Thunder to Bolt at period end; cancel at period end; failed renewal and recovery; declined first payment; double Checkout; duplicate, late and forged events; account deletion; unknown price; portal sessions; Stripe/database consistency.
@@ -54,7 +54,41 @@ The real Stripe runner drives the 20 required scenarios against the real sandbox
 
 **Not covered by any automated run:** paying on Stripe's hosted Checkout page. That needs a person: you, on the Preview, with test card 4242 4242 4242 4242.
 
-## Decisions needed
+## Real test-mode results (2026-10-16)
+
+| # | Scenario | Result |
+|---|---|---|
+| 1 | Flash for a new account | The Checkout session shows $5.99 − $4.99 = **$1.00**. The first invoice is **$1.00**, paid. The account is on Flash (3 h) and the offer is used. |
+| 2 | First renewal (test clock +32 days) | **$5.99**, paid, with no discount. Still Flash; the period moved to Stripe's new one, with the allowance full again. |
+| 3 | Returning customer | Canceled, so Free. Checking out again costs **$5.99**: no second $1 month. |
+| 4, 5 | Bolt and Thunder | $9.99 and $14.99 invoices. Thunder unlocks asking across recordings and combined guides. |
+| 6 | Flash ($1) to Bolt on day 10 | Upgraded at once. The invoice is **$6.09**: a credit of −$0.68 for unused Flash time, at the discounted rate actually paid, plus $6.77 for the rest of the Bolt period. |
+| 7 | Bolt to Thunder on day 15 | Upgraded at once; the prorated **$2.58** was paid. |
+| 8 | Thunder to Bolt, scheduled for period end | Thunder is kept until renewal, and the Account page shows "Switches to Bolt on …". At renewal the account is on Bolt and pays $9.99. |
+| 9 | Cancel at period end | The plan is kept and shown as ending; afterwards, Free with nothing charged. |
+| 10, 11 | Failed renewal, then recovery | past_due: the plan is kept while Stripe retries, with a payment warning. After the card is replaced and the invoice paid, the account is active again. |
+| 12 | Declined first payment | incomplete: no access, and the $1 offer is still available. |
+| 13 | Two Checkouts | The second expires the first, so only one can be paid. |
+| 14–16 | Duplicate, late and forged events | The duplicate is acknowledged and not re-applied; a late old event changes nothing; a forged signature gets 400. |
+| 17 | Deleting a Thunder account | The subscription is canceled in Stripe, the customer deleted, and the account and its data are gone. |
+| 18 | Unknown price | Free, plus an operator alert. |
+| 19 | Customer Portal | A real portal session opens. A subscriber choosing another plan is sent to confirm the change in the portal; no second subscription is created. |
+| 20 | Consistency | Stripe and the database agree for all 7 accounts, with at most one paying subscription each. |
+
+**Defects found and fixed by these runs:**
+- The offer was recorded as used on a Checkout that completed **unpaid** (possible with delayed payment methods). It's now recorded only when the Checkout is paid; the billing-server test covers this.
+- Plan changes depend on `STRIPE_PORTAL_CONFIGURATION_ID`: the account's default portal doesn't know the new prices. The server now refuses a plan change without it (nothing charged), and the runbook lists it as required.
+
+**Deployed Preview evidence:** Stripe delivered the QA run's real events to the Preview's webhook. Their signatures were verified, and they were ignored as another scope's objects (`webhook_ignored … other_scope` in the Vercel logs), so there were no database writes.
+
+## Decisions (owner, 2026-10-16)
+- **A1 approved:** the superseded prelaunch/dev test webhook `we_1UQZYB…` is disabled (test mode). The real test-mode scenarios are run below.
+- **B1: downgrades at the end of the period** (portal `schedule_at_period_end`).
+- **B3: 500 saved items per account;** at the cap, new saves are refused and nothing is deleted.
+- **B4: the offer is once per account** (never had a paid plan).
+- **B2 (upgrading during the $1 month):** measured above (scenario 6). Stripe credits only what was actually paid. **Recommendation: keep Stripe's standard proration.** The Terms text describes it, marked [CONFIRM] for your approval with the legal text.
+
+## Decisions as first asked
 
 - **A1. Permission:** disable the superseded test-mode webhook `we_1UQZYB…`, which points at the prelaunch/dev Preview, then run the 20 real test-mode scenarios. Test mode only, reversible.
 - **B1. Downgrade timing:**

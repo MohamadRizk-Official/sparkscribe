@@ -88,7 +88,9 @@ export async function createCheckout(sb, user, planKey, origin) {
     const item = current.items.data[0];
     if (item?.price?.id === price) throw new BillingError(`You're already on ${plan.name}.`, { status: 409, code: 'already_on_plan' });
     // Already paying: change the plan through the Customer Portal, where Stripe shows the prorated amount and
-    // the user confirms. No second subscription is ever created.
+    // the user confirms. No second subscription is ever created. SparkScribe's own portal configuration is required:
+    // the account's default one doesn't list these prices, so Stripe would refuse the change.
+    if (!portalConfig().configuration) throw new BillingError('Changing plans isn’t available yet. Nothing was charged.', { status: 503, code: 'billing_not_configured' });
     const session = await stripe.billingPortal.sessions.create({
       customer,
       ...portalConfig(),
@@ -136,6 +138,28 @@ export async function createCheckout(sb, user, planKey, origin) {
   });
   billingLog('checkout_session', { user: user.id, plan: plan.key, intro: Boolean(coupon) });
   return { url: session.url, kind: 'checkout' };
+}
+
+// A plan change the customer scheduled in the portal (a downgrade starts at the next renewal): read from Stripe for
+// the Account page, so the customer sees it was taken. -> { plan, planName, at } or null
+export async function scheduledChange(sb, user) {
+  if (!billingConfigured()) return null;
+  const { data: row } = await sb.from('subscriptions').select('stripe_subscription_id, livemode, stripe_price_id').eq('user_id', user.id).maybeSingle();
+  if (!row?.stripe_subscription_id || row.livemode !== isLiveMode()) return null;
+  const stripe = getStripe();
+  const sub = await stripe.subscriptions.retrieve(row.stripe_subscription_id);
+  const scheduleId = typeof sub.schedule === 'string' ? sub.schedule : sub.schedule?.id;
+  if (!scheduleId || !PAID_STATUSES.has(sub.status)) return null;
+  const schedule = await stripe.subscriptionSchedules.retrieve(scheduleId);
+  const now = Math.floor(Date.now() / 1000);
+  const currentPrice = sub.items.data[0]?.price?.id;
+  const next = (schedule.phases || []).find((ph) => ph.start_date > now && ph.items?.[0] && (typeof ph.items[0].price === 'string' ? ph.items[0].price : ph.items[0].price?.id) !== currentPrice);
+  if (!next) return null;
+  const price = typeof next.items[0].price === 'string' ? next.items[0].price : next.items[0].price?.id;
+  const plan = await planForPrice(price);
+  if (!plan) return null;
+  const p = (await loadPlans()).find((x) => x.key === plan);
+  return { plan, planName: p?.name || plan, at: new Date(next.start_date * 1000).toISOString() };
 }
 
 export async function createPortal(sb, user, origin) {
@@ -293,9 +317,10 @@ export async function handleEvent(event) {
         const linked = await db.call('billing_link_customer', { p_user: uid, p_customer: idOf(obj.customer), p_livemode: Boolean(event.livemode) });
         if (linked !== idOf(obj.customer)) throw new Error('customer_belongs_to_another_user');
         const r = await syncSubscription(idOf(obj.subscription));
-        // the introductory offer is used up only when a Checkout that carried it completes
+        // the introductory offer is used up only when a Checkout that carried it completes AND is paid (a delayed payment
+        // method can complete a Checkout unpaid; if it's paid later, the paid plan's history makes the account ineligible)
         let promo = '';
-        if (obj.metadata?.intro === '1' && Number(obj.total_details?.amount_discount || 0) > 0) {
+        if (obj.metadata?.intro === '1' && Number(obj.total_details?.amount_discount || 0) > 0 && obj.payment_status === 'paid') {
           promo = ` intro:${await db.call('billing_promo_redeem', { p_user: uid, p_promo: `${obj.metadata?.plan || 'flash'}_intro`, p_livemode: Boolean(event.livemode), p_session: obj.id, p_subscription: idOf(obj.subscription) })}`;
         }
         const extra = await settleDuplicates(idOf(obj.customer));

@@ -61,7 +61,8 @@
     const end = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)).toISOString();
     const st = { plan: plan.key, planName: plan.name, tier: plan.tier, features: plan.features, ...(K.introEligible != null && { introEligible: !!K.introEligible }), status: plan.key === 'free' ? 'free' : 'active', monthlySeconds: plan.monthly_seconds, usedSeconds: used, remainingSeconds: remaining,
       periodStart: new Date().toISOString(), periodEnd: end, periodKind: plan.key === 'free' ? 'calendar_month' : 'billing', cancelAtPeriodEnd: !!K.cancelAtPeriodEnd,
-      hasBillingAccount: plan.key !== 'free', paymentProblem: !!K.paymentProblem, meteringStarted: !!K.enforced, enforced: !!K.enforced, upgradesAvailable: !!K.upgrades, testMode: false };
+      hasBillingAccount: plan.key !== 'free', paymentProblem: !!K.paymentProblem,
+      ...(body.detail && K.scheduledPlan && { scheduledChange: { plan: K.scheduledPlan, planName: PLANS.find((p) => p.key === K.scheduledPlan)?.name, at: end } }), meteringStarted: !!K.enforced, enforced: !!K.enforced, upgradesAvailable: !!K.upgrades, testMode: false };
     if (body.action === 'status') return json(st);
     if (body.action === 'authorize') {
       const next = PLANS.find((p) => p.billing_interval && p.monthly_seconds > plan.monthly_seconds);

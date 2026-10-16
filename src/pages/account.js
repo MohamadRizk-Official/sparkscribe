@@ -44,6 +44,7 @@ function render() {
   let when;
   if (!paid) when = `Resets ${dateText(s.periodEnd)}`;
   else if (s.cancelAtPeriodEnd) when = `Your ${esc(plan.name)} plan remains active until ${dateText(s.periodEnd)}`;
+  else if (s.scheduledChange) when = `Switches to ${esc(s.scheduledChange.planName)} on ${dateText(s.scheduledChange.at)}. Until then you keep ${esc(plan.name)}.`;
   else when = `Renews ${dateText(s.periodEnd)}`;
 
   const warn = s.paymentProblem
@@ -121,7 +122,7 @@ async function main() {
   const q = new URLSearchParams(location.search);
   try {
     plans = await loadPlans();
-    status = await getBillingStatus();
+    status = await getBillingStatus({ detail: true });
   } catch (err) {
     $('account').innerHTML = `<p class="bill-error">${esc(err.message || 'Your plan couldn’t be loaded.')} <a href="/account">Try again</a></p>`;
     return;

@@ -120,3 +120,13 @@ export async function homeSignedOut() {
     }],
   ]);
 }
+
+// /account with __qaKnobs({ plan: 'thunder', scheduledPlan: 'bolt' }): a downgrade scheduled in the portal is shown
+export async function scheduled() {
+  return runTests([
+    ['a downgrade scheduled for the end of the period is shown, with the plan kept until then', async () => {
+      await waitFor(() => $('.acct-when'), { what: 'plan card' });
+      assert(/Switches to Bolt on .+ Until then you keep Thunder\./.test(text($('.acct-when'))), text($('.acct-when')));
+    }],
+  ]);
+}

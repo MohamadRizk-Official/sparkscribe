@@ -44,6 +44,8 @@ for (const w of (await stripe.webhookEndpoints.list({ limit: 50 })).data) {
 const priceFor = async (key, cents) => (await stripe.prices.list({ lookup_keys: [`sparkscribe_${key}_monthly_${cents}`], limit: 1 })).data[0]?.id;
 const PRICE = { flash: await priceFor('flash', 599), bolt: await priceFor('bolt', 999), thunder: await priceFor('thunder', 1499) };
 const COUPON = 'sparkscribe_flash_intro_499_1m';
+// the four-tier Customer Portal configuration made by scripts/stripe-setup.mjs (the account's default one only knows Plus/Pro)
+const PORTAL = (await stripe.billingPortal.configurations.list({ active: true, limit: 50 })).data.find((c) => c.metadata?.sparkscribe === 'portal_four_tier')?.id;
 assert.ok(PRICE.flash && PRICE.bolt && PRICE.thunder, 'run scripts/stripe-setup.mjs first');
 
 // ---------- isolated database + PostgREST stand-in for the server's anonymous calls ----------
@@ -69,6 +71,7 @@ Object.assign(process.env, {
   NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${rest.address().port}`, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_qa',
   BILLING_DB_SECRET: SECRET, STRIPE_SECRET_KEY: KEY, STRIPE_WEBHOOK_SECRET: WHSEC, BILLING_PAYMENTS_ENABLED: '1', BILLING_SCOPE: 'qa-local',
   STRIPE_FLASH_PRICE_ID: PRICE.flash, STRIPE_BOLT_PRICE_ID: PRICE.bolt, STRIPE_THUNDER_PRICE_ID: PRICE.thunder, STRIPE_FLASH_INTRO_COUPON: COUPON,
+  STRIPE_PORTAL_CONFIGURATION_ID: PORTAL,
 });
 delete process.env.VERCEL; delete process.env.STRIPE_API_HOST; delete process.env.STRIPE_AUTOMATIC_TAX;
 const quiet = console.log; console.log = (...a) => { if (!String(a[0]).startsWith('[billing]')) quiet(...a); };
@@ -80,7 +83,7 @@ const webhook = (await import(new URL('api/stripe-webhook.js', ROOT).href)).defa
 const userSb = (uid, { recentSignIn = false } = {}) => {
   const claims = recentSignIn ? { amr: [{ method: 'password', timestamp: unix() }] } : {};
   return {
-    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [uid])).rows[0] || null }) }) }) }),
+    from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: (await db.query('select stripe_customer_id, livemode, stripe_subscription_id, stripe_price_id from public.subscriptions where user_id = $1', [uid])).rows[0] || null }) }) }) }),
     rpc: async (fn, args = {}) => {
       try {
         const k = Object.keys(args);
@@ -149,7 +152,7 @@ async function completeCheckout(u, session, { token = 'pm_card_visa' } = {}) {
   });
   const inv = sub.latest_invoice;
   const evt = { id: `evt_qa_cs_${s.id.slice(-12)}`, object: 'event', type: 'checkout.session.completed', livemode: false, created: unix(),
-    data: { object: { ...s, status: 'complete', subscription: sub.id, total_details: { ...s.total_details, amount_discount: inv.total_discount_amounts?.reduce((t, x) => t + x.amount, 0) ?? s.total_details?.amount_discount ?? 0 } } } };
+    data: { object: { ...s, status: 'complete', subscription: sub.id, payment_status: inv.status === 'paid' ? 'paid' : 'unpaid', total_details: { ...s.total_details, amount_discount: inv.total_discount_amounts?.reduce((t, x) => t + x.amount, 0) ?? s.total_details?.amount_discount ?? 0 } } } };
   return { sub, invoice: inv, delivered: await deliver(evt) };
 }
 const stripeSub = (id) => stripe.subscriptions.retrieve(id, { expand: ['items.data.price'] });
@@ -242,12 +245,16 @@ try {
   ] });
   await sleep(2000); await pump(since);
   ok((await statusOf(bt.uid)).plan === 'thunder', '8 · Thunder → Bolt scheduled for the end of the period: Thunder kept until then');
+  const pending = await service.scheduledChange(userSb(bt.uid), { id: bt.uid });
+  ok(pending?.plan === 'bolt' && Math.abs(new Date(pending.at).getTime() / 1000 - s7.items.data[0].current_period_end) < 5, `8 · the Account page can show "Switches to Bolt on ${pending?.at?.slice(0, 10)}" (read from Stripe)`);
   await advance(bt.clock, 16 * 86400);
   await pump(since);
   const inv8 = (await invoicesOf(s7.id)).at(-1);
   ok((await statusOf(bt.uid)).plan === 'bolt' && inv8.total === 999, `8 · at renewal the account is on Bolt and pays $9.99 (${inv8.total})`);
 
-  // 9. cancel at the end of the period
+  // 9. cancel at the end of the period (the portal releases a finished schedule itself; done here as it would)
+  const sch = (await stripe.subscriptions.retrieve(s7.id)).schedule;
+  if (sch) await stripe.subscriptionSchedules.release(typeof sch === 'string' ? sch : sch.id);
   await stripe.subscriptions.update(s7.id, { cancel_at_period_end: true });
   await sleep(2000); await pump(since);
   st = await statusOf(bt.uid);
@@ -291,7 +298,9 @@ try {
   ok(c1.url !== c2.url && sessions.filter((s) => s.status === 'open').length === 1 && sessions.some((s) => s.status === 'expired'), '13 · a second Checkout expires the first: only one can be paid');
 
   // 14–16. duplicate, out-of-order and forged webhooks (real events)
-  const anyEvent = (await stripe.events.list({ created: { gte: since - 5 }, type: 'customer.subscription.updated', limit: 20 })).data.find((e) => created.customers.has(e.data.object.customer));
+  await pump(since);
+  // an event that was already delivered once (and processed)
+  const anyEvent = await stripe.events.retrieve([...seen].find((id) => id.startsWith('evt_') && !id.startsWith('evt_qa_')));
   ok((await deliver(anyEvent)).body.duplicate === true, '14 · a real event delivered again → acknowledged as a duplicate, not re-applied');
   const before16 = JSON.stringify(await statusOf(fr.uid));
   const oldest = (await stripe.events.list({ created: { gte: since - 5 }, type: 'customer.subscription.created', limit: 50 })).data.find((e) => e.data.object.customer === fr.customer);
@@ -318,7 +327,7 @@ try {
   await stripe.subscriptions.create({ customer: unk.customer, items: [{ price: odd.id }], metadata: { supabase_user_id: unk.uid, sparkscribe_scope: 'qa-local' } });
   await pump(since);
   ok((await statusOf(unk.uid)).plan === 'free' && alerts.some((a) => a.includes(odd.id)), '18 · an unknown Stripe price grants nothing (Free) and raises an operator alert');
-  await stripe.prices.update(odd.id, { active: false });
+  await stripe.products.update(typeof odd.product === 'string' ? odd.product : odd.product.id, { active: false }).catch(() => {}); // archive the QA product
 
   // 19. Customer Portal sessions (the server's own configuration)
   const portal = await service.createPortal(userSb(fr.uid), { id: fr.uid }, 'http://localhost:5173');

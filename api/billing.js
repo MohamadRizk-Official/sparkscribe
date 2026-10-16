@@ -8,7 +8,7 @@
 // price or plan status. Only a plan key is accepted, and the server maps it to its own Stripe price.
 import { readJson, sendJson } from '../server/http.js';
 import { userClient, appOrigin, BillingError, billingLog, billingConfigured, isLiveMode, priceIdFor, loadPlans, paymentsEnabled } from '../server/billing/config.js';
-import { getStatus, authorize, createCheckout, createPortal, deleteAccount } from '../server/billing/service.js';
+import { getStatus, authorize, createCheckout, createPortal, deleteAccount, scheduledChange } from '../server/billing/service.js';
 
 async function signedIn(req) {
   const token = /^Bearer (.+)$/.exec(req.headers.authorization || '')?.[1];
@@ -31,6 +31,8 @@ export default async function handler(req, res) {
           // whether upgrades can be bought here, and whether they are Stripe test payments (Preview)
           upgradesAvailable: paymentsEnabled() && (await loadPlans()).filter((p) => p.billing_interval).every((p) => priceIdFor(p.key)),
           testMode: billingConfigured() && !isLiveMode(),
+          // the Account page asks for a scheduled plan change too (one Stripe read; never fails the status)
+          ...(body.detail === true && { scheduledChange: await scheduledChange(sb, user).catch(() => null) }),
         });
       case 'authorize':
         return sendJson(res, 200, await authorize(sb, body.durationSeconds));

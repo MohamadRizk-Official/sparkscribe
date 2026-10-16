@@ -40,7 +40,7 @@ The release candidate is branch `release/four-tier`, built on prelaunch/dev with
    - Summary, Ask and quiz;
    - the pricing page shows "Coming soon" until step 8;
    - Account shows Free, 30 minutes.
-8. **Live payments** (separate approval, docs/launch/20). Set the live key and IDs, `STRIPE_AUTOMATIC_TAX` if registered, `BILLING_PAYMENTS_ENABLED=1`, `VITE_PAID_PLANS=1` and `BILLING_LIVE_APPROVED=1`. Then `update public.billing_settings set stripe_livemode = true;` and redeploy. Then one real purchase, which needs your authorization for that specific transaction.
+8. **Live payments** (separate approval, docs/launch/20). `STRIPE_PORTAL_CONFIGURATION_ID` is required: without it Stripe uses the account's default portal, which doesn't know the new prices, and plan changes fail. Set the live key and IDs, `STRIPE_AUTOMATIC_TAX` if registered, `BILLING_PAYMENTS_ENABLED=1`, `VITE_PAID_PLANS=1` and `BILLING_LIVE_APPROVED=1`. Then `update public.billing_settings set stripe_livemode = true;` and redeploy. Then one real purchase, which needs your authorization for that specific transaction.
 
 ## 3. Rollback
 

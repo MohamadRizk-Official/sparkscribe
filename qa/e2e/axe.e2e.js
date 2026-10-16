@@ -29,7 +29,7 @@ async function run(f, label, theme) {
     .map((v) => ({ page: label, theme, id: v.id, impact: v.impact, count: v.nodes.length, sample: v.nodes.slice(0, 3).map((n) => n.target.join(' ') + (n.any?.[0]?.message ? ` — ${n.any[0].message.slice(0, 120)}` : '')) }));
 }
 
-export async function scan({ pages = ['/', '/library', '/settings', '/pricing', '/account', '/privacy', '/terms', '/auth?mode=signup'], tabs = true } = {}) {
+export async function scan({ pages = ['/', '/library', '/settings', '/pricing', '/account', '/across', '/privacy', '/terms', '/auth?mode=signup'], tabs = true } = {}) {
   const out = [];
   for (const p of pages) {
     const f = await frameFor(p);

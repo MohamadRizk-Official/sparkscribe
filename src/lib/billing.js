@@ -45,7 +45,7 @@ async function call(action, payload = {}) {
   return body;
 }
 
-export const getBillingStatus = () => call('status');
+export const getBillingStatus = (opts = {}) => call('status', opts.detail ? { detail: true } : {});
 export const authorizeTranscription = (durationSeconds) => call('authorize', { durationSeconds });
 export async function startCheckout(plan) { const r = await call('checkout', { plan }); location.assign(r.url); return r; }
 export async function openPortal() { const r = await call('portal'); location.assign(r.url); return r; }
