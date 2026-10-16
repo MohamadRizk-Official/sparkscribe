@@ -30,7 +30,10 @@
           <h1 class="page-title">My Library</h1>
           <p class="lib-stats mono" id="libStats">&nbsp;</p>
         </div>
-        <a class="btn btn-primary" href="/">New transcription</a>
+        <div class="lib-head-actions">
+          <button class="btn btn-ghost" type="button" id="acrossBtn" title="Ask one question across several recordings, or make one study guide from them">Ask across recordings</button>
+          <a class="btn btn-primary" href="/">New transcription</a>
+        </div>
       </section>
 
       <form class="lib-search" role="search" id="searchForm" autocomplete="off">
@@ -77,6 +80,8 @@
 
     <div class="bulk-bar" id="bulkBar" hidden>
       <span class="bulk-count" id="bulkCount">0 selected</span>
+      <button class="btn btn-primary btn-sm" type="button" data-bulk="across" title="Ask one question across the selected recordings">Ask across</button>
+      <button class="btn btn-ghost btn-sm" type="button" data-bulk="across-guide" title="One study guide from the selected recordings">Study guide</button>
       <button class="btn btn-ghost btn-sm" type="button" data-bulk="favorite">Favorite</button>
       <button class="btn btn-ghost btn-sm" type="button" data-bulk="folder">Folder</button>
       <button class="btn btn-danger btn-sm" type="button" data-bulk="delete">Delete</button>

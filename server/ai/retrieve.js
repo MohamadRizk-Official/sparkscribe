@@ -47,7 +47,7 @@ export function buildChunks(segments) {
   return chunks;
 }
 
-function bm25(chunks, terms) {
+export function bm25(chunks, terms) {
   const docs = chunks.map((c) => tokenize(c.text));
   const N = docs.length;
   const avg = docs.reduce((t, d) => t + d.length, 0) / (N || 1);

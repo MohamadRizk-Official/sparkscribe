@@ -195,6 +195,13 @@
       res.sort((a, b) => b.score - a.score);
       return json(res.slice(body?.p_offset || 0, (body?.p_offset || 0) + (body?.p_limit || 10)));
     }
+    // ---- Create results: the learner's own writes (quiz progress, deleting a result) go to the dev-server store,
+    // which is where /api/* reads them ----
+    if (p === '/rest/v1/transcription_artifacts' && (method === 'PATCH' || method === 'DELETE')) {
+      const id = (url.searchParams.get('id') || '').replace(/^eq\./, '');
+      const r = await realFetch('/__harness/artifact-write', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, method, patch: body }) });
+      return json(r.ok ? [] : { message: 'not found' }, r.ok ? 200 : 404);
+    }
     if (p === '/rest/v1/rpc/library_stats') {
       const by = {}; for (const t of db.rows) { const k = real.has(t.recording_type) ? t.recording_type : 'general'; by[k] = (by[k] || 0) + 1; }
       return json([{ recordings: db.rows.length, seconds: db.rows.reduce((s, t) => s + (t.duration_seconds || 0), 0), this_month: db.rows.length, favorites: db.rows.filter((t) => t.is_favorite).length, by_type: by }]);

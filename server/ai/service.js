@@ -22,9 +22,10 @@ import { GRADE_SYSTEM, GRADE_SCHEMA, gradeInstructions, ANALYST_SYSTEM, ASK_SYST
 import { groundStructured, groundChapters, groundAnswer } from './grounding.js';
 import { TOOLS, ARTIFACT_KINDS, normalizeSettings, cardCount, questionCount, examBacked } from './tools.js';
 import { FILL_SCHEMA, fillInstructions, uncoveredConcepts, inheritRefs } from './study.js';
-import { studyItems, studyGuide } from './studyrun.js';
+import { studyItems, studyGuide, followupQuestions } from './studyrun.js';
 import { INSTRUCTIONS_MISSING } from '../../src/lib/tool-settings.js';
 import { selectContext, needsRetrieval, formatExcerpts } from './retrieve.js';
+import { askAcross, guideAcross } from './across.js';
 import { segmentsFromRow, modelLine, estimateTokens, normalizeRecordingType, RECORDING_TYPES, isNotFound, refersToPlayback, isFollowUp, fmtClock } from '../../src/lib/segments.js';
 import { speakerTable, dominantSpeaker, codedLine, tokenizeSpeakers, transcriptBasis, sameBasis, speakerResolver, renderSpeakers, origCodes, origResolver } from '../../src/lib/speaker-refs.js';
 
@@ -383,7 +384,8 @@ export async function gradeShortAnswer(db, { transcriptionId, artifactId, index,
   if (!given) throw new AIError('Type an answer first.', { status: 400, code: 'bad_request' });
   const artifacts = await db.listArtifacts(transcriptionId);
   const quiz = artifacts.find((a) => a.id === artifactId && a.kind === 'quiz' && a.status === 'ready');
-  const q = quiz?.content?.questions?.[Number(index)];
+  // the quiz's own questions, then the follow-ups written for Focused Review (same indexes as the browser)
+  const q = [...(quiz?.content?.questions || []), ...(quiz?.content?.followups || [])][Number(index)];
   if (!q || q.type !== 'short_answer') throw new AIError("That quiz question doesn't exist.", { status: 404, code: 'not_found' });
   const { segments } = await loadTranscript(db, transcriptionId);
   const lines = (q.refs || []).map((r) => segments.find((s) => s.id === r)).filter(Boolean).map((s) => s.text).join(' ');
@@ -406,6 +408,64 @@ export async function gradeShortAnswer(db, { transcriptionId, artifactId, index,
   } catch (err) {
     await meter.finish({ error: err?.message || 'failed' });
     throw err instanceof AIError ? err : new AIError("Your answer couldn't be checked.");
+  }
+}
+
+// Focused Review: new practice questions for concepts a learner keeps missing in one of their quizzes. The browser
+// sends only the quiz and the concept ids; the concepts, their passages and the questions already seen come from
+// the stored quiz (the user's own, under Row Level Security). The new questions are added to the quiz as
+// `followups` (its own questions and their indexes never change; progress is untouched).
+export const MAX_FOLLOWUPS = 30;          // per quiz: bounds what one quiz can cost in follow-ups
+const FOLLOWUP_CONCEPTS = 6;              // per request
+export async function generateFollowups(db, { transcriptionId, artifactId, conceptIds, userId = null }) {
+  const ids = [...new Set((Array.isArray(conceptIds) ? conceptIds : []).map((x) => String(x).slice(0, 20)))].slice(0, FOLLOWUP_CONCEPTS);
+  if (!ids.length) throw new AIError('Choose what to practise first.', { status: 400, code: 'bad_request' });
+  const quiz = (await db.listArtifacts(transcriptionId)).find((a) => a.id === artifactId && a.kind === 'quiz' && a.status === 'ready');
+  if (!quiz?.content?.map?.concepts?.length) throw new AIError("This quiz can't be reviewed by concept.", { status: 404, code: 'not_found' });
+  const { row, segments } = await loadTranscript(db, transcriptionId);
+  const basis = transcriptBasis(segments);
+  if (!(quiz.source_version === row.content_version || sameBasis(quiz.content.basis, basis))) {
+    throw new AIError('The transcript changed after this quiz was written. Update the quiz first.', { status: 409, code: 'stale' });
+  }
+  const have = quiz.content.followups || [];
+  if (have.length >= MAX_FOLLOWUPS) throw new AIError('This quiz already has as many practice questions as it can hold. Write new questions for the quiz to start fresh.', { status: 409, code: 'limit' });
+  const concepts = quiz.content.map.concepts.filter((c) => ids.includes(String(c.id)) && c.clarity !== 'unreliable');
+  if (!concepts.length) throw new AIError("Those concepts aren't in this quiz.", { status: 400, code: 'bad_request' });
+
+  const meter = createMeter({ feature: 'tool:quiz:followup', transcriptionId, userId });
+  // write (the concepts' passages) + check: a few thousand tokens each way
+  const passage = estimateTokens(segments.filter((s) => concepts.some((c) => (c.refs || []).some((r) => Math.abs(r - s.id) <= 3))).map(modelLine).join('\n'));
+  await reserveAi(db, meter, passage * 2 + 3000);
+  try {
+    const speakers = speakerTable(segments);
+    const usage = { input: 0, output: 0 };
+    let model = null;
+    const call = async ({ task, schema, body, instructions }) => {
+      const ai = getProvider();
+      const x = await meter.call(task, () => ai.complete({
+        task, ...taskConfig(task), system: ANALYST_SYSTEM, schema,
+        messages: [{ role: 'user', content: [{ type: 'text', text: `${codedHeader(row, segments, speakers)}${body ? `\n${body}` : ''}` }, { type: 'text', text: instructions }] }],
+      }));
+      usage.input += x.usage.input; usage.output += x.usage.output; model = x.model;
+      return x;
+    };
+    const settings = quiz.settings || {};
+    const items = (await followupQuestions({
+      concepts, map: quiz.content.map, segments, speakers, call,
+      ctx: { settings: { ...settings, types: settings.types === 'true_false' ? 'true_false' : 'mixed' }, dominant: dominantSpeaker(speakers.shares) },
+      existing: [...(quiz.content.questions || []), ...have],
+    })).slice(0, MAX_FOLLOWUPS - have.length);
+    let saved = items.length ? await db.appendFollowups(quiz, items) : quiz;
+    if (!saved) { // the quiz changed while we wrote (another tab): add to the newest version once
+      const latest = (await db.listArtifacts(transcriptionId)).find((a) => a.id === artifactId && a.status === 'ready');
+      saved = latest && sameBasis(latest.content?.basis, quiz.content.basis) ? (await db.appendFollowups(latest, items)) || latest : quiz;
+    }
+    await meter.finish({ groundingPassed: true, droppedItems: 0 });
+    void model;
+    return { artifact: publicArtifact(saved), added: items.length, usage };
+  } catch (err) {
+    await meter.finish({ error: err?.message || 'failed' });
+    throw err instanceof AIError ? err : new AIError("New questions couldn't be written. You can still practise with the same ones.");
   }
 }
 
@@ -567,3 +627,7 @@ export async function askTranscript(db, { transcriptionId, question, at = null, 
   });
   return { id: saved?.id, question, answer: g.answer, refs: g.refs, found: g.found, unsupported: g.unsupported, mode: ctx.mode, cached: false };
 }
+
+// Across recordings (server/ai/across.js): the same usage reservation as every other AI action.
+export const askAcrossRecordings = (db, args, emit) => askAcross(db, args, emit, { reserveAi });
+export const guideAcrossRecordings = (db, args) => guideAcross(db, args, { reserveAi });

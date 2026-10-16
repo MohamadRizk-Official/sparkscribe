@@ -178,6 +178,15 @@ function studyEngine3(base, step, text) {
       { concept: att.id, type: 'true_false', skill: 'misconception', question: 'In the Mock School view, the second idea is the opposite of the first.', options: ['True', 'False'], answer: 'false', accept: [], explanation: 'The Mock School view presents it as a definition, not as an opposite of the first idea.', refs: [] },
       { concept: att.id, type: 'multiple_choice', skill: 'recall', question: 'In the Mock School view, which of these applies?', options: ['One', 'Two', 'All of the above', 'Three'], answer: 'One', accept: [], explanation: null, refs: [] },
       { concept: att.id, type: 'short_answer', skill: 'recall', question: `What does the Mock School call the idea about ${w}?`, options: [], answer: words(ev(1))[0] || 'x', accept: [], explanation: null, refs: [] });
+    // Focused Review follow-ups: the same ideas asked another way (an application), plus one exact repeat that the
+    // duplicate check must drop
+    if (/FOLLOW-UP questions/.test(text)) {
+      const repeat = (text.match(/never reuse their answer or options:\n- (.+)/) || [])[1];
+      return { questions: [
+        ...concepts.map((k) => ({ concept: k.id, type: 'multiple_choice', skill: 'application', question: `In a new situation, which choice applies the idea "${k.name}" correctly?`, options: [ev(0), ev(1), ev(2), `Not ${ev(0)}`], answer: ev(0), accept: [], explanation: `The recording explains it this way: ${ev(1)}`, refs: [] })),
+        ...(repeat ? [{ concept: concepts[0]?.id, type: 'short_answer', skill: 'recall', question: repeat, options: [], answer: 'x', accept: [], explanation: null, refs: [] }] : []),
+      ] };
+    }
     return { questions };
   }
   if (step === 'verify' || step === 'recheck') {
@@ -201,6 +210,41 @@ function studyEngine3(base, step, text) {
   return {};
 }
 
+// Across recordings: for each recording, the line sharing most words with the question, cited [R2:45]; plus one
+// citation of a line it was never given ([R9:999]), which grounding must remove.
+function acrossAnswer(prompt) {
+  const question = (prompt.match(/<question>\n?([\s\S]*?)\n?<\/question>/) || [, ''])[1];
+  const qw = new Set(words(question));
+  const recs = [...prompt.matchAll(/<recording label="(R\d+)" title="([^"]*)"[^>]*>([\s\S]*?)<\/recording>/g)];
+  const parts = [];
+  for (const [, label, title, body] of recs) {
+    let best = null, score = 0;
+    for (const m of body.matchAll(/^\[(R\d+):(\d+)\] (?:\d+:\d+(?::\d+)? \S[^:]*: )?(.+)$/gm)) {
+      const s = words(m[3]).filter((w) => qw.has(w)).length;
+      if (s > score) { best = { line: m[2], text: m[3] }; score = s; }
+    }
+    if (best) parts.push(`In ${title}, the closest passage says: "${firstSentence(best.text)}" [${label}:${best.line}].`);
+  }
+  return parts.length ? `[Mock] ${parts.join(' ')} One invented link [R9:999].` : '[Mock] None of the selected recordings mention that.';
+}
+// Combined guide: one theme joining the first concept of every recording (a recurring theme), one theme per
+// recording, and one item resting only on a concept that doesn't exist (dropped by grounding).
+function acrossGuide(text) {
+  const refs = [...new Set([...text.matchAll(/^(R\d+\.c\d+) \|/gm)].map((m) => m[1]))];
+  const first = [...new Map(refs.map((r) => [r.split('.')[0], r])).values()];
+  return {
+    overview: '[Mock] What these recordings teach together.',
+    themes: [
+      { title: 'Shared idea', summary: '[Mock] An idea that comes up in several recordings.', comparison: first.length > 1 ? '[Mock] The later recording refines the earlier one.' : null, concepts: first },
+      ...first.map((r, i) => ({ title: `Theme of recording ${i + 1}`, summary: '[Mock] Taught in one recording.', comparison: null, concepts: [r] })),
+      { title: 'Invented theme', summary: 'Rests on nothing real.', comparison: null, concepts: ['R9.c99'] },
+    ],
+    definitions: refs.slice(0, 2).map((r) => ({ term: `Term ${r}`, definition: '[Mock] As the recording defines it.', concepts: [r] })),
+    distinctions: [{ text: '[Mock] Two ideas not to confuse.', concepts: first.slice(0, 2) }],
+    self_check: [{ question: '[Mock] How do the recordings connect?', answer: '[Mock] Through the shared idea.', concepts: first }],
+  };
+}
+
 export function mockProvider() {
   return {
     name: 'mock',
@@ -218,7 +262,8 @@ export function mockProvider() {
       }
       let json;
       const [base, step] = String(task).split(':');
-      if (base === 'studymap' || ['write', 'verify', 'recheck', 'compose'].includes(step)) json = studyEngine3(base, step, text);
+      if (task === 'across:guide') json = acrossGuide(text);
+      else if (base === 'studymap' || ['write', 'verify', 'recheck', 'compose'].includes(step)) json = studyEngine3(base, step, text);
       else if (step === 'fill') {
         // coverage pass: items for exactly the concepts it was asked about
         const ids = new Set([...((text.match(/<concepts>([\s\S]*?)<\/concepts>/) || [, '[]'])[1].matchAll(/"id": "([^"]+)"/g))].map((m) => m[1]));
@@ -235,10 +280,15 @@ export function mockProvider() {
       }
       return { text: JSON.stringify(json), json, model: 'mock', usage: { input: Math.ceil(text.length / 3.2), output: 200 } };
     },
-    async stream({ messages }, onDelta) {
+    async stream({ task, messages }, onDelta) {
       maybeFail();
       const last = messages[messages.length - 1];
       const prompt = typeof last.content === 'string' ? last.content : last.content.map((c) => c.text).join('\n');
+      if (task === 'across:ask') {
+        const answer = acrossAnswer(prompt);
+        for (const piece of answer.match(/\S+\s*/g)) { onDelta(piece); await new Promise((r) => setTimeout(r, 20)); }
+        return { text: answer, model: 'mock', usage: { input: Math.ceil(prompt.length / 3.2), output: 80 }, truncated: false };
+      }
       const question = (prompt.match(/<question>\n?([\s\S]*?)\n?<\/question>/) || [, ''])[1];
       const lines = parseLines(prompt);
       const qw = new Set(words(question));

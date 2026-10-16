@@ -332,10 +332,13 @@ function renderBulkBar() {
   document.body.classList.toggle('has-bulk', st.selecting);
   if (!st.selecting) return;
   const n = st.selected.size;
-  $('bulkCount').textContent = n ? `${n} selected` : 'Tap recordings to select';
+  $('bulkCount').textContent = n ? `${n} selected` : st.acrossHint ? 'Select 2 or more recordings' : 'Tap recordings to select';
   const allFav = n && [...st.selected].every((id) => st.rows.find((r) => r.id === id)?.is_favorite);
   bar.querySelector('[data-bulk=favorite]').textContent = allFav ? 'Unfavorite' : 'Favorite';
   bar.querySelectorAll('[data-bulk]:not([data-bulk=cancel])').forEach((b) => { b.disabled = !n; });
+  // across recordings: 2–12 for a question, 2–10 for one study guide
+  bar.querySelector('[data-bulk=across]').disabled = n < 2 || n > 12;
+  bar.querySelector('[data-bulk=across-guide]').disabled = n < 2 || n > 10;
 }
 function setSelecting(on) {
   st.selecting = on;
@@ -355,7 +358,11 @@ function toggleSelected(id) {
 async function bulk(action) {
   const ids = [...st.selected];
   if (!ids.length && action !== 'cancel') return;
-  if (action === 'cancel') return setSelecting(false);
+  if (action === 'cancel') { st.acrossHint = false; return setSelecting(false); }
+  if (action === 'across' || action === 'across-guide') {
+    location.href = `/across?ids=${ids.slice(0, 12).join(',')}${action === 'across-guide' ? '&tab=guide' : ''}`;
+    return;
+  }
   if (action === 'favorite') {
     const value = !ids.every((id) => st.rows.find((r) => r.id === id)?.is_favorite);
     try { await setFavorite(ids, value); toast(value ? `Added ${ids.length} to favorites` : `Removed ${ids.length} from favorites`); } catch (e) { return toast(e.message || 'That didn’t work'); }
@@ -450,6 +457,8 @@ async function deleteCurrentFolder() {
 
 // ---------- events ----------
 function bind() {
+  // "Ask across recordings": start selecting, with the hint in the bar
+  $('acrossBtn')?.addEventListener('click', () => { st.acrossHint = true; if (!st.selecting) setSelecting(true); else renderBulkBar(); });
   $('viewTabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-view]');
     if (!b) return;

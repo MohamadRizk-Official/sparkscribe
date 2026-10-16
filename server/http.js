@@ -36,7 +36,8 @@ export function sendError(res, err) {
   const code = err instanceof AIError ? err.code : 'server_error';
   // never echo internals (or anything that could contain a token) to the client or the logs
   if (!(err instanceof AIError)) console.error('[ai] unexpected error:', err?.name || 'Error');
-  sendJson(res, status, { error: code, message: err instanceof AIError ? err.message : 'Something went wrong. Try again.' });
+  // `details`: small, user-safe facts the page can act on (e.g. which of the selected recordings are gone)
+  sendJson(res, status, { error: code, message: err instanceof AIError ? err.message : 'Something went wrong. Try again.', ...(err instanceof AIError && err.details ? { details: err.details } : {}) });
 }
 
 export const isUuid = (s) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);

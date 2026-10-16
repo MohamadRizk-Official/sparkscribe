@@ -7,6 +7,7 @@ import { fmtClock, RECORDING_TYPE_LABEL } from '../lib/segments.js';
 import { mascotSignal } from '../mascot/bus.js';
 import { TOOL_SETTINGS, MAX_INSTRUCTIONS, INSTRUCTIONS_MISSING, normalizeToolSettings, describeSettings, quizQuestionCount, ENGINE2_TOOLS, isEngine2Key, legacyKeyOf } from '../lib/tool-settings.js';
 import { newRun, currentItem, answeredCount, correctCount, answer as gradeAnswer, record as recordAnswer, overrideCorrect, advance, summary } from './quiz-engine.js';
+import { readState, recordRun, markReviewed, flagQuestion, reviewList, openConcepts, practiceItems, needsNewQuestions, withState, allQuestions, supportsReview, STATE } from './focus-review.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -593,8 +594,11 @@ export function createToolsUI(api) {
   // ---------- Practice Quiz ----------
   // setup → one question at a time → instant feedback with the proof from the recording → result.
   // The questions are the stored, grounded quiz; quiz-engine.js only orders, shuffles and scores them.
+  // one view per set of questions: a new set (regenerated) starts fresh; follow-up questions added for Focused
+  // Review keep the learner where they are
   function quizView(a) {
-    const k = `${a.id}:${a.updatedAt}`;
+    const q = a.content?.questions || [];
+    const k = `${a.id}:${q.length}:${String(q[0]?.question || '').slice(0, 60)}:${String(q.at(-1)?.question || '').slice(0, 60)}`;
     if (!ui.quiz.has(k)) ui.quiz.set(k, { phase: 'setup', run: null });
     return ui.quiz.get(k);
   }
@@ -634,6 +638,7 @@ export function createToolsUI(api) {
         ${stale && !busy ? '<div class="ins-msg warn"><span>The transcript changed after these questions were written.</span><button class="btn btn-ghost btn-sm" type="button" data-act="regen">Update</button></div>' : ''}
         ${err && !busy ? api.errorBox(err, 'regen', n ? "New questions couldn't be written; your current quiz still works." : "The quiz couldn't be created.") : ''}
         ${busy ? api.loading(TOOL_INFO.quiz.loading) : `<button class="btn btn-primary study-start" type="button" data-act="start"${empty ? ' disabled' : ''}>Start Quiz <span aria-hidden="true">→</span></button>`}
+        ${!busy && !stale && !legacy ? focusResumeHtml(a) : ''}
         <p class="setup-meta">${empty ? 'The recording didn’t support good questions with these settings.' : n ? `${n} question${n === 1 ? '' : 's'} ready${last} · retakes are free` : 'Questions are written from this recording once; retakes are free.'}</p>
         ${!n && !busy ? api.privacyLine : ''}
       </section>
@@ -646,8 +651,20 @@ export function createToolsUI(api) {
     </div>`;
   }
 
+  // the quiz's open concepts, from an earlier session: pick the review up where it was left
+  function focusResumeHtml(a) {
+    if (!supportsReview(a?.content)) return '';
+    const open = openConcepts(reviewList(readState(a.progress), a.content));
+    if (!open.length) return '';
+    return `<div class="fr-resume" role="group" aria-label="Focused Review">
+      <span class="fr-resume-ic" aria-hidden="true">${ICON.loop}</span>
+      <span class="fr-resume-text"><b>Focused Review</b><span>${open.length} concept${open.length === 1 ? '' : 's'} to review from your last answers</span></span>
+      <button class="btn qr-second" type="button" data-act="focus">Continue review</button>
+    </div>`;
+  }
+
   function quizPlayHtml(a, v, byId) {
-    const qs = a.content.questions, run = v.run, it = currentItem(run), q = qs[it.qi], ans = run.answers[run.i];
+    const qs = allQuestions(a.content), run = v.run, it = currentItem(run), q = qs[it.qi], ans = run.answers[run.i];
     const total = run.items.length, done = answeredCount(run), right = correctCount(run);
     const kindLabel = { multiple_choice: 'Multiple choice', true_false: 'True or false', short_answer: 'Short answer' }[q.type] || '';
     let answers;
@@ -687,7 +704,7 @@ export function createToolsUI(api) {
         <div class="study-bar" role="progressbar" aria-label="Quiz progress" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${done}"><span style="width:${(done / total) * 100}%"></span></div>
       </header>
       <section class="study-card q-card">
-        <p class="q-kind">${esc(kindLabel)}${run.kind === 'missed' ? ' · from your missed questions' : ''}</p>
+        <p class="q-kind">${esc(kindLabel)}${run.kind === 'missed' ? ' · from your missed questions' : run.kind === 'focus' ? ' · Focused Review practice' : ''}</p>
         <h3 class="q-text" id="qText" tabindex="-1">${esc(q.question)}</h3>
         ${q.caution ? `<p class="item-caution" role="note">${esc(q.caution)}</p>` : ''}
         ${answers}
@@ -713,22 +730,30 @@ export function createToolsUI(api) {
   const givenOf = (run) => new Map(run.items.map((it, k) => [it.qi, run.answers[k]?.given]));
 
   function quizResultHtml(a, v, byId) {
-    const qs = a.content.questions, r = summary(v.run), given = givenOf(v.run);
+    const qs = allQuestions(a.content), r = summary(v.run), given = givenOf(v.run);
+    // Focused Review: what was missed, as concepts (quizzes made by study engine 3 carry the study map)
+    const focus = supportsReview(a.content) ? reviewList(readState(a.progress), a.content) : null;
+    const open = focus ? openConcepts(focus) : [];
+    const checks = focus ? focus.filter((x) => x.state === STATE.CHECK) : [];
     const pct = Math.round((r.score / r.total) * 100), perfect = r.score === r.total;
     const msg = perfect ? 'Every answer right. Nicely done.' : pct >= 80 ? 'Great work — just a little to review.' : pct >= 50 ? 'Good progress — a few to review.' : 'Keep going — you’re getting there.';
     const C = 2 * Math.PI * 52;
     const sparks = perfect ? `<div class="qr-sparks" aria-hidden="true">${Array.from({ length: 14 }, (_, i) => `<i style="--a:${i * (360 / 14)}deg;--d:${(i % 4) * 60}ms"></i>`).join('')}</div>` : '';
     // the next step is obvious: review what was missed first, then retake those, then the full quiz
-    const actions = r.missed.length
-      ? `<button class="btn btn-primary qr-main" type="button" data-act="review">Review missed questions <span aria-hidden="true">→</span></button>
+    const actions = open.length
+      ? `<button class="btn btn-primary qr-main" type="button" data-act="focus">Review ${open.length} concept${open.length === 1 ? '' : 's'} <span aria-hidden="true">→</span></button>
+         ${r.missed.length ? `<button class="btn qr-second" type="button" data-act="retake-missed">${ICON.loop}Retake missed</button>` : ''}
+         <button class="qr-third" type="button" data-act="retake">Retake full quiz</button>`
+      : r.missed.length
+        ? `<button class="btn btn-primary qr-main" type="button" data-act="review">Review missed questions <span aria-hidden="true">→</span></button>
          <button class="btn qr-second" type="button" data-act="retake-missed">${ICON.loop}Retake missed</button>
          <button class="qr-third" type="button" data-act="retake">Retake full quiz</button>`
-      : '<button class="btn btn-primary qr-main" type="button" data-act="retake">Retake full quiz</button>';
+        : '<button class="btn btn-primary qr-main" type="button" data-act="retake">Retake full quiz</button>';
     return `<div class="study study-result${perfect ? ' perfect' : ''}">
       ${crumb()}
       <section class="study-card result-card" aria-labelledby="qrTitle">
         ${sparks}
-        <p class="qr-eyebrow">${v.run.kind === 'missed' ? 'Missed questions done' : 'Quiz complete'}</p>
+        <p class="qr-eyebrow">${v.run.kind === 'missed' ? 'Missed questions done' : v.run.kind === 'focus' ? 'Focused practice done' : 'Quiz complete'}</p>
         <div class="qr-ring" role="img" aria-label="${r.score} of ${r.total} correct, ${pct} percent">
           <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="qrGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset=".5" stop-color="#a78bfa"/><stop offset="1" stop-color="#f472b6"/></linearGradient></defs>
             <circle cx="60" cy="60" r="52" class="qr-track"/><circle cx="60" cy="60" r="52" class="qr-arc" style="stroke-dasharray:${C.toFixed(1)};--off:${(C * (1 - r.score / r.total)).toFixed(1)}"/></svg>
@@ -743,12 +768,95 @@ export function createToolsUI(api) {
         <div class="qr-actions">${actions}</div>
         <button class="study-back" type="button" data-act="tools">← Back to Create</button>
       </section>
-      ${r.missed.length ? `<section class="miss-list" aria-label="Questions to review"><h4 class="miss-head">To review</h4>${r.missed.map((qi) => missCardHtml(qs[qi], given.get(qi), byId)).join('')}</section>` : ''}
+      ${focus ? conceptListHtml(open, checks) : r.missed.length ? `<section class="miss-list" aria-label="Questions to review"><h4 class="miss-head">To review</h4>${r.missed.map((qi) => missCardHtml(qs[qi], given.get(qi), byId)).join('')}</section>` : ''}
+    </div>`;
+  }
+
+  // ---------- Focused Review (Quiz Result → Concepts to Review → Review → Practice Again) ----------
+  const missedTimes = (x) => `Missed ${x.missed === 1 ? 'once' : `${x.missed} times`}`;
+  function conceptListHtml(open, checks) {
+    if (!open.length && !checks.length) return '';
+    return `<section class="fr-list" aria-labelledby="frListH">
+      ${open.length ? `<h4 class="miss-head" id="frListH">Concepts to review</h4>
+      <ul class="fr-concepts">${open.map((x) => `<li class="fr-concept${x.state === STATE.REVIEWED ? ' reviewed' : ''}"><span class="fr-c-name">${esc(x.concept.name)}</span>
+        <span class="fr-c-meta">${x.topic ? `<span>${esc(x.topic)}</span>` : ''}<span>${esc(missedTimes(x))}</span>${x.state === STATE.REVIEWED ? '<span class="fr-tag">Reviewed · practise to clear</span>' : ''}</span></li>`).join('')}</ul>` : ''}
+      ${checks.length ? `<h4 class="miss-head"${open.length ? '' : ' id="frListH"'}>Check the recording</h4>
+      <p class="fr-note">These questions use a word the automatic transcript may have misheard, so a wrong answer here isn’t counted against you.</p>
+      <ul class="fr-concepts">${checks.map((x) => `<li class="fr-concept check"><span class="fr-c-name">${esc(x.concept.name)}</span><span class="fr-c-meta">${x.topic ? `<span>${esc(x.topic)}</span>` : ''}</span></li>`).join('')}</ul>` : ''}
+    </section>`;
+  }
+
+  // the lines that explain a concept: time, speaker and words, each opening that moment
+  function sourceLinesHtml(refs, byId) {
+    const lines = (refs || []).map((r) => byId.get(r)).filter(Boolean).slice(0, 3);
+    if (!lines.length) return '';
+    const play = api.canPlay?.();
+    return `<div class="fr-src"><p class="fr-label">${ICON.quote}From the recording</p>
+      ${lines.map((s) => `<blockquote class="fr-line"><span class="proof-meta"><span class="mono">${fmtClock(s.start)}</span>${s.speaker ? ` · ${esc(s.speaker)}` : ''}</span><span class="proof-text">${esc(s.text)}</span>
+        <button class="fb-link" type="button" data-seek="${s.start}" data-ref="${s.id}">${play ? `${ICON.headphones}Hear it at ${fmtClock(s.start)}` : 'Open in transcript'}</button></blockquote>`).join('')}
+    </div>`;
+  }
+
+  const frCrumb = () => `<div class="study-top-row"><nav class="study-crumb" aria-label="Breadcrumb"><button type="button" data-act="tools">Create</button><span aria-hidden="true">›</span><button type="button" data-act="results">Practice Quiz</button><span aria-hidden="true">›</span><span aria-current="page">Focused Review</span></nav></div>`;
+
+  function focusHtml(a, v, byId) {
+    const all = reviewList(readState(a.progress), a.content);
+    const ids = v.focus.ids.filter((id) => all.some((x) => x.id === id));
+    if (!ids.length) { v.phase = v.run ? 'result' : 'setup'; return v.run ? quizResultHtml(a, v, byId) : renderQuiz(); }
+    v.focus.i = Math.min(v.focus.i, ids.length - 1);
+    const x = all.find((c) => c.id === ids[v.focus.i]);
+    const c = x.concept, qs = allQuestions(a.content);
+    const last = v.focus.i === ids.length - 1;
+    const held = ['attributed', 'criticized', 'quotation'].includes(c.stance) && c.held_by
+      ? `<p class="fr-held">${c.stance === 'criticized' ? 'A view the recording criticizes' : c.stance === 'quotation' ? 'A saying quoted' : 'The view'} of ${esc(c.held_by)}, not a general fact.</p>` : '';
+    const missedQs = x.questions.slice(0, 2).map((qi) => {
+      const q = qs[qi];
+      return `<article class="fr-q"><p class="fr-label">The question you missed</p>
+        <p class="miss-q">${esc(q.question)}</p>
+        <div class="miss-ans right"><span class="miss-label">${ICON.check}Correct answer</span><b>${esc(q.answer)}</b></div>
+        ${q.explanation ? `<p class="miss-why"><span class="miss-label">Why</span>${esc(q.explanation)}</p>` : ''}
+        <button class="fr-flag" type="button" data-flag="${qi}">This question seems wrong or unclear</button>
+      </article>`;
+    }).join('');
+    return `<div class="study study-focus">
+      ${frCrumb()}
+      <section class="study-card fr-card" aria-labelledby="frTitle">
+        <div class="fr-top"><span class="fr-step">Concept ${v.focus.i + 1} of ${ids.length}</span><span class="fr-miss">${esc(missedTimes(x))}</span></div>
+        ${x.topic ? `<p class="fr-topic">${esc(x.topic)}</p>` : ''}
+        <h3 class="study-title" id="frTitle" tabindex="-1">${esc(c.name)}</h3>
+        <div class="fr-says"><p class="fr-label">What the recording says</p><p class="fr-summary">${esc(c.summary)}</p>${c.reasoning ? `<p class="fr-why"><b>Why:</b> ${esc(c.reasoning)}</p>` : ''}${held}</div>
+        ${sourceLinesHtml(c.refs, byId)}
+        ${missedQs}
+        <div class="fr-nav">
+          ${v.focus.i > 0 ? '<button class="btn btn-ghost" type="button" data-act="focus-prev">← Previous</button>' : '<span></span>'}
+          ${last ? `<button class="btn btn-primary qr-main" type="button" data-act="focus-practice">Practice ${ids.length === 1 ? 'this concept' : `these ${ids.length} concepts`} <span aria-hidden="true">→</span></button>`
+            : '<button class="btn btn-primary" type="button" data-act="focus-next">Got it — next concept <span aria-hidden="true">→</span></button>'}
+        </div>
+      </section>
+    </div>`;
+  }
+
+  // before practice: concepts whose every stored question was already missed can get fresh questions (AI, small)
+  function focusPracticeHtml(a, v) {
+    const all = reviewList(readState(a.progress), a.content);
+    const fresh = needsNewQuestions(readState(a.progress), a.content, v.focus.ids);
+    const name = (id) => all.find((x) => x.id === id)?.concept.name || '';
+    return `<div class="study study-focus">
+      ${frCrumb()}
+      <section class="study-card fr-card" aria-labelledby="frPracticeH">
+        <h3 class="study-title" id="frPracticeH" tabindex="-1">Practice again</h3>
+        <p class="study-sub">You’ve already seen every question about ${fresh.length === 1 ? `“${esc(name(fresh[0]))}”` : `${fresh.length} of these concepts`}. New questions test the same ideas a different way.</p>
+        ${v.followErr ? `<div class="ins-msg warn" role="alert"><span>${esc(v.followErr)}</span></div>` : ''}
+        ${v.following ? api.loading('Writing new practice questions') : `<div class="qr-actions">
+          <button class="btn btn-primary qr-main" type="button" data-act="focus-new">Write new questions <span aria-hidden="true">→</span></button>
+          <button class="btn qr-second" type="button" data-act="focus-go">${ICON.loop}Practice with the same questions</button></div>
+          <p class="setup-meta">New questions are written once from the same passages, checked against them, and saved with this quiz.</p>`}
+      </section>
     </div>`;
   }
 
   function quizReviewHtml(a, v, byId) {
-    const qs = a.content.questions, r = summary(v.run), given = givenOf(v.run);
+    const qs = allQuestions(a.content), r = summary(v.run), given = givenOf(v.run);
     return `<div class="study study-review">
       <div class="study-top-row">${crumb()}<button class="study-exit" type="button" data-act="results">← Results</button></div>
       <h3 class="study-title" id="revTitle" tabindex="-1">Review missed questions</h3>
@@ -771,6 +879,8 @@ export function createToolsUI(api) {
     if (v?.phase === 'play') return quizPlayHtml(a, v, byId);
     if (v?.phase === 'result') return quizResultHtml(a, v, byId);
     if (v?.phase === 'review') return quizReviewHtml(a, v, byId);
+    if (v?.phase === 'focus') return focusHtml(a, v, byId);
+    if (v?.phase === 'focus-practice') return focusPracticeHtml(a, v);
     return quizSetupHtml({ sel, a, busy, err, stale, legacy, improved, prev });
   }
   function startRun(a, run) {
@@ -855,8 +965,13 @@ export function createToolsUI(api) {
     const settings = { ...selOf(kind) };
     const { key, a } = current(kind);
     const qs = a?.content?.questions || [];
+    const qa = allQuestions(a?.content);           // the quiz's questions, then follow-ups written for Focused Review
     const v = qs.length ? quizView(a) : null;
     const rerender = (focus) => { ui.focus = focus; api.refresh(); };
+    // Focused Review state: read from the quiz's progress, saved back merged with the score
+    const reviewable = supportsReview(a?.content);
+    const conceptIds = new Set((a?.content?.map?.concepts || []).map((c) => String(c.id)));
+    const saveReview = (state, extra = {}) => api.saveProgress(a, withState({ ...(a.progress || {}), ...extra }, state));
     const on = (sel, fn) => p.querySelectorAll(sel).forEach((b) => b.addEventListener('click', fn));
 
     // back to Create: a finished quiz reopens on its setup (with the last score); one in progress resumes
@@ -898,16 +1013,66 @@ export function createToolsUI(api) {
     if (!v) return focusAfter(p);
 
     const run = v.run;
-    on('[data-act="exit"]', () => { v.phase = 'setup'; v.run = null; mascotSignal('quiz-end'); rerender('setup'); });
-    on('[data-act="results"]', () => { v.phase = 'result'; rerender('result'); });
+    on('[data-act="exit"]', () => {
+      // answers already given still count for Focused Review (unanswered ones don't)
+      if (reviewable && run?.answers.some(Boolean)) saveReview(recordRun(readState(a.progress), qa, run, conceptIds));
+      v.phase = 'setup'; v.run = null; mascotSignal('quiz-end'); rerender('setup');
+    });
+    on('[data-act="results"]', () => { v.phase = v.run ? 'result' : 'setup'; rerender(v.run ? 'result' : 'setup'); });
     on('[data-act="review"]', () => { v.phase = 'review'; rerender('review'); });
     on('[data-act="retake"]', () => { startRun(a, newRun(qs, { shuffle: true })); api.refresh(); });
-    on('[data-act="retake-missed"]', () => { startRun(a, newRun(qs, { only: summary(run).missed, shuffle: true })); api.refresh(); });
+    on('[data-act="retake-missed"]', () => { startRun(a, newRun(qa, { only: summary(run).missed, shuffle: true })); api.refresh(); });
+
+    // ---- Focused Review ----
+    const reviewNow = () => readState(a.progress);
+    const focusIds = () => v.focus?.ids || [];
+    const currentConcept = () => focusIds()[Math.min(v.focus?.i || 0, focusIds().length - 1)];
+    const startFocusRun = () => {
+      const only = practiceItems(reviewNow(), a.content, focusIds());
+      if (!only.length) { v.phase = v.run ? 'result' : 'setup'; rerender('setup'); return; }
+      startRun(a, newRun(qa, { only, shuffle: true, kind: 'focus' }));
+      api.refresh();
+    };
+    on('[data-act="focus"]', () => {
+      const open = openConcepts(reviewList(reviewNow(), a.content));
+      if (!open.length) return;
+      v.focus = { ids: open.map((x) => x.id), i: 0 };
+      v.phase = 'focus';
+      rerender('focus');
+    });
+    on('[data-act="focus-prev"]', () => { v.focus.i = Math.max(0, v.focus.i - 1); rerender('focus'); });
+    on('[data-act="focus-next"]', () => { saveReview(markReviewed(reviewNow(), currentConcept())); v.focus.i++; rerender('focus'); });
+    on('[data-act="focus-practice"]', () => {
+      saveReview(markReviewed(reviewNow(), currentConcept()));
+      if (needsNewQuestions(reviewNow(), a.content, focusIds()).length) { v.phase = 'focus-practice'; v.followErr = null; rerender('focus-practice'); return; }
+      startFocusRun();
+    });
+    on('[data-act="focus-go"]', startFocusRun);
+    on('[data-act="focus-new"]', async () => {
+      v.following = true; v.followErr = null; rerender(null);
+      try {
+        const fresh = needsNewQuestions(reviewNow(), a.content, focusIds());
+        const updated = await api.followups(a, fresh);
+        v.following = false;
+        const only = practiceItems(readState(updated.progress), updated.content, focusIds());
+        startRun(updated, newRun(allQuestions(updated.content), { only, shuffle: true, kind: 'focus' }));
+        api.refresh();
+      } catch (err) {
+        v.following = false;
+        v.followErr = err?.message || "New questions couldn't be written. You can still practise with the same ones.";
+        rerender('focus-practice');
+      }
+    });
+    p.querySelectorAll('[data-flag]').forEach((b) => b.addEventListener('click', () => {
+      saveReview(flagQuestion(reviewNow(), Number(b.dataset.flag)));
+      api.toast?.('Thanks. That question no longer counts toward your review.');
+      rerender('focus');
+    }));
 
     if (v.phase === 'play') {
       const choose = (given) => {
         if (run.answers[run.i]) return;
-        const ok = gradeAnswer(run, qs, given);
+        const ok = gradeAnswer(run, qa, given);
         mascotSignal(ok ? 'quiz-correct' : 'quiz-wrong');
         rerender('continue');
       };
@@ -916,19 +1081,20 @@ export function createToolsUI(api) {
         if (!advance(run)) { mascotSignal('quiz-next'); rerender('question'); return; }
         v.phase = 'result';
         const r = summary(run);
-        if (run.kind === 'full') {
-          const prev = a.progress || {};
-          api.saveProgress(a, { last_score: r.score, total: r.total, attempts: (prev.attempts || 0) + 1, completed_at: new Date().toISOString(), missed: r.missed });
-        }
+        const prev = a.progress || {};
+        const score = run.kind === 'full' ? { last_score: r.score, total: r.total, attempts: (prev.attempts || 0) + 1, completed_at: new Date().toISOString(), missed: r.missed } : {};
+        // every finished run (full, missed or focused practice) updates Focused Review; only a full run sets the score
+        if (reviewable) saveReview(recordRun(readState(prev), qa, run, conceptIds), score);
+        else if (run.kind === 'full') api.saveProgress(a, { ...prev, ...score });
         mascotSignal('quiz-done', { score: r.score, total: r.total });
         rerender('result');
       };
-      p.querySelectorAll('[data-opt]').forEach((b) => b.addEventListener('click', () => choose(qs[currentItem(run).qi].options[Number(b.dataset.opt)])));
+      p.querySelectorAll('[data-opt]').forEach((b) => b.addEventListener('click', () => choose(qa[currentItem(run).qi].options[Number(b.dataset.opt)])));
       p.querySelector('[data-act="sa"]')?.addEventListener('submit', async (e) => {
         e.preventDefault();
         const given = e.target.querySelector('input').value.trim();
         if (!given || run.answers[run.i] || v.checking != null) return;
-        const it = currentItem(run), q = qs[it.qi];
+        const it = currentItem(run), q = qa[it.qi];
         const local = localGrade(given, q);
         if (local) { recordAnswer(run, given, { verdict: 'correct', typo: local.typo }); mascotSignal('quiz-correct'); rerender('continue'); return; }
         // not an obvious match: check the MEANING against the recording (one small AI call)
@@ -947,7 +1113,7 @@ export function createToolsUI(api) {
       // keys: A–D (or 1–4) pick a choice, T / F for true or false, Enter continues
       ui.quizKey = (e) => {
         if (e.target.closest('input, textarea, select, summary') || e.ctrlKey || e.metaKey || e.altKey) return;
-        const q = qs[currentItem(run).qi];
+        const q = qa[currentItem(run).qi];
         if (run.answers[run.i]) {
           if (e.key === 'Enter' && !e.target.closest('button')) { e.preventDefault(); next(); }
           return;
@@ -980,6 +1146,8 @@ export function createToolsUI(api) {
     if (f === 'result') countUp(p);
     const el = f === 'question' ? (p.querySelector('.sa-input') || p.querySelector('#qText'))
       : f === 'continue' ? p.querySelector('[data-act="qnext"]')
+        : f === 'focus' ? p.querySelector('#frTitle')
+        : f === 'focus-practice' ? p.querySelector('#frPracticeH')
         : f === 'result' ? p.querySelector('#qrTitle')
           : f === 'review' ? p.querySelector('#revTitle')
             : f === 'setup' ? p.querySelector('[data-act="start"]')

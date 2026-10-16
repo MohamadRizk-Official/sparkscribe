@@ -4,7 +4,7 @@
 // Requires a signed-in user (Authorization: Bearer <Supabase access token>); everything runs as that user,
 // so Row Level Security decides which recordings and outputs exist for them.
 import { authenticate, readJson, sendJson, sendError, isUuid } from '../server/http.js';
-import { generateArtifact, gradeShortAnswer } from '../server/ai/service.js';
+import { generateArtifact, gradeShortAnswer, generateFollowups } from '../server/ai/service.js';
 import { AIError } from '../server/ai/provider.js';
 
 export default async function handler(req, res) {
@@ -20,6 +20,11 @@ export default async function handler(req, res) {
     if (body.action === 'grade') {
       if (!isUuid(body.artifactId)) throw new AIError('Invalid quiz.', { status: 400, code: 'bad_request' });
       return sendJson(res, 200, await gradeShortAnswer(db, { transcriptionId: body.transcriptionId, artifactId: body.artifactId, index: Number(body.index), answer: body.answer, userId: user.id }));
+    }
+    // { action: 'followups', artifactId, concepts: [concept ids] }: Focused Review practice questions for a quiz
+    if (body.action === 'followups') {
+      if (!isUuid(body.artifactId)) throw new AIError('Invalid quiz.', { status: 400, code: 'bad_request' });
+      return sendJson(res, 200, await generateFollowups(db, { transcriptionId: body.transcriptionId, artifactId: body.artifactId, conceptIds: body.concepts, userId: user.id }));
     }
     const settings = body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings) ? body.settings : {};
     const out = await generateArtifact(db, {

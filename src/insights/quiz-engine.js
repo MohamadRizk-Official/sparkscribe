@@ -11,14 +11,15 @@ const shuffled = (arr) => arr.map((x) => [Math.random(), x]).sort((a, b) => a[0]
 
 /**
  * @param {object[]} questions  stored quiz questions
- * @param {{ only?: number[]|null, shuffle?: boolean }} o
+ * @param {{ only?: number[]|null, shuffle?: boolean, kind?: string }} o
  *   only: retake just these question indices; shuffle: new option order for multiple choice (the correct
- *   answer is the same text, only its position changes; True / False keep their natural order)
+ *   answer is the same text, only its position changes; True / False keep their natural order);
+ *   kind: 'focus' for Focused Review practice (questions chosen by concept, see focus-review.js)
  */
-export function newRun(questions, { only = null, shuffle = false } = {}) {
+export function newRun(questions, { only = null, shuffle = false, kind = null } = {}) {
   const pick = only?.length ? only.filter((i) => questions[i]) : questions.map((_, i) => i);
   return {
-    kind: only?.length ? 'missed' : 'full',
+    kind: kind || (only?.length ? 'missed' : 'full'),
     items: pick.map((qi) => {
       const n = questions[qi].options?.length || 0;
       const base = [...Array(n).keys()];

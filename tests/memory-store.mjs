@@ -2,7 +2,8 @@
 // unique (transcription, kind, type) constraint.
 import { randomUUID } from 'node:crypto';
 
-export function memoryStore() {
+// userId: the signed-in user; rows seeded with another user_id are invisible, as under Row Level Security
+export function memoryStore({ userId = null } = {}) {
   const transcriptions = new Map();
   const insights = [];
   const questions = [];
@@ -23,7 +24,10 @@ export function memoryStore() {
       transcriptions.set(row.id, { recording_type: null, segments: null, duration_seconds: null, language: null, ...prev, ...row, content_version: prev ? prev.content_version + (changed ? 1 : 0) : 1 });
       return transcriptions.get(row.id);
     },
-    async getTranscription(id) { return transcriptions.get(id) || null; },
+    async getTranscription(id) {
+      const row = transcriptions.get(id) || null;
+      return row && userId && row.user_id && row.user_id !== userId ? null : row;
+    },
     async listInsights(tid) { return insights.filter((i) => i.transcription_id === tid); },
     async getInsight(tid, kind, type) { return insights.find((i) => i.transcription_id === tid && i.kind === kind && i.recording_type === type) || null; },
     async startInsight(existing, { transcriptionId, kind, recordingType, version }) {
@@ -69,6 +73,17 @@ export function memoryStore() {
     async failArtifact(id, message, previousVersion) {
       const cur = artifacts.find((a) => a.id === id);
       Object.assign(cur, { status: 'failed', error: message, updated_at: now(), ...(previousVersion != null ? { source_version: previousVersion } : {}) });
+    },
+    async appendFollowups(artifact, items) {
+      const cur = artifacts.find((a) => a.id === artifact.id);
+      if (!cur || cur.status !== 'ready' || cur.updated_at !== artifact.updated_at) return null;
+      Object.assign(cur, { content: { ...cur.content, followups: [...(cur.content?.followups || []), ...items] }, updated_at: now() });
+      return { ...cur };
+    },
+    // cross-recording requests still running for this user (the server's "one at a time" guard)
+    async activeAi(prefix, withinMs) {
+      const t = Date.now();
+      return this._ai.filter((r) => r.status === 'reserved' && String(r.feature).startsWith(prefix) && t - r.at < withinMs).length;
     },
     // AI usage ledger with the same rules as ai_reserve / ai_settle (tests set store.aiLimits = { perHour, budget })
     aiLimits: null,

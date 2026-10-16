@@ -23,7 +23,7 @@ async function call(path, init = {}) {
   }
   let body = null;
   try { body = await res.json(); } catch {}
-  if (!res.ok) throw new ApiError(body?.message || `Request failed (${res.status}).`, body?.error || 'error', res.status);
+  if (!res.ok) throw Object.assign(new ApiError(body?.message || `Request failed (${res.status}).`, body?.error || 'error', res.status), { details: body?.details || null });
   return body;
 }
 
@@ -73,10 +73,62 @@ export async function askQuestion(id, question, at, { onStatus, onDelta } = {}) 
   return result;
 }
 
+// ---- Across recordings (/api/across) ----
+export const acrossStatus = (ids) => call('/api/across', { method: 'POST', body: JSON.stringify({ action: 'status', ids }) });
+export const acrossGuide = (ids, focus) => call('/api/across', { method: 'POST', body: JSON.stringify({ action: 'guide', ids, focus }) });
+// errors keep the server's `details` (e.g. which recordings are gone)
+async function streamSse(path, payload, { onStatus, onDelta } = {}) {
+  let res;
+  try {
+    res = await fetch(path, { method: 'POST', headers: await headers(), body: JSON.stringify(payload) });
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError("Couldn't reach SparkScribe. Check your connection.", 'network', 0);
+  }
+  if (!res.ok || !res.body) {
+    let body = null;
+    try { body = await res.json(); } catch {}
+    throw Object.assign(new ApiError(body?.message || `Request failed (${res.status}).`, body?.error || 'error', res.status), { details: body?.details || null });
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '', result = null;
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, i);
+        buf = buf.slice(i + 2);
+        const event = /^event: (.+)$/m.exec(block)?.[1];
+        const data = /^data: (.+)$/m.exec(block)?.[1];
+        if (!event || !data) continue;
+        const p = JSON.parse(data);
+        if (event === 'delta') onDelta?.(p.text);
+        else if (event === 'status') onStatus?.(p.status);
+        else if (event === 'done') result = p;
+        else if (event === 'error') throw Object.assign(new ApiError(p.message, p.error, 500), { details: p.details || null });
+      }
+    }
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiError('The connection dropped before the answer was complete. Try again.', 'network', 0);
+  }
+  if (!result) throw new ApiError("The answer couldn't be generated. Try again.", 'incomplete', 500);
+  return result;
+}
+export const askAcross = (ids, question, handlers) => streamSse('/api/across', { action: 'ask', ids, question }, handlers);
+
 // Phase 5 (Create tab): generate one tool output, or get the stored one back if it is still current.
 // Practice Quiz: check one short answer by meaning (the server reads the question from the stored quiz)
 export const gradeAnswer = (id, artifactId, index, answer) =>
   call('/api/tools', { method: 'POST', body: JSON.stringify({ action: 'grade', transcriptionId: id, artifactId, index, answer }) });
+
+// Focused Review: one or two new practice questions per concept for a quiz, written from the same passages
+export const requestFollowups = (id, artifactId, concepts) =>
+  call('/api/tools', { method: 'POST', body: JSON.stringify({ action: 'followups', transcriptionId: id, artifactId, concepts }) });
 
 export const requestTool = (id, kind, settings = {}, force = false) =>
   call('/api/tools', { method: 'POST', body: JSON.stringify({ transcriptionId: id, kind, settings, force }) });

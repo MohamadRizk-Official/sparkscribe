@@ -4,7 +4,7 @@
 // Used by the live result page (src/main.js) and the saved transcript page (src/pages/transcript.js).
 // The transcript stays the source of truth: everything here is generated from it on request, stored with
 // it, and every reference points back to a real line and timestamp.
-import { fetchState, requestInsight, requestTool, askQuestion, gradeAnswer, ApiError } from './api.js';
+import { fetchState, requestInsight, requestTool, requestFollowups, askQuestion, gradeAnswer, ApiError } from './api.js';
 import { createToolsUI, artifactBlocks, blocksToText, TOOL_INFO, toolsFor } from './tools.js';
 import { openExportDialog } from './export.js';
 import { watchNames, renameInText } from '../lib/speaker-names.js';
@@ -728,6 +728,17 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     chips, segById, loading, errorBox, timeOf, privacyLine,
     canPlay: () => ctx.playbackTime?.() != null,
     gradeShort: (a, index, answer) => gradeAnswer(ctx.getId(), a.id, index, answer),
+    // Focused Review: new practice questions for these concepts, saved with the quiz -> the updated quiz (as shown)
+    followups: async (a, concepts) => {
+      giveConsent();
+      const r = await requestFollowups(ctx.getId(), a.id, concepts);
+      const prev = st.artifacts.get(akey(r.artifact.kind, r.artifact.settingsKey));
+      // the server never touches progress here: keep the review state the page already has
+      st.artifacts.set(akey(r.artifact.kind, r.artifact.settingsKey), { ...r.artifact, progress: prev?.progress ?? r.artifact.progress });
+      if (!r.added) throw new Error('No new questions passed the checks for these concepts. You can practise with the same ones.');
+      return shown(st.artifacts.get(akey(r.artifact.kind, r.artifact.settingsKey)));
+    },
+    toast: (m) => ctx.toast?.(m),
     duration: () => ctx.duration?.() || 0,
     makeDialog,
     showTab,

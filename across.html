@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#04050d" />
+    <meta name="robots" content="noindex" />
+    <meta name="description" content="Ask one question across several of your recordings, or build one study guide from them, with every answer tied to the exact passages." />
+    <title>Across recordings — SparkScribe</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="bg" aria-hidden="true">
+      <div class="bg-grid"></div><div class="bg-glow bg-glow-a"></div><div class="bg-glow bg-glow-b"></div><div class="bg-glow bg-glow-c"></div><div class="bg-noise"></div>
+    </div>
+
+    <header class="topbar">
+      <!-- sparkscribe:brand -->
+      <div class="topbar-right"><div id="accountSlot"></div></div>
+    </header>
+
+    <main class="app ax">
+      <nav class="ax-crumb" aria-label="Breadcrumb"><a href="/library">My Library</a><span aria-hidden="true">›</span><span aria-current="page">Across recordings</span></nav>
+      <section class="ax-hero">
+        <div class="eyebrow mono"><span class="pulse"></span>across recordings</div>
+        <h1 class="page-title">Your recordings, <span class="grad">connected</span>.</h1>
+        <p class="ax-lede">Ask one question across several recordings, or build one study guide from them. Every answer points to the exact passages it comes from.</p>
+      </section>
+
+      <div class="ax-grid">
+        <aside class="ax-side" aria-labelledby="selH">
+          <div class="ax-side-head">
+            <h2 id="selH">Selected <span class="ax-count mono" id="selCount">0</span></h2>
+            <button class="btn btn-ghost btn-sm" type="button" id="addBtn" aria-expanded="false" aria-controls="addPanel">Add recordings</button>
+          </div>
+          <div class="ax-add" id="addPanel" hidden>
+            <form class="lib-search ax-search" role="search" id="addForm" autocomplete="off">
+              <svg class="lib-search-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input type="search" id="addQ" maxlength="200" placeholder="Search your library" aria-label="Search your library to add recordings" enterkeyhint="search" />
+            </form>
+            <ul class="ax-pick" id="addList" aria-live="polite"></ul>
+          </div>
+          <ul class="ax-sel" id="selList" aria-live="polite"></ul>
+          <p class="ax-limit mono" id="selLimit"></p>
+        </aside>
+
+        <section class="ax-main" aria-label="Workspace">
+          <nav class="tabs ax-tabs" role="tablist" aria-label="What to do with these recordings">
+            <button class="tab on" type="button" role="tab" id="tabAsk" aria-selected="true" aria-controls="askPanel" data-tab="ask">Ask</button>
+            <button class="tab" type="button" role="tab" id="tabGuide" aria-selected="false" aria-controls="guidePanel" data-tab="guide">Combined study guide</button>
+          </nav>
+          <div class="ax-panel" id="askPanel" role="tabpanel" aria-labelledby="tabAsk"></div>
+          <div class="ax-panel" id="guidePanel" role="tabpanel" aria-labelledby="tabGuide" hidden></div>
+        </section>
+      </div>
+    </main>
+    <!-- sparkscribe:legal -->
+    <script type="module" src="/src/pages/across.js"></script>
+  </body>
+</html>

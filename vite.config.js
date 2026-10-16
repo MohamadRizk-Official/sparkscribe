@@ -19,11 +19,12 @@ const pages = {
   transcript: 'transcript.html',
   settings: 'settings.html',
   pricing: 'pricing.html',
+  across: 'across.html',
   account: 'account.html',
   privacy: 'privacy.html',
   terms: 'terms.html',
 };
-const cleanRoutes = new Set(['/auth', '/auth/callback', '/library', '/transcript', '/settings', '/pricing', '/account', '/privacy', '/terms']);
+const cleanRoutes = new Set(['/auth', '/auth/callback', '/library', '/transcript', '/settings', '/pricing', '/across', '/account', '/privacy', '/terms']);
 
 export default defineConfig(({ mode }) => ({
   // The Supabase settings live in Vercel as NEXT_PUBLIC_* (public, browser-safe values).

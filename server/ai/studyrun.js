@@ -4,7 +4,7 @@
 import { groundStructured } from './grounding.js';
 import { tokenizeSpeakers, codedLine, sameBasis } from '../../src/lib/speaker-refs.js';
 import { fmtClock, estimateTokens } from '../../src/lib/segments.js';
-import { inheritRefs, keepsAttribution } from './study.js';
+import { inheritRefs, keepsAttribution, validateQuiz, sameQuestion } from './study.js';
 import { examBacked } from './tools.js';
 import { str, obj, list } from './prompts.js';
 import {
@@ -204,4 +204,62 @@ export async function studyGuide({ db, transcriptionId, segments, speakers, basi
   content.coverage = { topics: majors.length, topics_covered: majors.filter((t) => content.topics.some((x) => x.title === t.title)).length, core: map.concepts.filter((c) => c.importance === 'core' && c.clarity === 'clear').length, core_covered: ideas.filter((c) => c.importance === 'core').length, missing_topics: [] };
   content.quality = { sections, map_reused: reused ? 1 : 0, ideas: ideas.length };
   return { content };
+}
+
+// ---------------- Focused Review: follow-up questions ----------------
+// New practice questions for concepts a learner missed, written from the same passages as the quiz (the concept's
+// lines ± 3) and put through the same checks as every quiz question: the quiz validator, then the verification
+// pass (answer supported, one defensible option, attribution kept), with a final re-check of anything repaired.
+// Questions the learner has already seen on these concepts are given to the writer as "don't repeat", and any
+// near-duplicate that still comes back is dropped. One call to write, one to check (one more if something was
+// repaired); no map is built, so it costs a fraction of a quiz.
+export async function followupQuestions({ concepts, map, segments, speakers, ctx, existing, call }) {
+  const line = lineOf(speakers);
+  const seen = (existing || []).filter((q) => concepts.some((c) => String(c.id) === String(q.concept)));
+  const avoid = seen.map((q) => `- ${q.question}`).join('\n');
+  const r = await call({
+    task: 'quiz:write', schema: WRITE_SCHEMA.quiz,
+    body: `<transcript>\n${excerpt(segments, excerptIds(concepts, segments), line)}\n</transcript>`,
+    instructions: `${writeInstructions('quiz', { concepts, topics: map.topics, settings: ctx.settings, dominant: ctx.dominant })}
+- These are FOLLOW-UP questions for a learner who already answered the questions below and got them wrong. Test the same idea from a different angle (another skill: application, a distinction, cause and effect, a misconception). Never reword these questions and never reuse their answer or options:
+${avoid || '- (none)'}`,
+  });
+  let items = r.json?.questions || [];
+  inheritRefs(items, { concepts });
+  items = tokenizeSpeakers(groundStructured({ questions: items }, segments).content, speakers.codeOf).questions || [];
+  const validate = (list) => {
+    const c = { concepts: map.concepts, questions: list };
+    validateQuiz(c, segments, { count: Math.max(1, list.length), settings: ctx.settings, dominant: ctx.dominant, rawConceptIds: new Set(map.concepts.map((x) => x.id)) });
+    return c.questions;
+  };
+  const fresh = (list) => list.filter((q) => !seen.some((s) => sameQuestion(s.question, q.question)));
+  items = fresh(validate(items));
+  if (!items.length) return [];
+  const byId = new Map(map.concepts.map((x) => [x.id, x]));
+  const blockOf = (it, i) => {
+    const con = byId.get(it.concept);
+    const lines = excerptIds([{ refs: [...new Set([...(it.refs || []), ...(con?.refs || [])])] }], segments, 2);
+    const opts = it.options?.length ? `Options: ${it.options.map((o) => `[${o}]`).join(' ')}\n` : it.type === 'true_false' ? 'Options: [True] [False]\n' : '';
+    return `<item index="${i}">\nQuestion (${it.type}): ${it.question}\n${opts}Answer: ${it.answer}\nExplanation: ${it.explanation || '(none)'}\nPosition: ${con ? `${con.stance}${con.held_by ? `, held by ${con.held_by}` : ''}` : 'own'}\nLines:\n${excerpt(segments, lines, line)}\n</item>`;
+  };
+  const tokenized = (list) => tokenizeSpeakers({ questions: list }, speakers.codeOf).questions || [];
+  let applied;
+  try {
+    const v = await call({ task: 'quiz:verify', schema: VERIFY_SCHEMA, body: items.map(blockOf).join('\n'), instructions: verifyInstructions('quiz') });
+    applied = applyChecks('quiz', items, v.json?.checks || []);
+  } catch {
+    return []; // unchecked choices are never shipped (the same rule as the quiz itself)
+  }
+  let out = tokenized(applied.items.map((x) => ({ ...x })));
+  if (applied.recheck.length) {
+    const again = applied.recheck.map((i) => out[i]);
+    let final = null;
+    try {
+      const v2 = await call({ task: 'quiz:recheck', schema: VERIFY_SCHEMA, body: again.map(blockOf).join('\n'), instructions: verifyInstructions('quiz', { final: true }) });
+      final = applyChecks('quiz', again, v2.json?.checks || [], { final: true });
+    } catch { /* not re-checked: not shipped */ }
+    const kept = new Set(applied.recheck);
+    out = out.filter((_, i) => !kept.has(i)).concat(final ? final.items : []);
+  }
+  return fresh(validate(out)).map((q) => ({ ...q, followup: true }));
 }

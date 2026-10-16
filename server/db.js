@@ -4,7 +4,7 @@
 // No service-role / secret key is used anywhere.
 import { AIError } from './ai/provider.js';
 
-const TRANSCRIPT_COLUMNS = 'id, title, duration_seconds, language, recording_type, transcript_text, segments, content_version';
+const TRANSCRIPT_COLUMNS = 'id, title, duration_seconds, language, recording_type, transcript_text, segments, content_version, created_at';
 const INSIGHT_COLUMNS = 'id, transcription_id, kind, recording_type, status, content, error, source_version, updated_at';
 const ARTIFACT_COLUMNS = 'id, transcription_id, kind, settings, settings_key, status, content, error, source_version, progress, updated_at';
 
@@ -98,6 +98,15 @@ export function supabaseStore(sb) {
       if (previousVersion != null) patch.source_version = previousVersion;
       await sb.from('transcription_artifacts').update(patch).eq('id', id);
     },
+    // Focused Review: add practice questions to a quiz, only if nobody changed it since it was read (null otherwise).
+    // Only `content` changes; progress (the learner's own state) is left alone.
+    async appendFollowups(artifact, items) {
+      const content = { ...artifact.content, followups: [...(artifact.content?.followups || []), ...items] };
+      const { data, error } = await sb.from('transcription_artifacts').update({ content })
+        .eq('id', artifact.id).eq('status', 'ready').eq('updated_at', artifact.updated_at).select(ARTIFACT_COLUMNS);
+      check(error, 'save the new questions');
+      return data[0] || null;
+    },
     // a result reused after a plain speaker rename is current for the new version too
     async bumpInsightVersion(id, version) {
       await sb.from('transcription_insights').update({ source_version: version }).eq('id', id).lt('source_version', version);
@@ -144,6 +153,14 @@ export function supabaseStore(sb) {
         return { allowed: false, reason: 'unavailable' };
       }
       return data;
+    },
+    // how many requests with this feature prefix are still running for the user (reserved, not settled, recent):
+    // the user's own ledger rows (ai_usage: read own). Used to run expensive cross-recording requests one at a time.
+    async activeAi(prefix, withinMs) {
+      const since = new Date(Date.now() - withinMs).toISOString();
+      const { data, error } = await sb.from('ai_usage').select('id').eq('status', 'reserved').like('feature', `${prefix}%`).gt('created_at', since).limit(5);
+      if (error) return 0; // ledger not installed / unreadable: the reservation itself still applies the limits
+      return data.length;
     },
     async settleAi(id, ok, { input, output, costMicrousd }) {
       const secret = process.env.AI_DB_SECRET || process.env.BILLING_DB_SECRET;

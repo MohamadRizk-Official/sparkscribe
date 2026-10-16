@@ -15,7 +15,9 @@ const PORT = Number(process.argv[2]) || 5190;
 
 mkdirSync(resolve(ROOT, 'qa/out'), { recursive: true });
 process.env.SPARKSCRIBE_DEV_HARNESS = '1';
-process.env.AI_PROVIDER = 'mock'; // mock AI: no Anthropic calls
+// mock AI: no Anthropic calls. HARNESS_REAL_AI=1 uses the real model instead (key from .env.local; synthetic recordings
+// only), for demonstrating AI output; the database and sign-in stay mocked either way.
+process.env.AI_PROVIDER = process.env.HARNESS_REAL_AI === '1' ? '' : 'mock';
 process.env.VITE_ACCOUNT_DELETION = '1'; // show Settings > Delete account (its RPC is mocked in browser-mock.js)
 process.env.AI_USAGE_LOG = resolve(ROOT, 'qa/out/ai-usage.jsonl');
 
@@ -46,6 +48,19 @@ const server = await createServer({
         let raw = '';
         req.on('data', (c) => (raw += c));
         req.on('end', () => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(store.seedArtifact(JSON.parse(raw)))); });
+      });
+      // the browser's own writes to a Create result: progress only (the column users may change), or delete
+      s.middlewares.use('/__harness/artifact-write', (req, res) => {
+        let raw = '';
+        req.on('data', (c) => { raw += c; });
+        req.on('end', () => {
+          const { id, method, patch } = JSON.parse(raw || '{}');
+          const i = store._a.findIndex((a) => a.id === id);
+          if (i < 0) { res.statusCode = 404; return res.end('{}'); }
+          if (method === 'DELETE') store._a.splice(i, 1);
+          else if (patch && 'progress' in patch) store._a[i].progress = patch.progress;
+          res.end('{}');
+        });
       });
       s.middlewares.use('/__harness/artifacts', (req, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(store._a)); });
       s.middlewares.use('/__harness/model', (req, res) => {

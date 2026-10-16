@@ -50,7 +50,10 @@ export async function requireUser() {
 
 export async function signOut() {
   if (!isConfigured) return;
-  try { localStorage.removeItem('sparkscribe.pendingSave'); } catch {} // an unsaved transcript parked for sign-in (lib/transcripts.js)
+  try {
+    localStorage.removeItem('sparkscribe.pendingSave'); // an unsaved transcript parked for sign-in (lib/transcripts.js)
+    for (const k of Object.keys(localStorage)) if (k.startsWith('sparkscribe.across.')) localStorage.removeItem(k); // answers across recordings kept in this browser
+  } catch {}
   deleteAudio(PENDING_AUDIO_KEY); // ...and its audio
   await supabase.auth.signOut();
 }

@@ -291,6 +291,8 @@ const uncoveredCore = (concepts, items) => uncoveredConcepts(concepts, items).le
 // ("What did Speaker 2 propose?" and "What did Speaker 3 propose?" are two viewpoints, not one).
 const dupWords = (t) => ({ w: contentWords(t), sp: [...new Set(String(t).match(/\{\{S\d+\}\}/g) || [])].sort().join() });
 const isDup = (a, b) => jaccard(a.w, b.w) >= 0.7 && !(a.sp && b.sp && a.sp !== b.sp);
+// two question texts ask the same thing (Focused Review follow-ups must not repeat a question the learner saw)
+export const sameQuestion = (a, b) => isDup(dupWords(a), dupWords(b));
 
 // -> number dropped; writes content.quality = { reason: count, …, kept }
 export function validateFlashcards(c, segments, { count, dominant, rawConceptIds }) {

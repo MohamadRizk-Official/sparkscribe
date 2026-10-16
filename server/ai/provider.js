@@ -39,6 +39,9 @@ const TASKS = {
   interview_qa: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000 },
   episode_notes: { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 12000 },
   ask: { env: 'AI_MODEL_ASK', effort: 'low', maxTokens: 3000 },
+  // across recordings (Thunder): one answer from excerpts of several recordings; one combined study guide from their maps
+  'across:ask': { env: 'AI_MODEL_ASK', effort: 'low', maxTokens: 4000, timeoutMs: 50_000 },
+  'across:guide': { env: 'AI_MODEL_TOOLS', effort: 'medium', maxTokens: 16000, timeoutMs: 170_000 },
   grade: { env: 'AI_MODEL_TOOLS', effort: 'low', maxTokens: 1500 },   // quiz short answers: tiny prompts
   expand: { env: 'AI_MODEL_ASK', effort: 'low', maxTokens: 600 },
 };

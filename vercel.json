@@ -7,6 +7,9 @@
     },
     "api/tools.js": {
       "maxDuration": 300
+    },
+    "api/across.js": {
+      "maxDuration": 300
     }
   },
   "headers": [
