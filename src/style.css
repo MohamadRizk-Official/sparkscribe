@@ -1506,6 +1506,8 @@ label.btn { display: inline-flex; align-items: center; }
   .topbar-right { flex-wrap: nowrap; gap: 6px; align-items: center; }
   .chip-device { width: 34px; height: 34px; padding: 0; justify-content: center; font-size: 0; gap: 0; }
   .chip-device svg { display: none; }
+  .acct-signin { padding: 7px 11px; }
+  .acct-gear { margin-right: 6px; }
   /* five tabs: keep them readable and let the row scroll sideways instead of squeezing them */
   .tabs { width: 100%; scroll-snap-type: x proximity; scroll-padding: 4px; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 22px), transparent); }
   .tabs:has(.tab:last-child.on) { -webkit-mask-image: none; mask-image: none; }
@@ -3246,3 +3248,12 @@ html.bg-paused .bg *, html.bg-paused .bg { animation-play-state: paused !importa
    they fall to 1.4–2.8:1 contrast (speaker names were 1.66:1). Text keeps the hue, mixed 50% toward black
    (5.0–8.1:1 for every palette colour, WCAG AA). Icons and tinted backgrounds keep the bright colour. */
 :root[data-theme="light"] :is(.who, .avatar, .spk-name, .peek-outline, .pa-a .mono, .v-outline b, .va-a) { color: color-mix(in srgb, var(--c) 50%, #000); }
+
+/* the smallest phones (< 360 px): the header row keeps the brand, theme, settings and account; the device status dot
+   gives way so nothing scrolls sideways */
+@media (max-width: 400px) {
+  .topbar { gap: 8px; }
+  .brand { gap: 8px; }
+  .brand-name { font-size: 17px; }
+}
+@media (max-width: 359px) { .chip-device { display: none; } }
