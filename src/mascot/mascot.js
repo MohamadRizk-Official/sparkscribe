@@ -72,7 +72,7 @@ export function mountMascot({ page = 'other' } = {}) {
   // Home is anchored to the page's content (getBoundingClientRect), not to a viewport fraction: at 67 % zoom
   // or on a wide screen the viewport grows but the content column doesn't, so a viewport-relative spot
   // drifted away from everything. It stands just beside the content when there's room, else at the edge.
-  const HOME_ANCHOR = { home: ['.hear-grid', 'main.app'], transcript: ['main.app'], library: ['main.app'] };
+  const HOME_ANCHOR = { home: ['.pack:not([hidden]) .pack-grid', 'main.app'], transcript: ['main.app'], library: ['main.app'] };
   function homeX() {
     const edge = clampX(vw() - (touch ? 1.5 : 2.3) * k - (touch ? 4 : 14));
     if (touch) return edge;
@@ -147,6 +147,16 @@ export function mountMascot({ page = 'other' } = {}) {
   }
   let lastScroll = -1e9, lastKey = -1e9;
   addEventListener('scroll', () => { lastScroll = clock; }, { passive: true, capture: true });
+  // On a phone the home page scrolls under a corner that is always the same: the mascot keeps to the upload
+  // card and steps out of the way (fades) once that is scrolled past, so it never sits on a headline or button.
+  if (touch && page === 'home') {
+    const away = () => {
+      const dz = document.getElementById('dropzone');
+      el.classList.toggle('m-away', !!dz && dz.offsetParent !== null && dz.getBoundingClientRect().bottom < 60);
+    };
+    addEventListener('scroll', away, { passive: true });
+    addEventListener('resize', away, { passive: true });
+  }
   addEventListener('keydown', () => { lastKey = clock; }, { passive: true });
   const reading = () => clock - lastScroll < 6 || clock - lastKey < 6 || !!String(getSelection?.() || '').trim();
 
@@ -392,11 +402,11 @@ export function mountMascot({ page = 'other' } = {}) {
     if (q) lookAt(q.left + q.width / 2, q.top + q.height / 2, 2.5);
   }
   // ---------- homepage entrance (first homepage visit in a session) ----------
-  // It hides behind the "Use it" card: a hand comes up over the card's top edge and grabs it, the bolt peeks
+  // It hides behind the last output card (Ask) on the home page: a hand comes up over the card's top edge and grabs it, the bolt peeks
   // out, then the speaker; it looks around, the other hand grabs, it pulls itself up, hops out, lands with a
   // squash and a happy pulse. Everything below the card's edge is clipped, so it really is behind the card.
   const INTRO_KEY = 'sparkscribe.mascot.intro';
-  const INTRO_CARD = '.hear-card:last-child';
+  const INTRO_CARD = '.pack:not([hidden]) .pack-tile:last-child';
   // how far (body units) the body center is below the card's top edge over time
   const INTRO_Y = [[0, 2.6], [0.7, 1.55], [1.0, 1.6], [1.8, 1.45], [2.4, 0.1], [3.8, 0.05], [4.3, -0.95], [4.6, -0.9]];
   let intro = null;
@@ -632,11 +642,14 @@ export function mountMascot({ page = 'other' } = {}) {
     const dzOK = page === 'home' && dz && dz.offsetParent !== null;
     const far = Math.abs(X - homeX()) > 3 * k;
     const cursorNear = clock - cursor.t < 3 && Math.abs(cursor.x - X) < 520 && Math.abs(cursor.x - X) > 2 * k;
+    // On the home page it stays in its spot (no wandering, climbing or walking up to the cursor), so it never
+    // ends up over a headline or a button; it looks at the features instead.
+    const roam = page !== 'home';
     const b = touch
         ? pick([['nothing', 40], ['lookAround', 20], ['footTap', 12], ['hop', 8], ['stretch', 10], ['sit', 10]])
         : pick([['nothing', 26], ['lookAround', 14], ['footTap', 8], ['hop', 5], ['stretch', 6], ['sit', 6], ['rest', 3],
-          ['steps', 10], ['wander', 4], ['home', far ? 9 : 0], ['inspect', dzOK ? 6 : 0], ['climb', readingMode ? 0 : 6],
-          ['page', 5], ['dance', 3], ['approach', cursorNear ? 6 : 0]]);
+          ['steps', roam ? 10 : 0], ['wander', roam ? 4 : 0], ['home', far ? 9 : 0], ['inspect', dzOK && roam ? 6 : 0], ['climb', readingMode || !roam ? 0 : 6],
+          ['page', 5], ['dance', 3], ['approach', cursorNear && roam ? 6 : 0], ['feature', roam ? 0 : 12]]);
     if (!b || b === 'nothing') return;
     run((id) => behave(b, id));
   }
@@ -657,6 +670,17 @@ export function mountMascot({ page = 'other' } = {}) {
       return;
     }
     if (b === 'inspect') return inspect(id);
+    if (b === 'feature') {                                  // glances at an output card or a chip that's on screen
+      const els = [...document.querySelectorAll('.pack:not([hidden]) .pack-tile, .out-chips:not([hidden]) .out-chip')]
+        .filter((el) => { const r = el.getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight && r.width; });
+      const el = els[Math.floor(Math.random() * els.length)];
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      lookAt(r.left + r.width / 2, r.top + r.height / 2, 2.2);
+      if (Math.random() < 0.4) E.flash('curious', 1000);
+      await wait(2.2, id);
+      return;
+    }
     if (b === 'climb') return climbEdge(id);
   }
   async function sitFor(id, sleepy) {
@@ -755,15 +779,23 @@ export function mountMascot({ page = 'other' } = {}) {
       await wait(rand(3, 6), id);
       if (quiet() && Math.random() < 0.6) continue;
       const p = document.getElementById('progressPanel');
-      const a = pick([['tap', 28], ['look', 30], ['listen', 22], ['nod', 12], ['sit', clock - workSince > 25 ? 8 : 0]]);
+      // what it does follows the stage: watches the bar while the model downloads, listens while the
+      // audio is checked and speakers are found, pulses its speaker while words come in
+      const setup = workStage === 'setup', listening = workStage === 'analyze' || workStage === 'speakers', writing = workStage === 'run';
+      const a = pick([['tap', setup ? 10 : 28], ['look', setup ? 60 : 30], ['listen', listening ? 55 : 22], ['pulse', writing ? 40 : 0], ['nod', 12], ['sit', clock - workSince > 25 ? 8 : 0]]);
       if (a === 'tap') await act(CLIPS.footTap, id);
-      else if (a === 'look' && p && p.offsetParent !== null) { const r = p.getBoundingClientRect(); lookAt(r.left + r.width / 2, r.top + r.height / 2, 2.5); }
+      else if (a === 'pulse') E.pulse(2);
+      else if (a === 'look' && p && p.offsetParent !== null) {
+        const bar = setup ? document.getElementById('pctBar') : null;
+        const r = (bar && bar.offsetParent !== null ? bar : p).getBoundingClientRect();
+        lookAt(bar ? r.right : r.left + r.width / 2, r.top + r.height / 2, 2.5);
+      }
       else if (a === 'listen') E.flash('listening', 2000);
       else if (a === 'nod') await act(CLIPS.nod, id);
       else if (a === 'sit') { anim.setBase('sit', {}, 0.7); await wait(rand(5, 9), id); const q = act(CLIPS.pressUp, id); anim.setBase('working', {}, 0.01); await q; }
     }
   }
-  let workSince = 0;
+  let workSince = 0, workStage = '';
 
   // ---------- cursor: the speaker follows it; sometimes a small reaction ----------
   let hovering = false, hoverAt = 0, nearSince = 0, lastMove = null;
@@ -974,6 +1006,7 @@ export function mountMascot({ page = 'other' } = {}) {
       setMood('excited');
       run(async (id) => { await ready(id); E.flash('happy', 1100); E.pulse(3); E.gem('flash', 700); await act(CLIPS.hop, id); });
     },
+    stage: ({ stage }) => { workStage = stage || ''; },
     working: () => {
       setMood('working'); workSince = clock;
       run((id) => workLoop(id, true));
@@ -1142,7 +1175,7 @@ export function mountMascot({ page = 'other' } = {}) {
     else if (introWanted()) waitForIntro();
     else if (!peek) run(async (id) => { await wait(0.5, id); E.flash('happy', 900); await act(CLIPS.hop, id); });
   }).catch(fallback);
-  // the entrance plays once per session, on the homepage, when the "Use it" card is on screen; until then the
+  // the entrance plays once per session, on the homepage, when that card is on screen; until then the
   // mascot stays hidden. Any real product moment (a file, an upload) or ~9 s without the card: it just appears.
   function introWanted() {
     if (page !== 'home' || touch || calm() || pref !== 'on') return false;
