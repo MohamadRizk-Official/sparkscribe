@@ -1,6 +1,6 @@
 // /auth — sign in, create account, forgot password, and set a new password (after a reset link).
 import { supabase, isConfigured, authSettings } from '../lib/supabase.js';
-import { mountAccountMenu, safeNext, getUser } from '../lib/account.js';
+import { mountAccountMenu, safeNext, getUser, hasConsent, recordConsent, signOut } from '../lib/account.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -12,7 +12,10 @@ const MODES = {
   signup: { title: 'Create your account', sub: 'Free. Save transcripts and come back to them any time.', submit: 'Create account' },
   forgot: { title: 'Reset your password', sub: "Enter your email and we'll send you a link to choose a new password.", submit: 'Send reset link' },
   update: { title: 'Choose a new password', sub: 'Pick a new password for your account.', submit: 'Save new password' },
+  // a signed-in account that hasn't confirmed yet (first sign-in with Google)
+  consent: { title: 'One more step', sub: 'Before you start, please confirm your age and that you agree to the Terms.', submit: 'Continue' },
 };
+const PENDING_CONSENT = 'sparkscribe.consentAt'; // ticked on the sign-up tab before going to Google (this browser only)
 let mode = 'signin';
 let googleOn = false, socialMode = true;
 const showGoogle = () => $('googleWrap').classList.toggle('hidden', !(googleOn && socialMode));
@@ -38,7 +41,11 @@ async function init() {
   const requested = params.get('mode');
   const session = await getUser(); // server-verified; clears a stale local session
   mountAccountMenu($('accountSlot'));
-  if (requested === 'update') {
+  if (session && !hasConsent(session) && requested !== 'update') {
+    setMode('consent');
+  } else if (requested === 'consent' && !session) {
+    setMode('signin');
+  } else if (requested === 'update') {
     // Setting a new password needs the reset link from the email: a session that merely exists (a shared
     // computer, a stolen token) can't change the password and lock the owner out.
     if (!session || !(await cameFromResetLink())) {
@@ -60,6 +67,7 @@ async function init() {
   $('backToSignin').addEventListener('click', (e) => { e.preventDefault(); setMode('signin'); });
   $('googleBtn').addEventListener('click', google);
   $('authForm').addEventListener('submit', submit);
+  $('consentSignOut')?.addEventListener('click', async (e) => { e.preventDefault(); await signOut(); location.replace('/'); });
 }
 
 function setMode(m) {
@@ -69,17 +77,18 @@ function setMode(m) {
   $('authSub').textContent = cfg.sub;
   $('submitBtn').textContent = cfg.submit;
   document.querySelectorAll('#authTabs button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
-  $('authTabs').classList.toggle('hidden', m === 'forgot' || m === 'update');
+  $('authTabs').classList.toggle('hidden', m === 'forgot' || m === 'update' || m === 'consent');
   const social = m === 'signin' || m === 'signup';
   socialMode = social;
   showGoogle();
   document.querySelector('.auth-or').classList.toggle('hidden', !social);
-  $('emailField').classList.toggle('hidden', m === 'update');
-  $('passwordField').classList.toggle('hidden', m === 'forgot');
+  $('emailField').classList.toggle('hidden', m === 'update' || m === 'consent');
+  $('passwordField').classList.toggle('hidden', m === 'forgot' || m === 'consent');
   $('forgotLink').classList.toggle('hidden', m !== 'signin');
   $('confirmField').classList.toggle('hidden', !(m === 'signup' || m === 'update'));
   $('authLegal')?.classList.toggle('hidden', m !== 'signup');
-  $('ageField').classList.toggle('hidden', m !== 'signup');
+  $('ageField').classList.toggle('hidden', m !== 'signup' && m !== 'consent');
+  $('consentSignOut')?.classList.toggle('hidden', m !== 'consent');
   $('password').autocomplete = m === 'signin' ? 'current-password' : 'new-password';
   $('backToSignin').classList.toggle('hidden', m !== 'forgot');
   hideMsg();
@@ -132,6 +141,12 @@ async function submit(e) {
   const password = $('password').value;
   const confirm = $('confirm').value;
 
+  if (mode === 'consent') {
+    if (!$('ageOk').checked) return showMsg('Please confirm you’re 13 or older and agree to the Terms to continue.', 'error');
+    busy(true);
+    try { await recordConsent(); location.replace(next); } catch (err) { showMsg(explain(err), 'error'); busy(false); }
+    return;
+  }
   if (mode !== 'update' && !/^\S+@\S+\.\S+$/.test(email)) return showMsg('Enter a valid email address.', 'error');
   if ((mode === 'signin' || mode === 'signup' || mode === 'update') && password.length < 8) return showMsg('Passwords need at least 8 characters.', 'error');
   if ((mode === 'signup' || mode === 'update') && password !== confirm) return showMsg("The two passwords don't match.", 'error');
@@ -174,6 +189,9 @@ async function google() {
   hideMsg();
   // creating an account with Google needs the same confirmation (signing in to an existing one doesn't)
   if (mode === 'signup' && !$('ageOk').checked) return showMsg('Please confirm you’re 13 or older and agree to the Terms first.', 'error');
+  // the tick travels with this browser to the callback, which records it on the new account (signing in to an
+  // existing account that already confirmed changes nothing; one that hasn't is asked after signing in)
+  try { if (mode === 'signup') sessionStorage.setItem(PENDING_CONSENT, String(Date.now())); else sessionStorage.removeItem(PENDING_CONSENT); } catch {}
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callbackUrl(next) } });
   if (error) showMsg(explain(error), 'error');
 }

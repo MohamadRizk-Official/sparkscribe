@@ -109,3 +109,38 @@ export async function run() {
   signInLocally();
   return res;
 }
+
+// A signed-in account that never confirmed 13+ and the Terms (a first Google sign-in): every page sends it to the
+// confirmation step first; Terms and Privacy stay readable; confirming records it and returns to where it was going.
+export async function consent() {
+  const res = await runTests([
+    ['an account without the confirmation is asked before using the app (Library, home)', async () => {
+      knobs({ noConsent: true });
+      await open('/library');
+      await waitFor(() => at().startsWith('/auth?mode=consent'), { what: 'consent step' });
+      eq(new URLSearchParams(w().location.search).get('next'), '/library', 'next');
+      assert(d().getElementById('emailField').classList.contains('hidden') && !d().getElementById('ageField').classList.contains('hidden'), 'only the confirmation is shown');
+      await open('/');
+      await waitFor(() => at().startsWith('/auth?mode=consent'), { what: 'consent step from home' });
+    }],
+    ['Terms and Privacy stay readable before confirming', async () => {
+      await open('/terms');
+      await sleep(400);
+      eq(w().location.pathname, '/terms', 'still on /terms');
+    }],
+    ['continuing needs the tick; confirming returns to the page and is remembered', async () => {
+      await open('/auth?mode=consent&next=%2Flibrary');
+      d().getElementById('authForm').requestSubmit();
+      await waitFor(() => /13 or older/i.test(msg()), { what: 'tick required' });
+      d().getElementById('ageOk').checked = true;
+      d().getElementById('authForm').requestSubmit();
+      await waitFor(() => w().location.pathname === '/library', { what: 'back to /library' });
+      await open('/library');
+      await sleep(500);
+      eq(w().location.pathname, '/library', 'not asked again');
+    }],
+  ]);
+  knobs({ noConsent: false });
+  frame?.remove();
+  return res;
+}

@@ -9,6 +9,8 @@
   const REF = 'strkrrdndoofpcenopxk';
   const USER = { id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email: 'tester@example.com', user_metadata: { full_name: 'Test User' }, app_metadata: { provider: 'email' }, created_at: '2026-10-07T00:00:00Z' };
   const knobs = () => { try { return JSON.parse(sessionStorage.getItem('__qa') || '{}'); } catch { return {}; } };
+  // an account that confirmed 13+ and the Terms (knob noConsent: a first Google sign-in that hasn't yet)
+  if (!knobs().noConsent) Object.assign(USER.user_metadata, { age_13_plus_confirmed_at: '2026-10-07T00:00:00Z', terms_accepted_at: '2026-10-07T00:00:00Z' });
   // the plan knob is mirrored to the dev server, whose entitlement checks (server code) read it like billing_status
   const mirrorPlan = (plan) => fetch('/__harness/plan?key=' + encodeURIComponent(plan || 'free')).catch(() => {});
   window.__qaKnobs = (k) => { sessionStorage.setItem('__qa', JSON.stringify({ ...knobs(), ...k })); if ('plan' in k) mirrorPlan(k.plan); return knobs(); };
@@ -97,7 +99,7 @@
     log({ method, path: p, q: url.search.slice(0, 120) });
     // ---- auth ----
     if (p === '/auth/v1/user') {
-      if (method === 'PUT') { Object.assign(USER.user_metadata, body?.data || {}); return json(USER); }
+      if (method === 'PUT') { Object.assign(USER.user_metadata, body?.data || {}); if (body?.data?.terms_accepted_at) window.__qaKnobs({ noConsent: false }); return json(USER); }
       return K.signedOut ? json({ message: 'no session' }, 401) : json(USER);
     }
     if (p === '/auth/v1/settings') return json({ external: { google: false, email: true } });

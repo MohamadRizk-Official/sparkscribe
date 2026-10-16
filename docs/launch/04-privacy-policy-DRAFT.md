@@ -1,7 +1,7 @@
 # SparkScribe Privacy Policy
 
 > **Draft for review, not legal advice.** **[CONFIRM]** marks the last details for the owner to confirm before
-> publication. Everything else describes how SparkScribe works today (2026-10-15). It has not been reviewed by a lawyer.
+> publication. Everything else describes how SparkScribe works today (2026-10-16). It has not been reviewed by a lawyer.
 
 **Effective date:** the date of publication **[CONFIRM: filled in when published]**
 **Who we are:** SparkScribe is a product operated by HRstudios LLC **[CONFIRM: postal address, optional]** ("we", "us").
@@ -11,9 +11,10 @@ Contact: contact.hrstudios@gmail.com
 - **Your audio is never uploaded.** Recordings are converted and transcribed inside your browser. If you allow it, the
   original audio is also kept in that browser so you can play it back later; it never leaves your device.
 - If you **save** a transcript, its **text** is stored in your account.
-- If you use **AI features** (summaries, notes, insights, Create tools, Ask, quiz grading), the relevant **transcript text**
-  (never audio) is sent to our AI provider, Anthropic, to produce the result.
-- Payments for Plus and Pro are handled by Stripe; we never see your full card number.
+- If you use **AI features** (summaries, notes, insights, Create tools, Ask, quiz grading, Focused Review practice, asking
+  across recordings, combined study guides), the relevant **transcript text** (never audio) is sent to our AI provider,
+  Anthropic, to produce the result.
+- Payments for paid plans (Flash, Bolt, Thunder) are handled by Stripe; we never see your full card number.
 - We don't sell your data, show ads, or use analytics or advertising trackers.
 - You can delete your account and everything in it yourself, at any time, in Settings.
 
@@ -25,9 +26,16 @@ profile picture.
 
 **Content you save:** transcript titles and text, speaker names you assign, timestamps, recording length, language and
 recording type, folders and favourites. If you use AI features: the summaries, notes, insights, study material, drafts,
-quizzes (and your quiz progress), and questions and answers they produce.
+quizzes (and your quiz progress, including which concepts you're reviewing), and questions and answers they produce. If
+you ask across several recordings or make a combined study guide (Thunder), the question, the answer or guide, which
+recordings it used, and links to the passages it cites are saved to your account so you can reopen them on any device;
+the recordings' audio and full transcripts are not copied into them.
 
-**Subscription information (Plus and Pro):** your plan, its status and renewal date, and the identifiers Stripe gives us for
+**Your confirmation:** when you create an account (by email, or the first time you sign in with Google) we record that
+you confirmed you're 13 or older and agreed to the Terms, with the time.
+
+**Subscription information (paid plans):** your plan, its status and renewal date, whether you've had a paid plan before
+and whether you've used the Flash first-month offer (so it's used once), and the identifiers Stripe gives us for
 your customer record and subscription. Stripe collects your name, email, card details and billing address directly; we
 receive only the card brand and last four digits when Stripe shows them to you in its billing portal, not the card number.
 
@@ -92,7 +100,7 @@ results are stored in your account until you delete them or your account. AI out
 against the transcript and the recording.
 
 ## 6. How long we keep it
-- Saved transcripts and AI results: until you delete them or your account.
+- Saved transcripts and AI results (including answers and guides across recordings): until you delete them or your account.
 - Account: until you delete it.
 - Usage and subscription records: with your account; billing records Stripe keeps are governed by Stripe's own policies.
 - Payment and tax records: Stripe keeps them, and we keep invoices and payment records, as long as accounting and tax
@@ -104,7 +112,7 @@ against the transcript and the recording.
 
 ## 7. Your choices and rights
 - **Delete:** Settings → Account → Delete account removes your account and everything in it immediately and permanently.
-  If you have a Plus or Pro subscription, it is canceled at the same moment so you are never charged again. Single
+  If you have a paid subscription, it is canceled at the same moment so you are never charged again. Single
   recordings can be deleted in My Library.
 - **Access and export:** you can view everything in the app and export each transcript and AI result (TXT, Markdown,
   Word, PDF, subtitles). For a full copy of your account data, email contact.hrstudios@gmail.com; we reply within
@@ -127,8 +135,8 @@ you, we'll notify you as the law requires.
 ## 10. Children and teens
 SparkScribe is for people aged **13 and older**. We don't knowingly allow accounts for, or collect personal information
 from, children under 13. If you believe a child under 13 has created an account, contact us and we'll delete it.
-If you are 13 to 17, use SparkScribe with your parent's or guardian's permission; a Plus or Pro subscription must be
-purchased by a parent, guardian or another adult. We don't share a teen's transcripts with anyone, including whoever pays
+If you are 13 to 17, use SparkScribe with your parent's or guardian's permission; a paid plan must be purchased by a
+parent, guardian or another adult. We don't share a teen's transcripts with anyone, including whoever pays
 for the subscription.
 
 ## 11. Changes

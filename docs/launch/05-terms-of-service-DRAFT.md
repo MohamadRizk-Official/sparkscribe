@@ -1,8 +1,8 @@
 # SparkScribe Terms of Service
 
 > **Draft for review, not legal advice.** **[CONFIRM]** marks the last details for the owner to confirm before
-> publication. It describes SparkScribe as built today (2026-10-15): Free, Plus and Pro plans. It has not been reviewed by
-> a lawyer.
+> publication. It describes SparkScribe as built today (2026-10-16): the Free, Flash, Bolt and Thunder plans. It has not
+> been reviewed by a lawyer.
 
 **Effective date:** the date of publication **[CONFIRM: filled in when published]** · **Operator:** HRstudios LLC
 **[CONFIRM: postal address, optional]** · **Contact:** contact.hrstudios@gmail.com
@@ -12,8 +12,8 @@ SparkScribe is a product operated by HRstudios LLC. By creating an account or us
 the Privacy Policy. If you use SparkScribe for an organisation, you confirm you may accept these Terms on its behalf.
 
 **Age.** You must be at least 13 years old. If you are 13 to 17, you may use SparkScribe only with your parent's or
-guardian's permission, and a Plus or Pro subscription must be purchased by a parent, guardian or another adult, who agrees
-to these Terms for that purchase.
+guardian's permission, and a paid plan (Flash, Bolt or Thunder) must be purchased by a parent, guardian or another adult,
+who agrees to these Terms for that purchase.
 
 ## 2. The service
 SparkScribe turns audio and video files into transcripts in your browser (your audio isn't uploaded) and, if you choose,
@@ -22,28 +22,46 @@ features require an account. Features may change; we'll give notice of significa
 
 **Transcription is English-only for now.** Other languages may be transcribed poorly or not at all.
 
-**Fair-use limits.** AI features have usage limits per account and a service-wide daily cap that protect the service's
-costs. When a limit is reached, the app tells you when you can continue. We may adjust limits; your plan's transcription
-allowance below is not affected by them.
+**Fair-use limits.** AI features have usage limits per account (higher on paid plans) and a service-wide daily cap that
+protect the service's costs. They are set well above normal study and work use. When a limit is reached, the app tells you
+when you can continue. We may adjust limits; your plan's transcription allowance below is not affected by them. Every plan
+gets the same transcription accuracy and the same quality of AI answers.
 
 ## 3. Plans and subscriptions
-- **Plans:** Free ($0, 60 minutes of transcription a month), Plus ($7.99 a month, 20 hours) and Pro ($14.99 a month,
-  50 hours). Prices are in US dollars. Where we're required to collect sales tax or a similar tax, it is calculated at
-  checkout based on your billing address and added to the price; you'll see the total before you pay.
+**Plans** (US dollars, per month):
+
+
+| Plan | Price | Transcription | Also includes |
+|---|---|---|---|
+| Free | $0 | 30 minutes | Summaries, notes, Ask, flashcards, quizzes, study guides, Create tools and exports |
+| Flash | $5.99 ($1.00 for the first month, see below) | 3 hours | Everything in Free |
+| Bolt | $9.99 | 9 hours | Everything in Flash, plus Focused Review and new practice questions |
+| Thunder | $14.99 | 20 hours | Everything in Bolt, plus asking across recordings and combined study guides |
+
+Where we're required to collect sales tax or a similar tax, it is calculated at checkout based on your billing address
+and added to the price; you'll see the total before you pay.
+
+- **Flash introductory offer:** if you have never had a paid SparkScribe plan, your first month of Flash costs $1.00. From
+  your second month, Flash renews at $5.99 a month until you cancel. The offer is available once per person and account;
+  it ends when the first month ends, and it isn't available on a plan change from another paid plan. We may end the offer
+  for new customers at any time; that doesn't change the price of a first month you've already paid for.
 - **What the allowance counts:** the length of recordings you transcribe and save. AI features, exports and opening
-  saved recordings don't use it. Free resets each calendar month; Plus and Pro reset at each renewal. Unused time
+  saved recordings don't use it. Free resets each calendar month (UTC); paid plans reset at each renewal. Unused time
   doesn't carry over.
-- **Payment and renewal:** payments are handled by Stripe; we never see your full card details. Plus and Pro renew
+- **Payment and renewal:** payments are handled by Stripe; we never see your full card details. Paid plans renew
   automatically every month on the same date until you cancel. You'll see the price and renewal terms before you pay.
-- **Upgrades** (Plus to Pro) take effect immediately; the prorated difference for the rest of the current period is
-  charged at once.
-- **Downgrades** (Pro to Plus) take effect immediately; the unused part of the higher price is credited to your next
-  payment.
+- **Upgrades** (to a plan with more time or features) take effect immediately; the prorated difference for the rest of the
+  current period is charged at once. **[CONFIRM: upgrading during the $1 Flash month, see the billing report]**
+- **Downgrades** (to a plan with less time or features) take effect at the end of the current period; until then you keep
+  the plan you paid for. **[CONFIRM: downgrade timing — end of period (recommended) or immediately with a prorated credit]**
 - **Cancellation:** at any time in Plan & usage → Manage Billing. Your plan stays active until the end of the period
   you've paid for, then you return to Free and no further payments are taken. Nothing in your library is deleted.
+- **When a plan ends or changes:** your recordings, transcripts, notes, quizzes, review progress and practice questions
+  stay in your account, and so do the answers and study guides you made across recordings (you can still open and delete
+  them). Creating new ones with a feature your plan no longer includes needs a plan that includes it.
 - **Failed payments:** if a renewal payment fails, Stripe retries it several times over about two weeks and you'll be
   asked to update your card; you keep your plan during that time. If payment still can't be collected, the subscription
-  ends and you return to Free.
+  ends and you return to Free. A first payment that fails gives no paid plan and uses no introductory offer.
 - **Refunds:** payments are non-refundable, including for partly used periods, except: duplicate or mistaken charges,
   charges for a period in which a service failure on our side prevented you from using SparkScribe, and where the law
   requires a refund. Duplicate charges and charges made after an account was deleted are refunded automatically; for
@@ -66,6 +84,10 @@ transcript text to our AI provider when you use AI features. We don't use your c
 You're responsible for your content and for having the right to record, upload and transcribe it, including consent from
 the people recorded where the law, your school or your workplace requires it.
 
+**Answers and guides across recordings** (Thunder) are saved to your account with the questions you asked and links to
+the recordings they come from, so you can open them on any device. They're part of your content: you can delete them at
+any time, and they're deleted with your account.
+
 ## 6. Acceptable use
 Don't use SparkScribe to: break the law or others' rights (including privacy and recording-consent laws); record people
 secretly where that's unlawful; process content you aren't allowed to; attempt to access other accounts or our systems
@@ -74,8 +96,8 @@ example with many accounts or automated requests); or use AI features to create 
 Anthropic's usage policy (https://www.anthropic.com/legal/aup) also applies to AI features.
 
 ## 7. AI output and transcription accuracy
-AI-generated summaries, notes, quizzes, drafts and answers can be incomplete or wrong, and transcription can mishear
-words, names or speakers. Check important information against the recording before relying on it, especially for legal,
+AI-generated summaries, notes, quizzes, review material, drafts and answers (including answers and study guides across
+several recordings) can be incomplete or wrong, and transcription can mishear words, names or speakers. Check important information against the recording before relying on it, especially for legal,
 medical, financial or academic decisions.
 
 ## 8. Availability and changes

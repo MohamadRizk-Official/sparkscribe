@@ -19,6 +19,20 @@ export function safeNext(value, fallback = '/') {
 
 export const currentPath = () => location.pathname + location.search;
 
+// The 13+ / Terms confirmation every account gives once. An email sign-up records it at sign-up; an account first
+// created through Google (from the sign-in tab, or before this existed) is asked on its first visit, on any page,
+// before using the app. Stored in the account's user metadata (the person's own confirmation, with its time).
+export const hasConsent = (user) => !!(user?.user_metadata?.terms_accepted_at && user?.user_metadata?.age_13_plus_confirmed_at);
+export async function recordConsent() {
+  const at = new Date().toISOString();
+  const { data, error } = await supabase.auth.updateUser({ data: { age_13_plus_confirmed_at: at, terms_accepted_at: at } });
+  if (error) throw error;
+  return data.user;
+}
+// pages a person may open before confirming (to read what they're agreeing to, or to confirm it)
+const CONSENT_FREE = /^\/(auth|terms|privacy)(\/|$)/;
+export function consentUrl(next = currentPath()) { return `/auth?mode=consent&next=${encodeURIComponent(next)}`; }
+
 // Fast, local check (reads the stored session). Good for UI state.
 export async function getSession() {
   if (!isConfigured) return null;
@@ -38,12 +52,16 @@ export async function getUser() {
   return null;
 }
 
-// Private pages: send signed-out visitors to sign in, then back here.
+// Private pages: send signed-out visitors to sign in, then back here (and accounts without the confirmation to give it).
 export async function requireUser() {
   const user = await getUser();
   if (!user) {
     location.replace(`/auth?next=${encodeURIComponent(currentPath())}`);
     return new Promise(() => {}); // stop the page while navigating
+  }
+  if (!hasConsent(user) && !CONSENT_FREE.test(location.pathname)) {
+    location.replace(consentUrl());
+    return new Promise(() => {});
   }
   return user;
 }
@@ -149,6 +167,8 @@ export function mountAccountMenu(slot, { onChange } = {}) {
       return;
     }
     pricingLink(false);
+    // a signed-in account that hasn't confirmed 13+ and the Terms (first Google sign-in) does that before anything else
+    if (!hasConsent(session.user) && !CONSENT_FREE.test(location.pathname)) { location.replace(consentUrl()); return; }
     adoptAccountPrefs(session.user);
     const p = await loadProfile(session.user);
     const label = p.name || p.email;
