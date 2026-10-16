@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-apple-disable-message-reformatting">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>Confirm your new email address</title>
+<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+<style>
+  body { margin:0; padding:0; width:100% !important; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }
+  a { color:#0e7490; }
+  @media (max-width:520px) { .ss-card { padding:28px 22px !important; } .ss-h1 { font-size:24px !important; } }
+  @media (prefers-color-scheme: dark) {
+    body, .ss-page { background:#05060f !important; }
+    .ss-card { background:#0e1124 !important; border-color:#232845 !important; }
+    .ss-h1 { color:#eef1ff !important; }
+    .ss-body { color:#c3c8e6 !important; }
+    .ss-muted, .ss-foot { color:#8d93b8 !important; }
+    .ss-rule { border-color:#232845 !important; }
+    .ss-spark { color:#22d3ee !important; } .ss-scribe { color:#c4a5fd !important; }
+    .ss-link { color:#22d3ee !important; }
+    .ss-code { background:#151935 !important; border-color:#232845 !important; color:#eef1ff !important; }
+  }
+  [data-ogsc] .ss-card { background:#0e1124 !important; }
+</style>
+</head>
+<body class="ss-page" style="margin:0;padding:0;background:#f2f3f8;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all;">Confirm the change of the email address on your SparkScribe account.&#8202;&#847;&#8202;&#847;&#8202;&#847;&#8202;&#847;&#8202;&#847;&#8202;&#847;</div>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="ss-page" style="background:#f2f3f8;">
+  <tr><td align="center" style="padding:32px 12px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;">
+      <tr><td style="padding:0 4px 18px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
+          <td style="vertical-align:middle;"><img src="https://www.spark-scribe.com/email/sparkscribe-mark.png" width="40" height="40" alt="" style="display:block;border:0;border-radius:10px;"></td>
+          <td style="vertical-align:middle;padding-left:10px;font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:-.01em;"><span class="ss-spark" style="color:#0891b2;">Spark</span><span class="ss-scribe" style="color:#9333ea;">Scribe</span></td>
+        </tr></table>
+      </td></tr>
+      <tr><td class="ss-card" style="background:#ffffff;border:1px solid #e4e6f0;border-radius:16px;padding:36px 36px 28px;font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <h1 class="ss-h1" style="margin:0 0 16px;font-size:26px;line-height:1.25;font-weight:700;color:#111427;">Confirm your new email address</h1>
+        <p class="ss-body" style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#3b4060;">We received a request to change the email address on your SparkScribe account from <strong>{{ .Email }}</strong> to <strong>{{ .NewEmail }}</strong>. Click the button below to confirm.</p>
+        
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 24px;">
+  <tr><td align="center" bgcolor="#93c5fd" style="border-radius:12px;background-color:#93c5fd;background-image:linear-gradient(90deg,#22d3ee 0%,#60a5fa 50%,#c084fc 100%);">
+    <!--[if mso]><v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="https://www.spark-scribe.com/auth/callback#token_hash={{ .TokenHash }}&amp;type=email_change" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="25%" stroke="f" fillcolor="#93c5fd"><center style="color:#0b1020;font-family:Arial,sans-serif;font-size:16px;font-weight:bold;">Confirm Email Change</center></v:roundrect><![endif]-->
+    <!--[if !mso]><!--><a href="https://www.spark-scribe.com/auth/callback#token_hash={{ .TokenHash }}&amp;type=email_change" target="_blank" style="display:inline-block;padding:14px 28px;font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:16px;font-weight:700;line-height:20px;color:#0b1020;text-decoration:none;border-radius:12px;">Confirm Email Change</a><!--<![endif]-->
+  </td></tr>
+</table>
+<p class="ss-muted" style="margin:0 0 6px;font-size:13px;line-height:1.5;color:#6b7190;">Button not working? Copy this link into your browser:</p>
+<p style="margin:0 0 20px;font-size:13px;line-height:1.5;word-break:break-all;"><a href="https://www.spark-scribe.com/auth/callback#token_hash={{ .TokenHash }}&amp;type=email_change" target="_blank" class="ss-link" style="color:#0e7490;text-decoration:underline;">https://www.spark-scribe.com/auth/callback#token_hash={{ .TokenHash }}&amp;type=email_change</a></p>
+        <hr class="ss-rule" style="border:0;border-top:1px solid #e4e6f0;margin:4px 0 18px;">
+        <p class="ss-foot" style="margin:0;font-size:13px;line-height:1.55;color:#6b7190;">If you didn’t request this change, don’t click the button, and consider resetting your password. For your security, this link works once and expires after a short time.</p>
+      </td></tr>
+      <tr><td style="padding:18px 4px 0;font-family:'Space Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+        <p class="ss-foot" style="margin:0;font-size:12px;line-height:1.55;color:#6b7190;">SparkScribe · private transcription · <a href="https://www.spark-scribe.com" target="_blank" class="ss-link" style="color:#6b7190;text-decoration:underline;">spark-scribe.com</a><br>This is an automated message about your account; replies aren’t monitored.</p>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

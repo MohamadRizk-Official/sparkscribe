@@ -37,6 +37,15 @@ export const isUuid = (s) => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-
 
 // Who is calling? The browser sends its Supabase access token; Supabase Auth verifies it. The returned
 // store queries the database AS that user, so RLS decides what exists for them.
+export function isRecoveryToken(token) {
+  try {
+    const amr = JSON.parse(Buffer.from(String(token).split('.')[1], 'base64url').toString('utf8')).amr;
+    if (!Array.isArray(amr) || !amr.length) return false;
+    const newest = amr.reduce((a, b) => (Number(b?.timestamp) > Number(a?.timestamp) ? b : a));
+    return newest?.method === 'recovery';
+  } catch { return false; }
+}
+
 export async function authenticate(req) {
   // Local development only: the Vite dev server can plug in an in-memory store for UI testing.
   // Never active on Vercel (VERCEL is always set there) or without the dev server's explicit opt-in.
@@ -54,5 +63,8 @@ export async function authenticate(req) {
   });
   const { data, error } = await sb.auth.getUser(token);
   if (error || !data?.user) throw new AIError('Your session has expired. Sign in again.', { status: 401, code: 'unauthorized' });
+  // A session started by a password-reset link (its newest sign-in method is "recovery") exists only to choose a new
+  // password; it isn't accepted as a sign-in here (the token was just verified by Supabase above).
+  if (isRecoveryToken(token)) throw new AIError('Finish resetting your password, then sign in again.', { status: 403, code: 'recovery_session' });
   return { user: { id: data.user.id }, db: supabaseStore(sb) };
 }

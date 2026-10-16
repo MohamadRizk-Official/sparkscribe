@@ -578,6 +578,14 @@ mark.cur { background: rgba(251, 191, 36, .6); }
 .auth-msg { font-size: 13.5px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); }
 .auth-msg.error { color: #fecdd3; border-color: rgba(251,113,133,.4); background: rgba(251,113,133,.08); }
 .auth-msg.success { color: #d9f99d; border-color: rgba(163,230,53,.35); background: rgba(163,230,53,.07); }
+.auth-msg.note { color: var(--text); border-color: rgba(34,211,238,.35); background: rgba(34,211,238,.08); }
+.auth-resend { margin-left: 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.auth-resend:disabled { opacity: .6; cursor: default; }
+/* Cloudflare Turnstile (lib/captcha.js): usually invisible; holds the checkbox when Cloudflare shows one */
+.captcha-slot { display: flex; justify-content: center; width: 100%; min-height: 0; }
+.captcha-slot.is-interactive { margin: 2px 0 6px; }
+.captcha-slot.hidden { display: none; }
+.captcha-slot iframe { max-width: 100%; }
 .auth-foot { margin: 14px 0 0; font-size: 13.5px; }
 .auth-foot a { color: var(--cyan); text-decoration: none; }
 .auth-privacy { margin: 18px 0 0; padding-top: 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--dim); line-height: 1.5; }

@@ -31,3 +31,10 @@ export function authSettings() {
     .catch(() => null);
   return settingsPromise;
 }
+
+// A second client that keeps its session in memory only (never in this browser's storage) and never reads the URL:
+// for confirming an email link without touching whoever is signed in here (callback.js).
+export function isolatedClient() {
+  if (!isConfigured) return null;
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'sb-sparkscribe-isolated' } });
+}

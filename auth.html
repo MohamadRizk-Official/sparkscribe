@@ -54,11 +54,12 @@
             <span>Confirm password</span>
             <input type="password" id="confirm" autocomplete="new-password" minlength="8" />
           </label>
+          <div class="captcha-slot hidden" id="captchaSlot"></div>
           <div class="auth-msg hidden" id="authMsg" role="status"></div>
           <button class="btn btn-primary btn-block" id="submitBtn" type="submit">Sign in</button>
         </form>
 
-        <p class="auth-foot" id="authFoot"><a href="#" id="backToSignin" class="hidden">← Back to sign in</a></p>
+        <p class="auth-foot" id="authFoot"><a href="#" id="backToSignin" class="hidden">← Back to sign in</a><a href="#" id="cancelReset" class="hidden">Cancel and return to sign in</a></p>
         <p class="auth-privacy">Only transcript text, and the summaries and answers you create from it, are stored in your account. Audio is processed on your device and never uploaded.</p>
       </section>
 

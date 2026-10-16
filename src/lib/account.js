@@ -1,12 +1,18 @@
 // Session helpers + the small account area in the top bar (shared by every page).
 import { supabase, isConfigured } from './supabase.js';
 import { adoptAccountPrefs } from './prefs.js';
+import { guardRecovery, currentSession } from './recovery.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-// Only ever redirect to a path on this site.
+// Only ever redirect to a path on this site. Browsers drop tabs and newlines while parsing a URL, so "/\t/evil.com"
+// would become "//evil.com": reject control characters and backslashes, then let the URL parser decide the origin.
 export function safeNext(value, fallback = '/') {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') && !value.includes('\\') ? value : fallback;
+  if (typeof value !== 'string' || !value.startsWith('/') || /[\u0000-\u001f\u007f\\]/.test(value)) return fallback;
+  try {
+    const u = new URL(value, location.origin);
+    return u.origin === location.origin ? u.pathname + u.search + u.hash : fallback;
+  } catch { return fallback; }
 }
 
 export const currentPath = () => location.pathname + location.search;
@@ -37,6 +43,8 @@ export async function requireUser() {
     location.replace(`/auth?next=${encodeURIComponent(currentPath())}`);
     return new Promise(() => {}); // stop the page while navigating
   }
+  // a password-reset session isn't a way into the app (lib/recovery.js)
+  if (await guardRecovery(await currentSession())) return new Promise(() => {});
   return user;
 }
 
@@ -81,6 +89,7 @@ export function mountAccountMenu(slot, { onChange } = {}) {
       slot.innerHTML = onAuthPage ? '' : `${gear}<a class="acct-signin" href="/auth?next=${encodeURIComponent(currentPath())}">Sign in</a>`;
       return;
     }
+    if (await guardRecovery(session)) return; // a password-reset session: back to the password form, or signed out
     adoptAccountPrefs(session.user);
     const p = await loadProfile(session.user);
     const label = p.name || p.email;
