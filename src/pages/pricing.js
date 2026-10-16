@@ -39,27 +39,31 @@ const ICON = {
 const CAP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m2.5 9 9.5-5 9.5 5-9.5 5z"/><path d="M6.5 11.2V16c0 1.5 2.5 3 5.5 3s5.5-1.5 5.5-3v-4.8M21.5 9v5"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17.5 19.5 7"/></svg>';
 
+// Each card answers "who is this for, and why choose it". What every plan shares lives once, in "Every plan includes".
 const LOOK = {
   free: {
-    theme: 'free', line: 'Your first step toward smarter notes.', who: 'I want to see what SparkScribe can do.',
-    items: ['The full AI workspace', 'Summaries, Notes & Ask', 'Flashcards, quizzes & study guides', 'Exports: PDF, Word & more'],
+    theme: 'free', line: 'Your first step toward smarter notes.', sub: 'No credit card required',
+    who: 'I want to see what SparkScribe can do.',
+    items: ['Sign up in seconds with email or Google', 'Every AI study tool, on your own recordings', 'Keep everything you save'],
     cta: 'Get Started Free',
   },
   flash: {
     theme: 'flash', ribbon: 'Featured Deal', line: 'Turn your recordings into progress.',
     who: 'I record an occasional lecture.',
-    items: ['Everything in Free', '{x:free} Free’s transcription time', 'Every AI study tool', 'Cancel anytime'],
+    items: ['{x:free} Free’s transcription time', 'Every AI study tool', 'Cancel anytime'],
     cta: 'Get Flash for $1',
   },
   bolt: {
     theme: 'bolt', badge: 'Best for Students', line: 'Stay ahead of your classes.', who: 'I have classes every week.',
-    items: ['Everything in Flash', 'Room for weekly lectures & revision', 'Quizzes & study guides for exam prep', 'Cancel anytime'],
+    items: ['Room for weekly lectures and revision', 'Made for regular study and exam prep', 'Cancel anytime'],
     cta: 'Choose Bolt',
   },
   thunder: {
-    theme: 'thunder', line: 'Take on your biggest workloads.', who: 'I record often and need more capacity.',
-    items: ['Everything in Bolt', 'Long lectures & back-to-back meetings', 'Frequent recording, all month', 'Cancel anytime'],
+    theme: 'thunder', line: 'Your recordings, connected.', who: 'I record often and need more room.',
+    items: ['Our biggest allowance', 'Lowest price per hour: {ph}', 'Cancel anytime'],
     cta: 'Get Thunder',
+    // approved direction, not built yet: shown only in the design preview, always labelled as in development
+    planned: { title: 'Ask across recordings', text: 'Go beyond individual transcripts. Discover connections and ask questions across selected recordings.' },
   },
 };
 // plans without a designed identity (the current database lineup) get a plain look
@@ -101,23 +105,22 @@ function ctaFor(p, look) {
 // ---------- cards ----------
 function card(p, i) {
   const look = lookFor(p, i, plans);
-  const prev = plans[i - 1];
   const free = plans.find((x) => !x.billing_interval);
   const a = allowance(p.monthly_seconds);
   const pl = priceLines(p);
-  const sub = p.billing_interval && !p.intro ? 'Billed monthly' : pl.note;
-  const items = look.items.map((t) => t.replace('{x:free}', free ? times(p, free) : '').replace(/^Everything in .*$/, prev ? `Everything in ${prev.name}` : t));
-  // Bolt's headline comparison with Flash (always against Flash's REGULAR price), Thunder's value per hour
+  const sub = look.sub || (p.billing_interval && !p.intro ? 'Billed monthly' : pl.note);
+  const items = look.items.map((t) => t.replace('{x:free}', free ? times(p, free) : '').replace('{ph}', perHour(p) || ''));
+  // Bolt's headline comparison with Flash (always against Flash's REGULAR price); Thunder's planned capability
   const flash = byKey('flash');
   let callout = '';
   if (p.key === 'bolt' && flash) {
-    callout = `<div class="pz-x"><span class="pz-x-big">${esc(times(p, flash))}</span><span class="pz-x-text"><b>Flash’s recording time</b><span>Just ${esc(priceGap(p, flash))} more per month than Flash’s regular price.</span></span></div>`;
-  } else if (p.key === 'thunder' && perHour(p)) {
-    callout = `<div class="pz-x calm"><span class="pz-x-text"><b>Our biggest allowance</b><span>${esc(perHour(p))} per transcription hour, the lowest of any plan.</span></span></div>`;
+    callout = `<div class="pz-x"><span class="pz-x-big">${esc(times(p, flash))}</span><span class="pz-x-text"><b>Flash’s transcription time</b><span>Just ${esc(priceGap(p, flash))} more per month than Flash’s regular ${esc(money(flash.price_cents))} price.</span></span></div>`;
+  } else if (look.planned && PREVIEW) {
+    callout = `<div class="pz-x planned"><span class="pz-x-text"><span class="pz-soon">In development</span><b>${esc(look.planned.title)}</b><span>${esc(look.planned.text)}</span><em class="pz-soon-note">Not included in Thunder yet.</em></span></div>`;
   } else if (p.key === 'flash' && p.intro) {
     callout = `<div class="pz-x calm"><span class="pz-x-text"><b>Start for just ${esc(money(p.intro.price_cents))}</b><span>${esc(allowance(p.monthly_seconds).long)} of transcription and the AI study tools you need.</span></span></div>`;
   } else if (p.key === 'free') {
-    callout = '<div class="pz-x calm"><span class="pz-x-text"><b>Try it on your own recordings</b><span>Every AI tool is included, so you can see how SparkScribe works.</span></span></div>';
+    callout = '<div class="pz-x calm"><span class="pz-x-text"><b>The real app, not a demo</b><span>Transcribe a recording, then try notes, Ask, flashcards and quizzes on it.</span></span></div>';
   }
   const isCurrent = status && status.plan === p.key;
   return `
@@ -170,7 +173,7 @@ function renderWhy() {
     <div class="pz-why-text">
       <p class="pz-kicker mono">Flash or Bolt?</p>
       <h2 id="whyTitle">Bolt gives you <span class="pz-grad-bolt">${esc(times(bolt, flash))}</span> the transcription time of Flash.</h2>
-      <p>${esc(allowance(bolt.monthly_seconds).long)} a month instead of ${esc(allowance(flash.monthly_seconds).long)}, for ${esc(priceGap(bolt, flash))} more than Flash’s regular ${esc(money(flash.price_cents))}. More room for lectures, revision, and the studying that matters.</p>
+      <p>${esc(allowance(bolt.monthly_seconds).long)} a month instead of ${esc(allowance(flash.monthly_seconds).long)}, for ${esc(priceGap(bolt, flash))} more than Flash’s regular ${esc(money(flash.price_cents))}.</p>
     </div>
     <div class="pz-why-vis" role="img" aria-label="${esc(`Flash: ${allowance(flash.monthly_seconds).long} a month for ${money(flash.price_cents)} a month after the first month. Bolt: ${allowance(bolt.monthly_seconds).long} a month for ${money(bolt.price_cents)} a month, ${times(bolt, flash)} as much.`)}">
       <div class="pz-why-row t-flash">
@@ -193,17 +196,16 @@ function renderCompare() {
   if (!PREVIEW) { $('compare').hidden = true; return; } // the live lineup keeps "Every plan includes" only
   const flash = byKey('flash');
   const yes = `<span class="pz-yes">${CHECK}<span class="sr-only">Included</span></span>`;
-  const dash = '<span class="pz-na" aria-label="Not applicable">—</span>';
+  const dash = '<span class="pz-na"><span aria-hidden="true">—</span><span class="sr-only">Not applicable</span></span>';
+  const thunderPlanned = PREVIEW && byKey('thunder') && LOOK.thunder.planned;
   const rows = [
     ['Monthly price', (p) => p.intro ? `<b>${esc(money(p.price_cents))}</b><small>${esc(money(p.intro.price_cents))} first month</small>` : `<b>${esc(money(p.price_cents))}</b>`],
     ['Transcription each month', (p) => `<b>${esc(allowance(p.monthly_seconds).long)}</b>`],
     ['Compared with Flash', (p) => (flash && p.billing_interval && p.key !== 'flash' ? `<b class="pz-ratio">${esc(times(p, flash))}</b>` : p.key === 'flash' ? '<span class="pz-muted">1×</span>' : dash)],
-    ['Price per hour of transcription', (p) => (perHour(p) ? esc(perHour(p)) : dash)],
-    ['Full AI workspace', () => yes, 'Summary, Notes, Ask, flashcards, quizzes, study guides, recaps and drafts'],
-    ['Exports', () => yes, 'PDF, Word, Markdown, TXT and subtitles'],
-    ['Private, searchable library', () => yes],
+    ['Price per hour of transcription', (p) => (perHour(p) ? esc(perHour(p)) : dash), 'Regular monthly price'],
+    thunderPlanned && ['Ask across recordings', (p) => (p.key === 'thunder' ? '<span class="pz-soon">In development</span>' : dash), 'Planned for Thunder; not included yet'],
     ['Cancel anytime', (p) => (p.billing_interval ? yes : dash)],
-  ];
+  ].filter(Boolean);
   const cls = (p) => `t-${lookFor(p, plans.indexOf(p), plans).theme}`;
   $('compareTable').innerHTML = `
     <table class="pz-table" role="table">
@@ -211,7 +213,7 @@ function renderCompare() {
       <thead role="rowgroup"><tr role="row"><td class="pz-corner" role="cell"></td>${plans.map((p) => `<th scope="col" role="columnheader" class="${cls(p)}"><span class="pz-th"><span class="pz-dot" aria-hidden="true"></span>${esc(p.name)}</span></th>`).join('')}</tr></thead>
       <tbody role="rowgroup">${rows.map(([label, f, hint]) => `<tr role="row"><th scope="row" role="rowheader">${esc(label)}${hint ? `<small>${esc(hint)}</small>` : ''}</th>${plans.map((p) => `<td role="cell" class="${cls(p)}" data-plan="${esc(p.name)}">${f(p)}</td>`).join('')}</tr>`).join('')}</tbody>
     </table>
-    <p class="pz-fine">AI features have fair-use limits per account, and paid plans have higher limits. When you reach one, SparkScribe tells you when you can continue.</p>`;
+    <p class="pz-fine">Every plan includes the full AI workspace (see below). AI features have fair-use limits per account, and paid plans have higher limits; when you reach one, SparkScribe tells you when you can continue.</p>`;
   $('compare').hidden = false;
 }
 

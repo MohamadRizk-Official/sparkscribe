@@ -38,7 +38,10 @@ keep them on every plan, and differentiate with features that don't exist yet.
 - Thunder: Ask across selected recordings; a course-wide study guide built from several recordings; consolidated
   review of a collection; batch workflows (several files at once).
 
-The preview advertises none of these.
+The preview advertises none of these as included. Thunder's card (design preview only) leads with "Your recordings,
+connected." and shows "Ask across recordings" in a dashed box labelled **In development · Not included in Thunder yet**;
+builds without `VITE_PRICING_PREVIEW` never show it. It becomes a plan benefit only after it is built and approved
+(Master Phase 2).
 
 ## Phase 2: plans, database, entitlements (after design approval)
 1. **Migration (reviewed, with rollback):**

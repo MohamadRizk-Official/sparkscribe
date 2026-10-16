@@ -28,6 +28,8 @@ ok(!/plus|pro\b/i.test(JSON.stringify(PREVIEW_PLANS)), 'no Plus/Pro left in the 
 // isolation: the server never reads the preview catalogue, and production builds refuse the preview flag
 const serverFiles = ['api/billing.js', 'server/billing/config.js', 'server/billing/service.js'].map((f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')).join('\n');
 ok(!/pricing-catalog|PREVIEW_PLANS/.test(serverFiles), 'the server never imports the preview catalogue');
+const page = readFileSync(new URL('../src/pages/pricing.js', import.meta.url), 'utf8');
+ok(/look\.planned && PREVIEW/.test(page) && /thunderPlanned = PREVIEW &&/.test(page) && /In development/.test(page), 'Thunder’s planned capability is shown only in the design preview, labelled “In development”');
 const { default: config } = await import('../vite.config.js');
 const guard = config({ mode: 'production' }).plugins.find((p) => p.name === 'pricing-preview-guard');
 const runGuard = (env) => {
