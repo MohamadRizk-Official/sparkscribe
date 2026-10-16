@@ -90,14 +90,17 @@ export function forgetThisBrowser() {
 // Permanently delete the signed-in account. The password (null for accounts without one) is checked by signing in again (the database refuses
 // unless the latest sign-in is under 10 minutes old), then one database call removes the account and everything in
 // it, all or nothing. Throws an Error with a message to show; nothing is deleted when it throws.
-export async function deleteMyAccount(password) {
+export async function deleteMyAccount(password, captchaToken) {
   if (!isConfigured) throw new Error('Accounts aren’t available here.');
   const { data: { session } } = await supabase.auth.getSession();
   const email = session?.user?.email;
   if (!email) throw new Error('Sign in again to delete your account.');
   if (password != null) {
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    if (authError) throw new Error(/invalid login|invalid_grant|credentials/i.test(authError.message) ? 'That password isn’t right.' : authError.message);
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken } });
+    if (authError) {
+      if (authError.code === 'captcha_failed' || /captcha/i.test(authError.message)) throw new Error('The security check didn’t go through, so nothing was deleted. Please try again.');
+      throw new Error(/invalid login|invalid_grant|credentials/i.test(authError.message) ? 'That password isn’t right.' : authError.message);
+    }
   }
   // through the server: it cancels any Stripe subscription first, so nobody keeps paying for a deleted account
   let data;

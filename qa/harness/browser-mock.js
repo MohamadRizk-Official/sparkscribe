@@ -16,6 +16,41 @@
   window.__qaKnobs = (k) => { sessionStorage.setItem('__qa', JSON.stringify({ ...knobs(), ...k })); if ('plan' in k) mirrorPlan(k.plan); return knobs(); };
   mirrorPlan(knobs().plan);
   window.__qaLog = [];
+  // ---- Cloudflare Turnstile stand-in (knob turnstile: 'pass' | 'fail' | 'slow' | 'expire' | 'interactive'). Defined before
+  // the app loads, so lib/captcha.js uses it instead of Cloudflare's script. Without the knob, a build with a Site Key
+  // loads the real widget (Cloudflare's test keys work on localhost).
+  {
+    const tsMode = knobs().turnstile;
+    if (tsMode) {
+      const widgets = {};
+      let n = 0, issued = 0;
+      const run = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); // tokens are unique, as Cloudflare's are
+      const stats = (window.__qaTurnstile = { renders: 0, resets: 0, issued: 0, removed: 0, mode: tsMode });
+      const issue = (id) => {
+        const w = widgets[id];
+        if (!w) return;
+        const o = w.opts;
+        if (tsMode === 'fail') return setTimeout(() => o['error-callback']?.('300030'), 80);
+        if (tsMode === 'interactive') {
+          o['before-interactive-callback']?.();
+          return setTimeout(() => { if (!widgets[id]) return; o['after-interactive-callback']?.(); o.callback?.(`qa-token-${run}-${++issued}`); stats.issued = issued; }, 600);
+        }
+        setTimeout(() => {
+          if (!widgets[id]) return;
+          o.callback?.(`qa-token-${run}-${++issued}`);
+          stats.issued = issued;
+          // the first token runs out before it is used: Turnstile (refresh-expired: auto) fetches another
+          if (tsMode === 'expire' && issued === 1) setTimeout(() => { o['expired-callback']?.(); setTimeout(() => { o.callback?.(`qa-token-${run}-${++issued}`); stats.issued = issued; }, 400); }, 100);
+        }, tsMode === 'slow' ? 2500 : 120);
+      };
+      window.turnstile = {
+        render(el, opts) { const id = `qa-ts-${++n}`; widgets[id] = { el, opts }; stats.renders++; stats.lastOptions = { sitekey: opts.sitekey, action: opts.action, appearance: opts.appearance, size: opts.size }; issue(id); return id; },
+        reset(id) { stats.resets++; issue(id); },
+        remove(id) { delete widgets[id]; stats.removed++; },
+        getResponse() { return undefined; },
+      };
+    }
+  }
   const log = (e) => { window.__qaLog.push({ t: Math.round(performance.now()), ...e }); };
   const now = Math.floor(Date.now() / 1000);
   const sessionToken = () => ({ access_token: 'fake.jwt.token', refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: USER });
@@ -99,11 +134,25 @@
     const p = url.pathname;
     log({ method, path: p, q: url.search.slice(0, 120) });
     // ---- auth ----
+    // CAPTCHA, as Supabase applies it once enabled (knob captchaRequired): sign-up, password sign-in, reset and resend
+    // requests need a valid, unused token. Every token received is recorded (sessionStorage __qaCaptcha).
+    if (/^\/auth\/v1\/(signup|recover|resend)$/.test(p) || (p === '/auth/v1/token' && url.searchParams.get('grant_type') === 'password')) {
+      const tok = body?.gotrue_meta_security?.captcha_token ?? null;
+      const seen = JSON.parse(sessionStorage.getItem('__qaCaptcha') || '[]');
+      const reused = tok != null && seen.some((x) => x.token === tok);
+      seen.push({ path: p, token: tok });
+      sessionStorage.setItem('__qaCaptcha', JSON.stringify(seen));
+      const valid = typeof tok === 'string' && (/^qa-token-[a-z0-9]+-\d+$/.test(tok) || tok === 'XXXX.DUMMY.TOKEN.XXXX') && !reused;
+      if (K.captchaRejectNext || (K.captchaRequired && !valid)) {
+        if (K.captchaRejectNext) window.__qaKnobs({ captchaRejectNext: false });
+        return json({ code: 400, error_code: 'captcha_failed', msg: 'captcha protection: request disallowed (captcha verification process failed)' }, 400);
+      }
+    }
     if (p === '/auth/v1/user') {
       if (method === 'PUT') { Object.assign(USER.user_metadata, body?.data || {}); if (body?.data?.terms_accepted_at) window.__qaKnobs({ noConsent: false }); return json(USER); }
       return K.signedOut ? json({ message: 'no session' }, 401) : json(USER);
     }
-    if (p === '/auth/v1/settings') return json({ external: { google: false, email: true } });
+    if (p === '/auth/v1/settings') return json({ external: { google: !!K.googleOn, email: true } });
     if (p === '/auth/v1/logout') { sessionStorage.setItem('__signedOut', '1'); return new Response(null, { status: 204 }); }
     if (p === '/auth/v1/token') {
       if (body?.password === 'unconfirmed-password') return json({ error: 'invalid_grant', error_code: 'email_not_confirmed', error_description: 'Email not confirmed', msg: 'Email not confirmed' }, 400);

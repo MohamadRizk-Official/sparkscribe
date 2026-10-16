@@ -2,6 +2,7 @@
 // Works signed out too: preferences are kept in this browser, and on the account when signed in.
 import { mountAccountMenu, getSession, signOut, esc, deleteMyAccount } from '../lib/account.js';
 import { makeDialog } from '../library/dialogs.js';
+import { createCaptcha } from '../lib/captcha.js';
 import { getMascotPref, setMascotPref, getThemePref, setThemePref } from '../lib/prefs.js';
 import { mountMascot } from '../mascot/mascot.js';
 import { keepAudioPref, setKeepAudioPref, audioStorageInfo, clearAllAudio, fmtBytes } from '../lib/audio-store.js';
@@ -41,6 +42,7 @@ const justDeleted = new URLSearchParams(location.search).has('deleted');
 if (justDeleted) history.replaceState(null, '', '/settings');
 function openDeleteDialog(user) {
   const hasPassword = (user.app_metadata?.providers || [user.app_metadata?.provider]).includes('email');
+  let captcha = null; // created below, removed when the dialog closes (however it closes)
   const { dlg, dismiss } = makeDialog('delete-account-dlg', `
     <form class="dlg-form" novalidate>
       <h3>Delete your account?</h3>
@@ -49,15 +51,17 @@ function openDeleteDialog(user) {
         <ul class="dlg-list"><li>every saved transcript and its speaker names</li><li>summaries, notes, insights and Ask answers</li><li>everything made in Create (study guides, quizzes, recaps…)</li><li>your folders and preferences</li><li>your sign-in${user.email ? ` (${esc(user.email)})` : ''}</li></ul>
         <p class="dlg-dim">A paid plan is canceled right away, so you won’t be charged again. It can’t be undone, and we can’t restore it. Your audio was never uploaded. Files you exported stay on your devices.</p>
       </div>
-      ${hasPassword ? '<label class="dlg-field"><span>Your password</span><input type="password" name="password" autocomplete="current-password" required /></label>' : ''}
+      ${hasPassword ? '<label class="dlg-field"><span>Your password</span><input type="password" name="password" autocomplete="current-password" required /></label><div data-captcha></div>' : ''}
       <label class="dlg-field"><span>Type DELETE to confirm</span><input type="text" name="confirm" autocomplete="off" autocapitalize="characters" spellcheck="false" required /></label>
       <p class="dlg-err" role="alert" hidden></p>
       <div class="confirm-actions">
         <button class="btn btn-ghost" type="button" data-act="cancel">Cancel</button>
         <button class="btn btn-danger" type="submit" disabled>Delete my account</button>
       </div>
-    </form>`);
+    </form>`, () => captcha?.remove());
   const form = dlg.querySelector('form'), pw = form.elements.password, word = form.elements.confirm;
+  // checking the password signs in again, which Supabase protects with the same CAPTCHA as the sign-in page
+  if (pw) captcha = createCaptcha(form.querySelector('[data-captcha]'), { action: 'reauth' });
   const go = form.querySelector('[type=submit]'), err = form.querySelector('.dlg-err');
   const ready = () => word.value.trim() === 'DELETE' && (!pw || pw.value.length > 0);
   form.addEventListener('input', () => { go.disabled = !ready(); });
@@ -68,7 +72,9 @@ function openDeleteDialog(user) {
     if (!ready() || go.dataset.busy) return;
     go.dataset.busy = '1'; go.disabled = true; go.textContent = 'Deleting…'; err.hidden = true;
     try {
-      await deleteMyAccount(pw ? pw.value : null);
+      let token;
+      try { token = await captcha?.token(); } catch (ce) { throw new Error(ce.message); }
+      try { await deleteMyAccount(pw ? pw.value : null, token); } finally { captcha?.reset(); }
       location.replace('/settings?deleted=1');
     } catch (ex) {
       err.textContent = ex.message; err.hidden = false;

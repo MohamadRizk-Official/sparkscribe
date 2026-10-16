@@ -4067,3 +4067,9 @@ a.ax-item-title:hover { text-decoration: underline; }
 .plan-tag { margin-left: 6px; padding: 1px 7px; border-radius: 999px; font: 600 10px/1.6 var(--mono); letter-spacing: .05em; text-transform: uppercase; color: #8b5cf6; border: 1px solid rgba(139, 92, 246, .45); vertical-align: middle; }
 .plan-tag[hidden] { display: none; }
 :root[data-theme="light"] .plan-tag { color: #6d28d9; }
+
+/* Cloudflare Turnstile (lib/captcha.js): invisible unless Cloudflare asks for a click; then it sits centred above the button */
+.captcha-slot { display: flex; justify-content: center; width: 100%; min-height: 0; }
+.captcha-slot.is-interactive { margin: 2px 0 6px; }
+.captcha-slot.hidden { display: none; }
+.captcha-slot iframe { max-width: 100%; }

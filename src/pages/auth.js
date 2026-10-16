@@ -1,6 +1,7 @@
 // /auth — sign in, create account, forgot password, and set a new password (after a reset link).
 import { supabase, isConfigured, authSettings } from '../lib/supabase.js';
 import { mountAccountMenu, safeNext, getUser, hasConsent, recordConsent, signOut } from '../lib/account.js';
+import { createCaptcha, CaptchaError, isCaptchaRejection, CAPTCHA_REJECTED } from '../lib/captcha.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -18,6 +19,10 @@ const MODES = {
 const PENDING_CONSENT = 'sparkscribe.consentAt'; // ticked on the sign-up tab before going to Google (this browser only)
 let mode = 'signin';
 let googleOn = false, socialMode = true;
+// Cloudflare Turnstile (lib/captcha.js): for the modes that call Supabase with an email and password or send an email.
+// Created the first time one of them is shown; off (no widget, no token) when the build has no Site Key.
+let captcha = null;
+const needsCaptcha = (m) => m === 'signin' || m === 'signup' || m === 'forgot';
 const showGoogle = () => $('googleWrap').classList.toggle('hidden', !(googleOn && socialMode));
 
 if (!isConfigured) {
@@ -91,7 +96,17 @@ function setMode(m) {
   $('consentSignOut')?.classList.toggle('hidden', m !== 'consent');
   $('password').autocomplete = m === 'signin' ? 'current-password' : 'new-password';
   $('backToSignin').classList.toggle('hidden', m !== 'forgot');
+  if (needsCaptcha(m) && !captcha) captcha = createCaptcha($('captchaSlot'), { action: 'auth' });
+  $('captchaSlot').classList.toggle('hidden', !needsCaptcha(m));
   hideMsg();
+}
+
+// A fresh single-use token for one Supabase request (undefined when Turnstile is off). Shows why if there's none.
+async function captchaToken() {
+  try { return await captcha?.token(); } catch (err) {
+    showMsg(err instanceof CaptchaError ? err.message : 'We couldn’t complete the security check. Please try again.', 'error');
+    return null;
+  }
 }
 
 function showMsg(text, kind = 'info', resendTo = null) {
@@ -110,7 +125,10 @@ function showMsg(text, kind = 'info', resendTo = null) {
 }
 async function resend(email, btn) {
   btn.disabled = true;
-  const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: callbackUrl(next) } });
+  const token = await captchaToken();
+  if (token === null) { btn.disabled = false; return; }
+  const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: callbackUrl(next), captchaToken: token } });
+  captcha?.reset();
   if (error) { btn.disabled = false; return showMsg(explain(error), 'error'); }
   showMsg(`Sent again to ${email}. It can take a few minutes; check spam too. The link works in this browser.`, 'success');
 }
@@ -124,6 +142,7 @@ function busy(on) {
 // Supabase error messages, made friendlier where it matters.
 function explain(error) {
   const msg = error?.message || String(error);
+  if (isCaptchaRejection(error)) return CAPTCHA_REJECTED;
   if (/invalid login credentials/i.test(msg)) return 'Wrong email or password.';
   if (/email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox (and spam) for the link we sent.';
   // the email service refused or failed: not the user's fault, and retrying right away rarely helps
@@ -153,22 +172,28 @@ async function submit(e) {
   if (mode === 'signup' && !$('ageOk').checked) return showMsg('Please confirm you’re 13 or older and agree to the Terms to create an account.', 'error');
 
   busy(true);
+  // sign-in, sign-up and the reset email carry a Turnstile token (once Supabase's CAPTCHA protection is on, it insists)
+  let token;
+  if (needsCaptcha(mode)) {
+    token = await captchaToken();
+    if (token === null) return busy(false);
+  }
   try {
     if (mode === 'signin') {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: token } });
       if (error) throw error;
       location.replace(next);
     } else if (mode === 'signup') {
       // what the person confirmed, and when (kept with the account)
       const agreed = new Date().toISOString();
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: callbackUrl(next), data: { age_13_plus_confirmed_at: agreed, terms_accepted_at: agreed } } });
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: callbackUrl(next), captchaToken: token, data: { age_13_plus_confirmed_at: agreed, terms_accepted_at: agreed } } });
       if (error) throw error;
       if (data.session) return location.replace(next); // email confirmation is off
       // With confirmation on, Supabase deliberately gives the same answer for new and existing emails.
       showMsg(`Check ${email} for a confirmation link. Open it in this browser to finish creating your account.`, 'success', email);
       $('authForm').reset();
     } else if (mode === 'forgot') {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: callbackUrl('/auth?mode=update') });
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: callbackUrl('/auth?mode=update'), captchaToken: token });
       if (error) throw error;
       showMsg(`If an account exists for ${email}, a reset link is on its way. Open it in this browser.`, 'success');
     } else if (mode === 'update') {
@@ -182,6 +207,7 @@ async function submit(e) {
     showMsg(explain(err), 'error', mode === 'signin' && /email not confirmed/i.test(err?.message || '') ? email : null);
   } finally {
     busy(false);
+    if (needsCaptcha(mode)) captcha?.reset(); // a token works once: get the next one ready for another attempt
   }
 }
 
