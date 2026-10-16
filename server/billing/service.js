@@ -8,7 +8,7 @@
 //   createPortal()       Stripe Customer Portal for the signed-in user's own customer
 //   handleEvent()        a verified Stripe webhook event -> synchronized subscription state
 //   deleteAccount()      stop billing in Stripe, then delete the account (nobody keeps paying for a deleted account)
-import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured, automaticTax } from './config.js';
+import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured, automaticTax, introCouponFor, billingScope } from './config.js';
 
 const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
 const ACTIVE = (s) => PAID_STATUSES.has(s.status);
@@ -54,7 +54,7 @@ async function ensureCustomer(sb, user) {
     throw new BillingError('Test payments are not available for an account with real billing.', { status: 409, code: 'live_account' });
   }
   const created = await stripe.customers.create(
-    { email: user.email || undefined, metadata: { supabase_user_id: user.id } },
+    { email: user.email || undefined, metadata: { supabase_user_id: user.id, sparkscribe_scope: billingScope() } },
     { idempotencyKey: `sparkscribe-customer-${user.id}-${live ? 'live' : 'test'}` },
   );
   const linked = await billingDb().call('billing_link_customer', { p_user: user.id, p_customer: created.id, p_livemode: live });
@@ -102,6 +102,17 @@ export async function createCheckout(sb, user, planKey, origin) {
     billingLog('plan_change_session', { user: user.id, to: plan.key });
     return { url: session.url, kind: 'change' };
   }
+  // The introductory price (Flash: $1 for the first month), only for an account the database says has never had a
+  // paid subscription nor used the offer. Decided here, never by the browser. If the coupon isn't configured the
+  // checkout is refused rather than charging a price the page didn't show.
+  let coupon = null;
+  if (plan.intro_price_cents != null) {
+    const st = await getStatus(sb);
+    if (st.introEligible === true) {
+      coupon = introCouponFor(plan.key);
+      if (!coupon) throw new BillingError('The introductory price isn’t available right now. Nothing was charged. Try again later.', { status: 503, code: 'intro_unavailable' });
+    }
+  }
   // Checkout pages this customer opened earlier (another tab, a double click) are closed first, so at most one can
   // be paid. Two paid at the same instant are still caught by the webhook (settleDuplicates).
   const open = await stripe.checkout.sessions.list({ customer, status: 'open', limit: 10 }).catch(() => ({ data: [] }));
@@ -115,14 +126,15 @@ export async function createCheckout(sb, user, planKey, origin) {
     customer,
     client_reference_id: user.id,
     line_items: [{ price, quantity: 1 }],
-    metadata: { supabase_user_id: user.id, plan: plan.key },
-    subscription_data: { metadata: { supabase_user_id: user.id, plan: plan.key } },
+    metadata: { supabase_user_id: user.id, plan: plan.key, intro: coupon ? '1' : '0', sparkscribe_scope: billingScope() },
+    subscription_data: { metadata: { supabase_user_id: user.id, plan: plan.key, intro: coupon ? '1' : '0', sparkscribe_scope: billingScope() } },
     success_url: `${origin}/account?checkout=success`,
     cancel_url: `${origin}/pricing?checkout=canceled`,
-    allow_promotion_codes: false,
+    // the only discount is the server's introductory coupon; customers can't enter codes
+    ...(coupon ? { discounts: [{ coupon }] } : { allow_promotion_codes: false }),
     ...(automaticTax() && { automatic_tax: { enabled: true }, billing_address_collection: 'required', customer_update: { address: 'auto', name: 'auto' } }),
   });
-  billingLog('checkout_session', { user: user.id, plan: plan.key });
+  billingLog('checkout_session', { user: user.id, plan: plan.key, intro: Boolean(coupon) });
   return { url: session.url, kind: 'checkout' };
 }
 
@@ -155,6 +167,8 @@ async function syncSubscription(subscriptionId) {
   const item = sub.items?.data?.[0];
   const price = item?.price?.id || null;
   const plan = await planForPrice(price);
+  // a price this server doesn't know grants nothing (stored as Free); raise it for an operator, ids only
+  if (price && !plan) console.error(`[billing] ${JSON.stringify({ event: 'unknown_price', alert: true, subscription: sub.id, price, livemode: Boolean(sub.livemode) })}`);
   const metaUser = sub.metadata?.supabase_user_id || null;
   const userId = await billingDb().call('billing_apply_subscription', {
     p_customer: idOf(sub.customer),
@@ -245,11 +259,22 @@ async function relinkFromMetadata(subscriptionId) {
 // Outcomes that will never succeed on retry: recorded, acknowledged, and never grant access.
 const FINAL_REFUSALS = /unknown_customer|user_mismatch|mode_mismatch|customer_belongs_to_another_user|unknown_user/;
 
+// the deployment that created the object an event is about (see billingScope); null = untagged (older objects)
+function scopeOf(obj) {
+  return obj?.metadata?.sparkscribe_scope || obj?.parent?.subscription_details?.metadata?.sparkscribe_scope
+    || obj?.subscription_details?.metadata?.sparkscribe_scope || null;
+}
+
 export async function handleEvent(event) {
   const db = billingDb();
   if (Boolean(event.livemode) !== isLiveMode()) {
     billingLog('webhook_ignored', { id: event.id, type: event.type, reason: 'other_mode' });
     return { status: 200, body: { received: true, ignored: 'other_mode' } };
+  }
+  const scope = scopeOf(event.data?.object);
+  if (scope && scope !== billingScope()) {
+    billingLog('webhook_ignored', { id: event.id, type: event.type, reason: 'other_scope' });
+    return { status: 200, body: { received: true, ignored: 'other_scope' } };
   }
   const begin = await db.call('billing_event_begin', { p_event_id: event.id, p_type: event.type, p_livemode: Boolean(event.livemode) });
   if (begin !== 'new') {
@@ -268,8 +293,13 @@ export async function handleEvent(event) {
         const linked = await db.call('billing_link_customer', { p_user: uid, p_customer: idOf(obj.customer), p_livemode: Boolean(event.livemode) });
         if (linked !== idOf(obj.customer)) throw new Error('customer_belongs_to_another_user');
         const r = await syncSubscription(idOf(obj.subscription));
+        // the introductory offer is used up only when a Checkout that carried it completes
+        let promo = '';
+        if (obj.metadata?.intro === '1' && Number(obj.total_details?.amount_discount || 0) > 0) {
+          promo = ` intro:${await db.call('billing_promo_redeem', { p_user: uid, p_promo: `${obj.metadata?.plan || 'flash'}_intro`, p_livemode: Boolean(event.livemode), p_session: obj.id, p_subscription: idOf(obj.subscription) })}`;
+        }
         const extra = await settleDuplicates(idOf(obj.customer));
-        out = { ...out, result: 'synced', detail: `${r.plan}/${r.status}${extra ? ` dup:${extra}` : ''}`, userId: r.userId, subscription: r.subscription };
+        out = { ...out, result: 'synced', detail: `${r.plan}/${r.status}${promo}${extra ? ` dup:${extra}` : ''}`, userId: r.userId, subscription: r.subscription };
         break;
       }
       case 'customer.subscription.created':

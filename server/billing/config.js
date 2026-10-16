@@ -98,6 +98,17 @@ export async function loadPlans() {
 }
 
 const envName = (planKey) => `STRIPE_${planKey.toUpperCase()}_PRICE_ID`;
+// The Stripe coupon that gives a plan its introductory price (Flash: $4.99 off the first month = $1). Created by
+// scripts/stripe-setup.mjs; separate in test and live mode, like the prices.
+export function introCouponFor(planKey) {
+  const id = process.env[`STRIPE_${planKey.toUpperCase()}_INTRO_COUPON`];
+  return id && /^[A-Za-z0-9_-]{3,60}$/.test(id) ? id : null;
+}
+// Which deployment created a Stripe object. Every Preview, local QA run and Production of this project shares one
+// Stripe sandbox (test mode) and one database, so each tags what it creates and its webhook ignores objects tagged by
+// another (otherwise one deployment would treat another's test subscriptions as orphans). Untagged objects (created
+// before this) are handled as before. BILLING_SCOPE is set only for local QA runs; deployments use "app".
+export const billingScope = () => (/^[a-z0-9:-]{1,40}$/.test(process.env.BILLING_SCOPE || '') ? process.env.BILLING_SCOPE : 'app');
 // The only way a Stripe price is chosen: from a plan key the server knows, never from the browser.
 export function priceIdFor(planKey) {
   const id = process.env[envName(planKey)];

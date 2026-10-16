@@ -1,12 +1,18 @@
 // One-time Stripe setup for SparkScribe (safe to re-run: it reuses what already exists).
 //
 //   node scripts/stripe-setup.mjs [--webhook-url https://.../api/stripe-webhook --secret-out <file>] [--legal-base https://<site>]
+//                                 [--downgrades at-period-end|immediately]
 //
 // Reads STRIPE_SECRET_KEY (and the public Supabase URL/key) from the environment or .env.local. Never prints
 // a secret. Creates, or finds by lookup key:
-//   * one product + monthly price per paid plan in billing_plans (prices and names come from the database)
-//   * a Customer Portal configuration: update payment method, invoices, switch Plus <-> Pro (prorated and invoiced at once),
-//     cancel at the end of the period; a plan switch is invoiced at once (always_invoice)
+//   * one product + monthly price per paid plan of the four-tier lineup in billing_plans (Flash, Bolt, Thunder; prices
+//     and names come from the database)
+//   * for a plan with an introductory price (Flash: $1 first month), a coupon for the difference that applies to that
+//     plan's product only, for the first month(s) only (duration "once"); the server adds it at Checkout for eligible
+//     accounts
+//   * a Customer Portal configuration: update payment method, invoices, switch between the paid plans, cancel at the end
+//     of the period. Upgrades are prorated and invoiced at once; downgrades take effect at the end of the period
+//     (--downgrades at-period-end, the default) or at once with a prorated credit (--downgrades immediately)
 //   * optionally a webhook endpoint; its signing secret is written only to --secret-out (mode 600). Its events use
 //     the same Stripe API version as the server's library. A Vercel protection-bypass query (?x-vercel-protection-bypass=…)
 //     may be appended to the URL when the deployment is protected; the URL is never printed.
@@ -27,13 +33,15 @@ const secretOut = arg('--secret-out');
 if (webhookUrl && !secretOut) { console.error('--webhook-url needs --secret-out <file>'); process.exit(1); }
 if (webhookUrl && !/^https:\/\/[a-z0-9.-]+\/api\/stripe-webhook(\?x-vercel-protection-bypass=[A-Za-z0-9]+)?$/i.test(webhookUrl)) { console.error('webhook URL must be https://<host>/api/stripe-webhook'); process.exit(1); }
 const legalBase = arg('--legal-base');
+const downgrades = arg('--downgrades') || 'at-period-end';
+if (!['at-period-end', 'immediately'].includes(downgrades)) { console.error('--downgrades must be at-period-end or immediately'); process.exit(1); }
 if (legalBase && !/^https:\/\/[a-z0-9.-]+$/i.test(legalBase)) { console.error('--legal-base must be https://<host>'); process.exit(1); }
 
 const stripe = new Stripe(key);
 // Stripe Tax product tax code: "Software as a service (SaaS) - personal use" (SparkScribe is sold to individuals)
 const TAX_CODE = 'txcd_10103000';
 const sbUrl = env.NEXT_PUBLIC_SUPABASE_URL, sbKey = env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-const plans = await (await fetch(`${sbUrl}/rest/v1/billing_plans?select=*&active=eq.true&order=sort_order`, { headers: { apikey: sbKey } })).json();
+const plans = await (await fetch(`${sbUrl}/rest/v1/billing_plans?select=*&tier=not.is.null&order=tier`, { headers: { apikey: sbKey } })).json();
 const paid = plans.filter((p) => p.billing_interval);
 if (!paid.length) { console.error('No paid plans found in billing_plans.'); process.exit(1); }
 
@@ -66,7 +74,29 @@ for (const p of paid) {
   if ((typeof price.product === 'string' ? null : price.product.tax_code?.id ?? price.product.tax_code) !== TAX_CODE) await stripe.products.update(productId, { tax_code: TAX_CODE });
   if (price.tax_behavior === 'unspecified') console.log(`  note: ${p.name} price has no tax behavior; Stripe Tax uses the account default (set it to "exclusive" in Tax settings)`);
   out[`STRIPE_${p.key.toUpperCase()}_PRICE_ID`] = price.id;
-  prices.push({ product: typeof price.product === 'string' ? price.product : price.product.id, prices: [price.id] });
+  prices.push({ product: productId, prices: [price.id] });
+
+  // introductory price: a coupon worth the difference, on this plan's product only, for the intro months only
+  if (p.intro_price_cents != null) {
+    const off = p.price_cents - p.intro_price_cents, months = p.intro_months || 1;
+    const id = `sparkscribe_${p.key}_intro_${off}_${months}m`;
+    const getCoupon = () => stripe.coupons.retrieve(id, { expand: ['applies_to'] }).catch(() => null);
+    let coupon = await getCoupon();
+    if (!coupon) {
+      coupon = await stripe.coupons.create({
+        id, name: `${p.name}: first ${months === 1 ? 'month' : `${months} months`} ${(p.intro_price_cents / 100).toFixed(2)} ${p.currency.toUpperCase()}`,
+        amount_off: off, currency: p.currency, applies_to: { products: [productId] },
+        ...(months === 1 ? { duration: 'once' } : { duration: 'repeating', duration_in_months: months }),
+        metadata: { sparkscribe_plan: p.key, sparkscribe_intro: '1' },
+      });
+      coupon = await getCoupon(); // applies_to is only returned when expanded
+      console.log(`created coupon ${id}`);
+    } else console.log(`found   coupon ${id}`);
+    if (coupon.amount_off !== off || coupon.currency !== p.currency || !coupon.applies_to?.products?.includes(productId) || (months === 1 ? coupon.duration !== 'once' : coupon.duration_in_months !== months)) {
+      console.error(`Coupon ${id} doesn't match the plan's introductory price`); process.exit(1);
+    }
+    out[`STRIPE_${p.key.toUpperCase()}_INTRO_COUPON`] = coupon.id;
+  }
 }
 
 const portalSpec = {
@@ -76,11 +106,15 @@ const portalSpec = {
     invoice_history: { enabled: true },
     payment_method_update: { enabled: true },
     subscription_cancel: { enabled: true, mode: 'at_period_end', proration_behavior: 'none', cancellation_reason: { enabled: true, options: ['too_expensive', 'unused', 'switched_service', 'other'] } },
-    subscription_update: { enabled: true, default_allowed_updates: ['price'], proration_behavior: 'always_invoice', products: prices },
+    subscription_update: {
+      enabled: true, default_allowed_updates: ['price'], proration_behavior: 'always_invoice', products: prices,
+      // a cheaper plan starts at the next renewal (the customer keeps what they paid for until then)
+      ...(downgrades === 'at-period-end' && { schedule_at_period_end: { conditions: [{ type: 'decreasing_item_amount' }] } }),
+    },
   },
-  metadata: { sparkscribe: 'portal' },
+  metadata: { sparkscribe: 'portal_four_tier', downgrades },
 };
-const existing = (await stripe.billingPortal.configurations.list({ active: true, limit: 20 })).data.find((c) => c.metadata?.sparkscribe === 'portal');
+const existing = (await stripe.billingPortal.configurations.list({ active: true, limit: 50 })).data.find((c) => c.metadata?.sparkscribe === 'portal_four_tier');
 const portal = existing ? await stripe.billingPortal.configurations.update(existing.id, portalSpec) : await stripe.billingPortal.configurations.create(portalSpec);
 console.log(`${existing ? 'updated' : 'created'} portal configuration ${portal.id}`);
 out.STRIPE_PORTAL_CONFIGURATION_ID = portal.id;

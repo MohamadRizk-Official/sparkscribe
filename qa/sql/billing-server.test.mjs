@@ -93,6 +93,7 @@ Object.assign(process.env, {
   NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${restPort}`, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_qa',
   BILLING_DB_SECRET: SECRET, STRIPE_WEBHOOK_SECRET: 'whsec_qa_test', STRIPE_API_HOST: `127.0.0.1:${stripePort}`,
   STRIPE_FLASH_PRICE_ID: 'price_flash', STRIPE_BOLT_PRICE_ID: 'price_bolt', STRIPE_THUNDER_PRICE_ID: 'price_thunder',
+  STRIPE_FLASH_INTRO_COUPON: 'sparkscribe_flash_intro_499',
 });
 delete process.env.VERCEL;
 const quiet = console.log; console.log = (...a) => { if (!String(a[0]).startsWith('[billing]')) quiet(...a); };
@@ -109,8 +110,13 @@ ok(!config.paymentsEnabled(env({ STRIPE_SECRET_KEY: 'sk_live_x', BILLING_PAYMENT
 ok(config.paymentsEnabled(env({ STRIPE_SECRET_KEY: 'sk_live_x', BILLING_PAYMENTS_ENABLED: '1', BILLING_LIVE_APPROVED: '1' })), 'LIVE key + switch + approval → on (the only way to take real money)');
 ok(!config.paymentsEnabled(env({ STRIPE_SECRET_KEY: 'pk_live_x', BILLING_PAYMENTS_ENABLED: '1', BILLING_LIVE_APPROVED: '1' })), 'a publishable key is never accepted as a secret key');
 
-const fakeSb = (uid) => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [uid])).rows[0] || null }) }) }) }) });
-const tryCheckout = async (plan = 'flash') => { try { return await service.createCheckout(fakeSb(user), { id: user, email: 'payer@example.com' }, plan, 'http://localhost:5173'); } catch (e) { return e; } };
+// the signed-in user's Supabase client, as the billing server uses it: their subscription row and billing_status()
+const fakeSb = (uid) => ({
+  from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [uid])).rows[0] || null }) }) }) }),
+  rpc: async (fn) => (fn === 'billing_status' ? { data: await statusOf(uid), error: null } : { data: null, error: { code: 'PGRST202' } }),
+});
+const tryCheckoutFor = async (uid, plan) => { try { return await service.createCheckout(fakeSb(uid), { id: uid, email: `${uid.slice(0, 6)}@example.com` }, plan, 'http://localhost:5173'); } catch (e) { return e; } };
+const tryCheckout = async (plan = 'flash') => tryCheckoutFor(user, plan);
 for (const [label, vars] of [['no key', {}], ['test key without the switch', { STRIPE_SECRET_KEY: 'sk_test_qa' }], ['live key without approval', { STRIPE_SECRET_KEY: 'sk_live_qa', BILLING_PAYMENTS_ENABLED: '1' }]]) {
   Object.assign(process.env, env(vars));
   const before = stripeCalls.length;
@@ -124,6 +130,16 @@ ok(authorized.ok && authorized.upgradesAvailable === false, 'authorize: recordin
 Object.assign(process.env, env({ STRIPE_SECRET_KEY: 'sk_test_qa', BILLING_PAYMENTS_ENABLED: '1' }));
 const c = await tryCheckout('flash');
 ok(/^https:\/\/checkout\.stripe\.test\/cs_test_\d+$/.test(c.url) && stripeCalls.includes('POST /v1/customers') && stripeCalls.includes('POST /v1/checkout/sessions'), 'test mode + switch: Checkout session created (fake Stripe)');
+ok((await statusOf(user)).introEligible === true, 'a new account is eligible for the $1 first month (decided by the database)');
+ok(lastCheckout.get('discounts[0][coupon]') === 'sparkscribe_flash_intro_499' && lastCheckout.get('metadata[intro]') === '1' && !lastCheckout.has('allow_promotion_codes'),
+  'eligible + Flash: Checkout carries the server’s introductory coupon (no customer-entered codes)');
+ok(lastCheckout.get('subscription_data[metadata][sparkscribe_scope]') === 'app' && lastCheckout.get('line_items[0][price]') === 'price_flash', 'the subscription is tagged with this deployment’s scope; the price is the server’s Flash price');
+const cb = await tryCheckout('bolt');
+ok(cb.url && !lastCheckout.has('discounts[0][coupon]') && lastCheckout.get('allow_promotion_codes') === 'false' && lastCheckout.get('metadata[intro]') === '0', 'Bolt: no introductory price, and no promotion codes');
+delete process.env.STRIPE_FLASH_INTRO_COUPON;
+const noCoupon = await tryCheckout('flash');
+ok(noCoupon.code === 'intro_unavailable' && noCoupon.status === 503, 'eligible but the coupon isn’t configured: refused (never charges $5.99 when the page said $1)');
+process.env.STRIPE_FLASH_INTRO_COUPON = 'sparkscribe_flash_intro_499';
 const c2 = await tryCheckout('flash');
 ok(c2.url !== c.url && openSessions.size === 1 && !openSessions.has(c.url.split('/').pop()), 'a second Checkout (another tab, double click) closes the first one: only one can be paid');
 const linked = (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [user])).rows[0];
@@ -160,8 +176,11 @@ ok((await deliver(event('evt_a', 'customer.subscription.updated', { id: 'sub_qa_
 ok((await statusOf(user)).plan === 'free', '…and none of those changed anything');
 
 subs.set('sub_qa_1', subscription());
-const r1 = await deliver(event('evt_checkout', 'checkout.session.completed', { id: 'cs_test_1', mode: 'subscription', subscription: 'sub_qa_1', customer, client_reference_id: user, metadata: { supabase_user_id: user } }));
+const r1 = await deliver(event('evt_checkout', 'checkout.session.completed', { id: 'cs_test_1', mode: 'subscription', subscription: 'sub_qa_1', customer, client_reference_id: user, metadata: { supabase_user_id: user, plan: 'flash', intro: '1' }, total_details: { amount_discount: 499 } }));
 ok(r1.statusCode === 200 && (await statusOf(user)).plan === 'flash', 'checkout.session.completed (valid signature) → Flash, from Stripe’s own subscription record');
+const promo = (await db.query(`select promo, checkout_session from private.billing_promotions where user_id = $1`, [user])).rows;
+ok(promo.length === 1 && promo[0].promo === 'flash_intro' && promo[0].checkout_session === 'cs_test_1' && (await statusOf(user)).introEligible === false, 'the $1 offer is recorded as used when that Checkout completes; the account is no longer eligible');
+ok((await db.query(`select first_plan from private.billing_paid_history where user_id = $1`, [user])).rows[0]?.first_plan === 'flash', 'the first paid plan is recorded (a returning customer is never eligible again)');
 const dup = await deliver(event('evt_checkout', 'checkout.session.completed', { id: 'cs_test_1', mode: 'subscription', subscription: 'sub_qa_1', customer, client_reference_id: user }));
 ok(dup.statusCode === 200 && dup.body.duplicate === true, 'the same event again → acknowledged as duplicate, not re-applied');
 
@@ -187,8 +206,37 @@ ok(foreign.statusCode === 200 && foreign.body.refused === 'unknown_customer', 'a
 subs.set('sub_steal', subscription({ id: 'sub_steal', metadata: { supabase_user_id: other } }));
 const steal = await deliver(event('evt_steal', 'customer.subscription.updated', { id: 'sub_steal' }));
 ok(steal.body.refused === 'user_mismatch' && (await statusOf(other)).plan === 'free', 'a subscription claiming another user is refused');
+// another deployment's object (a different Preview or a local QA run sharing this sandbox) is never touched
+subs.set('sub_scoped', subscription({ id: 'sub_scoped', metadata: { supabase_user_id: user, sparkscribe_scope: 'qa-local' } }));
+const scoped = await deliver(event('evt_scoped', 'customer.subscription.updated', { id: 'sub_scoped', metadata: { supabase_user_id: user, sparkscribe_scope: 'qa-local' } }));
+ok(scoped.statusCode === 200 && scoped.body.ignored === 'other_scope', 'an event about another deployment’s subscription is ignored (no orphan cancellation, no state change)');
+// a price this server doesn't know: grants nothing, and raises an operator alert (ids only)
+const errs = []; const err0 = console.error; console.error = (...a) => errs.push(a.join(' '));
+subs.set('sub_unknown_price', subscription({ id: 'sub_unknown_price', items: { data: [{ id: 'si_u', price: { id: 'price_mystery' }, current_period_start: now, current_period_end: now + 30 * 86400 }] } }));
+const subsBefore = new Map(subs);
+for (const [k, v] of subsBefore) if (k !== 'sub_unknown_price' && ['active', 'trialing', 'past_due'].includes(v.status)) subs.set(k, { ...v, status: 'canceled' });
+await deliver(event('evt_unknown_price', 'customer.subscription.updated', { id: 'sub_unknown_price' }));
+console.error = err0;
+ok((await statusOf(user)).plan === 'free' && errs.some((e) => /"unknown_price".*"alert":true.*price_mystery/.test(e)) && !errs.some((e) => /payer@|sk_|whsec_/.test(e)), 'unknown price → Free, plus an operator alert with ids only');
+for (const [k, v] of subsBefore) subs.set(k, v);
+subs.delete('sub_unknown_price');
 const logged = (await db.query(`select id, result from public.billing_events order by created_at`)).rows.map((r) => `${r.id}:${r.result}`);
 ok(logged.includes('evt_checkout:synced') && logged.includes('evt_foreign:refused:unknown_customer'), `every processed event is logged with its outcome (${logged.length} events)`);
+
+// ---------- 3b. the introductory offer: who gets it ----------
+const returning = await P.createUser('returning@example.com');
+await db.query(`insert into private.billing_paid_history (user_id, livemode, first_plan) values ($1, false, 'flash')`, [returning]);
+const ret = await tryCheckoutFor(returning, 'flash');
+ok(ret.url && !lastCheckout.has('discounts[0][coupon]') && (await statusOf(returning)).introEligible === false, 'a returning customer (had Flash before) gets the regular $5.99, and the page is told so (introEligible: false)');
+const declined = await P.createUser('declined@example.com');
+const dc = await tryCheckoutFor(declined, 'flash');
+const dcust = (await db.query('select stripe_customer_id from public.subscriptions where user_id = $1', [declined])).rows[0].stripe_customer_id;
+subs.set('sub_declined', subscription({ id: 'sub_declined', customer: dcust, status: 'incomplete', metadata: { supabase_user_id: declined } }));
+await deliver(event('evt_declined', 'customer.subscription.created', { id: 'sub_declined' }));
+ok(dc.url && (await statusOf(declined)).plan === 'free' && (await statusOf(declined)).introEligible === true, 'a first payment that was declined (incomplete): no access, and the offer is still available');
+subs.set('sub_declined', subscription({ id: 'sub_declined', customer: dcust, status: 'incomplete_expired', metadata: { supabase_user_id: declined } }));
+await deliver(event('evt_declined_exp', 'customer.subscription.updated', { id: 'sub_declined' }));
+ok((await statusOf(declined)).introEligible === true, '…also after Stripe expires that attempt');
 
 // ---------- 4. duplicates, orphans, account deletion ----------
 // two checkouts paid at the same moment: the newer subscription is canceled and refunded, the first stays
