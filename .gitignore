@@ -40,3 +40,6 @@ accuracy/testset/**/*
 !accuracy/testset/README.md
 dist-eval
 dist-eval-*
+
+# local QA output (never committed)
+qa/out/
