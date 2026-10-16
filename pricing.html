@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#04050d" />
-    <meta name="description" content="SparkScribe plans: Free, Plus and Pro. Every plan includes the full AI workspace (notes, Ask, flashcards, quizzes, study guides, recaps); plans differ only in how many hours you transcribe each month." />
+    <meta name="description" content="SparkScribe plans. Every plan includes the full AI workspace (notes, Ask, flashcards, quizzes, study guides); choose how many hours you transcribe each month." />
     <meta name="application-name" content="SparkScribe" />
     <title>Pricing — SparkScribe</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -14,7 +14,7 @@
     <meta property="og:site_name" content="SparkScribe" />
     <meta property="og:url" content="https://www.spark-scribe.com/pricing" />
     <meta property="og:title" content="Pricing — SparkScribe" />
-    <meta property="og:description" content="Free, Plus and Pro: the same AI workspace on every plan; choose by how much you record." />
+    <meta property="og:description" content="The full AI workspace on every plan; choose by how much you record." />
     <meta name="twitter:card" content="summary" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,19 +31,35 @@
       <div class="topbar-right"><div id="accountSlot"></div></div>
     </header>
 
-    <main class="app bill-app">
-      <section class="bill-hero">
+    <main class="app bill-app pz">
+      <section class="pz-hero">
         <div class="eyebrow mono"><span class="pulse"></span>pricing</div>
-        <h1 class="page-title">Your recordings, <span class="grad">put to work</span>.</h1>
-        <p class="bill-sub">Transcribe, understand, study and act on anything you record.</p>
-        <p class="bill-sub2">All plans include the full SparkScribe AI workspace. Choose based on how much you record.</p>
-        <p class="bill-privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span><b>Audio stays on your device.</b><br />AI features use transcript text, never your audio.</span></p>
+        <h1 class="page-title">Find your <span class="grad">spark</span>.</h1>
+        <p class="pz-lede">Every plan includes the full AI workspace: summaries, notes, Ask, flashcards, quizzes and study guides. Plans differ in <b>how many hours you can transcribe each month</b>.</p>
+        <p class="bill-privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span><b>Audio stays on your device.</b> AI features use transcript text, never your audio.</span></p>
       </section>
+
       <div class="bill-notice" id="notice" hidden></div>
-      <section class="plan-grid" id="plans" aria-live="polite"><div class="plan-card skel"></div><div class="plan-card skel"></div><div class="plan-card skel"></div></section>
+
+      <section class="pz-plans" aria-labelledby="plansTitle">
+        <h2 class="sr-only" id="plansTitle">Plans</h2>
+        <div class="pz-grid" id="plans" aria-busy="true"><div class="pz-card skel"></div><div class="pz-card skel"></div><div class="pz-card skel"></div><div class="pz-card skel"></div></div>
+        <p class="pz-legend" id="legend" hidden><span class="pz-legend-blk" aria-hidden="true"></span>Each block is 1 hour of transcription a month.</p>
+        <p class="pz-disclose" id="disclose" hidden></p>
+      </section>
+
+      <section class="pz-why" id="why" hidden aria-labelledby="whyTitle"></section>
+
+      <section class="pz-compare" id="compare" hidden aria-labelledby="compareTitle">
+        <header class="sec-head pz-sec-head">
+          <h2 id="compareTitle">Compare plans</h2>
+          <p>The same AI workspace on every plan. The difference is how much you can record.</p>
+        </header>
+        <div class="pz-table-wrap" id="compareTable"></div>
+      </section>
 
       <section class="incl" aria-labelledby="inclTitle">
-        <header class="sec-head"><h2 id="inclTitle">Every plan includes</h2></header>
+        <header class="sec-head pz-sec-head"><h2 id="inclTitle">Every plan includes</h2></header>
         <div class="incl-grid">
           <article class="incl-card c-cyan">
             <span class="incl-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h2m3-5v10m3-13v16m3-11v6m3-3h2"/></svg></span>
@@ -71,31 +87,16 @@
       <section class="faq" aria-labelledby="faqTitle">
         <header class="faq-head">
           <h2 id="faqTitle">Frequently asked questions</h2>
-          <p>Plans, time and privacy, in short.</p>
+          <p>Plans, time, billing and privacy, in short.</p>
         </header>
-        <div class="faq-list">
-          <details class="faq-item">
-            <summary><span>What counts toward my plan?</span><span class="faq-ic" aria-hidden="true"></span></summary>
-            <div class="faq-a"><p>The length of recordings you save to your library. Opening recordings, searching and exports never use your time. AI features (summaries, notes, Ask, Create tools) don’t use transcription time either; they have their own fair-use limits, and the app tells you if you reach one.</p></div>
-          </details>
-          <details class="faq-item">
-            <summary><span>When does my time reset?</span><span class="faq-ic" aria-hidden="true"></span></summary>
-            <div class="faq-a"><p>Free resets on the 1st of each month (UTC). Paid plans reset when your subscription renews each month.</p></div>
-          </details>
-          <details class="faq-item">
-            <summary><span>What happens if I cancel or downgrade?</span><span class="faq-ic" aria-hidden="true"></span></summary>
-            <div class="faq-a"><p>Your paid plan stays active until the end of the period you paid for. Your recordings, notes and everything you created stay in your library; only new transcription is limited.</p></div>
-          </details>
-          <details class="faq-item">
-            <summary><span>What leaves my device?</span><span class="faq-ic" aria-hidden="true"></span></summary>
-            <div class="faq-a"><p>Never your audio: transcription runs on your device. Transcripts you save are stored privately in your account, and when you use an AI feature only the transcript text it needs is sent to our AI provider, Anthropic. Payments are handled by Stripe; SparkScribe never sees your card.</p></div>
-          </details>
-        </div>
+        <div class="faq-list" id="faqList"></div>
       </section>
     </main>
     <!-- sparkscribe:legal -->
 
     <footer class="bill-foot" id="billFoot">Paid plans coming soon · no payment details are collected</footer>
+
+    <dialog class="pz-dialog" id="pzDialog" aria-labelledby="pzdTitle"></dialog>
     <script type="module" src="/src/pages/pricing.js"></script>
   </body>
 </html>

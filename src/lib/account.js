@@ -123,14 +123,29 @@ export function mountAccountMenu(slot, { onChange } = {}) {
   const outside = (e) => { if (menu && !menu.contains(e.target) && !slot.contains(e.target)) close(); };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
+  // signed-out visitors get a "Pricing" link at the start of the header's right side (signed-in users have Plan & usage)
+  function pricingLink(show) {
+    const bar = slot.parentElement;
+    let link = bar?.querySelector(':scope > .acct-link');
+    if (!show) { link?.remove(); return; }
+    if (!bar || link) return;
+    link = document.createElement('a');
+    link.className = 'acct-link hide-sm';
+    link.href = '/pricing';
+    link.textContent = 'Pricing';
+    bar.insertBefore(link, bar.querySelector(':scope > .theme-btn') || slot);
+  }
+
   async function render(session) {
     close();
     if (!session) {
       const onAuthPage = location.pathname.startsWith('/auth');
       const gear = location.pathname.startsWith('/settings') ? '' : `<a class="acct-gear" href="/settings" aria-label="Settings" title="Settings">${GEAR}</a>`;
       slot.innerHTML = onAuthPage ? '' : `${gear}<a class="acct-signin" href="/auth?next=${encodeURIComponent(currentPath())}">Sign in</a>`;
+      pricingLink(!onAuthPage && !location.pathname.startsWith('/pricing'));
       return;
     }
+    pricingLink(false);
     adoptAccountPrefs(session.user);
     const p = await loadProfile(session.user);
     const label = p.name || p.email;

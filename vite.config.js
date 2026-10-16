@@ -55,6 +55,17 @@ export default defineConfig(({ mode }) => ({
       },
     },
     {
+      // The proposed four-plan pricing (src/lib/pricing-catalog.js) is a design preview: it may be shown on a Vercel
+      // Preview, never on the live site, where prices and plans must match what Checkout actually charges.
+      name: 'pricing-preview-guard',
+      apply: 'build',
+      buildStart() {
+        if (process.env.VITE_PRICING_PREVIEW === '1' && (process.env.VERCEL_ENV === 'production' || process.env.REQUIRE_FINAL_LEGAL === '1')) {
+          this.error('Production build stopped: VITE_PRICING_PREVIEW=1 shows proposed prices that Checkout does not charge. Remove it from the Production environment.');
+        }
+      },
+    },
+    {
       // One brand for every page: <!-- sparkscribe:brand --> (header logo + wordmark) and
       // <!-- sparkscribe:mark --> (the mark alone) come from src/lib/brand-markup.js, plus the wordmark's font,
       // and the theme boot script (src/lib/theme.js) at the very top of <head> so the theme never flashes.
