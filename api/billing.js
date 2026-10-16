@@ -1,7 +1,7 @@
 // POST /api/billing { action, ... }   (signed-in users only)
 //   action "status"                     -> plan, usage, renewal date
 //   action "authorize", durationSeconds -> may a recording this long be transcribed now?
-//   action "checkout", plan: "plus"|"pro" -> { url } Stripe Checkout (or a plan change for paid users)
+//   action "checkout", plan: "flash"|"bolt"|"thunder" -> { url } Stripe Checkout (or a plan change for paid users)
 //   action "portal"                     -> { url } Stripe Customer Portal
 //   action "delete_account"             -> cancels the account's Stripe subscriptions, then deletes the account
 // The user is always the one in the verified session token; the browser never names a user, customer,

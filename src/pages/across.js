@@ -1,52 +1,38 @@
-// /across — Ask across recordings and the combined study guide (server/ai/across.js).
+// /across — Ask across recordings and the combined study guide (server/ai/across.js). Thunder.
 //
 // The selection lives in the URL (?ids=…), so it survives a reload and can be bookmarked. Recordings are read as the
 // signed-in user (Row Level Security): an id that isn't theirs, or was deleted, simply doesn't come back and is
-// dropped with a notice. Questions, answers and the combined guide are kept in this browser only (per account, at
-// most 10 sets of recordings); the server stores nothing new. Saved answers keep the recording versions they were
-// made from, so a deleted or edited recording is flagged instead of silently pointing at the wrong place.
+// dropped with a notice. Answers and guides are saved to the account by the server as they are made, so they are the
+// same on every device: this page always shows the server's copy (reloaded when the tab comes back into view), never
+// a copy of its own. Saved work is shown with the recordings' current titles and speaker names; a deleted or edited
+// recording is flagged instead of silently pointing at the wrong place.
+// Asking and making guides need Thunder (the server checks; this page only explains). Saved work stays readable on
+// every plan.
 import { isConfigured, supabase } from '../lib/supabase.js';
 import { mountAccountMenu, requireUser, esc } from '../lib/account.js';
 import { fmtDuration } from '../lib/transcripts.js';
 import { fmtClock, RECORDING_TYPE_LABEL } from '../lib/segments.js';
 import { listLibrary, searchLibrary } from '../lib/library.js';
+import { myPlan } from '../lib/billing.js';
+import { renderAcrossStreaming } from '../lib/across-refs.js';
 import { toast } from '../library/dialogs.js';
-import { acrossStatus, acrossGuide, askAcross, requestInsight, requestTool } from '../insights/api.js';
+import { acrossStatus, acrossGuide, askAcross, acrossHistory, acrossThread, acrossDelete, requestInsight, requestTool } from '../insights/api.js';
 
 const $ = (id) => document.getElementById(id);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ASK_MAX = 12, GUIDE_MAX = 10, MIN = 2;
-const STORE_SETS = 10, STORE_QA = 20;
+const newId = () => (crypto.randomUUID ? crypto.randomUUID() : '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (c) => (c ^ (crypto.getRandomValues(new Uint8Array(1))[0] & (15 >> (c / 4)))).toString(16)));
 
 const st = {
-  user: null, ids: [], meta: new Map(), tab: 'ask',
-  thread: [], guide: null, pending: null, asking: false, askErr: null,
-  prepared: new Set(), guideBusy: null, guideErr: null, focus: 'balanced',
+  user: null, plan: null, ids: [], meta: new Map(), tab: 'ask',
+  items: [], loading: false, loadErr: null, history: null,
+  pending: null, asking: false, askErr: null, askPlan: null,
+  prepared: new Set(), guideBusy: null, guideErr: null, focus: 'balanced', guideOpen: false,
   add: { open: false, q: '', rows: [], loading: false },
 };
-
-// ---------- saved work (this browser, this account) ----------
-const storeKey = () => `sparkscribe.across.${st.user?.id || 'anon'}`;
-const setKey = (ids) => [...ids].sort().join(',');
-function readStore() { try { return JSON.parse(localStorage.getItem(storeKey()) || '{}') || {}; } catch { return {}; } }
-function writeStore(mutate) {
-  try {
-    const s = readStore();
-    s.sets ||= {};
-    mutate(s);
-    const keys = Object.keys(s.sets).sort((a, b) => (s.sets[b].at || 0) - (s.sets[a].at || 0));
-    for (const k of keys.slice(STORE_SETS)) delete s.sets[k];
-    localStorage.setItem(storeKey(), JSON.stringify(s));
-  } catch { /* storage full or blocked: the work is still on screen */ }
-}
-function loadSaved() {
-  const s = readStore().sets?.[setKey(st.ids)];
-  st.thread = s?.thread || [];
-  st.guide = s?.guide || null;
-}
-function saveSet() {
-  writeStore((s) => { s.sets[setKey(st.ids)] = { at: Date.now(), thread: st.thread.slice(0, STORE_QA), guide: st.guide }; });
-}
+const can = (cap) => !!st.plan?.features?.includes(cap);
+const asks = () => st.items.filter((x) => x.kind === 'ask');
+const guide = () => st.items.find((x) => x.kind === 'guide') || null;
 
 // ---------- selection ----------
 function readUrl() {
@@ -55,7 +41,7 @@ function readUrl() {
 }
 function writeUrl() {
   const q = st.ids.length ? `?ids=${st.ids.join(',')}` : '';
-  history.replaceState(null, '', `/across${q}`);
+  history.replaceState(null, '', `/across${q}${st.tab === 'guide' ? `${q ? '&' : '?'}tab=guide` : ''}`);
 }
 async function loadMeta(ids) {
   if (!ids.length) return [];
@@ -73,22 +59,38 @@ async function setIds(next, { quiet = false } = {}) {
   writeUrl();
   const gone = await loadMeta(st.ids.filter((id) => !st.meta.has(id))).catch(() => []);
   if (gone.length) {
-    const before = setKey(st.ids);
     st.ids = st.ids.filter((id) => !gone.includes(id));
     writeUrl();
-    // work saved for the full selection stays with what is left, so its answers can say what was deleted
-    writeStore((s) => {
-      const old = s.sets[before], key = setKey(st.ids);
-      if (!old || before === key) return;
-      const cur = s.sets[key];
-      s.sets[key] = { at: Date.now(), thread: [...(cur?.thread || []), ...(old.thread || [])].sort((a, b) => b.at - a.at).slice(0, STORE_QA), guide: cur?.guide || old.guide || null };
-      delete s.sets[before]; // that selection can't come back (a recording in it is gone)
-    });
     if (!quiet) toast(`${gone.length === 1 ? 'One recording is' : `${gone.length} recordings are`} no longer in your library, so ${gone.length === 1 ? 'it was' : 'they were'} removed.`, 4000);
   }
-  st.askErr = null; st.guideErr = null;
-  loadSaved();
+  st.askErr = null; st.guideErr = null; st.guideOpen = false;
+  st.items = [];
   render();
+  await loadThread();
+}
+
+// the server's saved answers and guides for this selection (newest first). Work saved for a larger selection whose
+// other recordings were deleted is included (the server decides).
+let threadToken = 0;
+async function loadThread({ quiet = false } = {}) {
+  const my = ++threadToken;
+  if (ordered().length < MIN) { st.items = []; st.loading = false; render(); return; }
+  if (!quiet) { st.loading = true; render(); }
+  try {
+    const r = await acrossThread(st.ids);
+    if (my !== threadToken) return;
+    st.items = r.items || [];
+    st.loadErr = null;
+  } catch (err) {
+    if (my !== threadToken) return;
+    st.loadErr = quiet && st.items.length ? null : (err.message || 'Your saved answers couldn’t be loaded.');
+  }
+  st.loading = false;
+  render();
+}
+async function loadHistory() {
+  try { st.history = (await acrossHistory()).sets || []; } catch { st.history = st.history || []; }
+  renderSide();
 }
 
 function renderSide() {
@@ -105,6 +107,19 @@ function renderSide() {
   $('addBtn').setAttribute('aria-expanded', String(st.add.open));
   $('addPanel').hidden = !st.add.open;
   if (st.add.open) renderAdd();
+  // saved work: every selection that has answers or a guide, on any device
+  const key = [...st.ids].sort().join(',');
+  const sets = (st.history || []).filter((s) => s.setKey !== key);
+  $('histPanel').hidden = !sets.length;
+  $('histList').innerHTML = sets.slice(0, 12).map((s) => {
+    const live = s.recordings.filter((r) => r.available);
+    const names = live.slice(0, 3).map((r) => r.title).join(', ') + (live.length > 3 ? ` +${live.length - 3}` : '');
+    const gone = s.recordings.length - live.length;
+    return `<li><button class="ax-hist-row" type="button" data-set="${esc(live.map((r) => r.id).join(','))}"${live.length < MIN ? ' disabled' : ''}>
+      <span class="ax-hist-q">${esc(s.lastQuestion || 'Combined study guide')}</span>
+      <span class="ax-hist-meta">${esc(names || 'Recordings deleted')}${gone ? ` · ${gone} deleted` : ''}</span>
+      <span class="ax-hist-n mono">${esc([s.asks ? `${s.asks} answer${s.asks === 1 ? '' : 's'}` : '', s.guides ? `${s.guides} guide${s.guides === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · '))}</span></button></li>`;
+  }).join('');
 }
 
 // ---------- adding recordings ----------
@@ -140,30 +155,28 @@ function renderAdd() {
 
 // ---------- answers: [R2:45] → links to that passage ----------
 const CITE = /\[((?:R\d+:\d+)(?:\s*,\s*(?:R\d+:)?\d+)*)\]/g;
-function chipFor(ref, recs) {
-  const live = st.meta.get(ref.transcriptionId);
-  const n = recs.findIndex((r) => r.label === ref.label) + 1;
-  const name = `${ref.title}`;
-  if (!live) return `<span class="ax-chip gone" title="This recording was deleted">${esc(name)} · ${fmtClock(ref.start)}</span>`;
-  return `<a class="ax-chip" href="/transcript?id=${encodeURIComponent(ref.transcriptionId)}&t=${Math.floor(ref.start * 100) / 100}&line=${ref.line}" title="Open ${esc(name)} at ${fmtClock(ref.start)}"><span class="ax-chip-n mono" aria-hidden="true">${n || ''}</span>${esc(name)} · <span class="mono">${fmtClock(ref.start)}</span></a>`;
+const numberOf = (item, label) => item.recordings.findIndex((r) => r.label === label) + 1;
+function chipFor(ref, item) {
+  const n = numberOf(item, ref.label);
+  if (ref.available === false) return `<span class="ax-chip gone" title="This recording was deleted">${esc(ref.title)} · ${fmtClock(ref.start)}</span>`;
+  return `<a class="ax-chip" href="/transcript?id=${encodeURIComponent(ref.transcriptionId)}&t=${Math.floor(ref.start * 100) / 100}&line=${ref.line ?? 0}" title="Open ${esc(ref.title)} at ${fmtClock(ref.start)}"><span class="ax-chip-n mono" aria-hidden="true">${n || ''}</span>${esc(ref.title)} · <span class="mono">${fmtClock(ref.start)}</span></a>`;
 }
-function richAnswer(text, refs, recs) {
+function richAnswer(text, refs, item) {
   const find = (label, line) => refs.find((r) => r.label === label && r.line === line);
   const inline = (t) => {
     let out = '', last = 0;
     for (const m of t.matchAll(CITE)) {
       out += esc(t.slice(last, m.index));
       let label = null;
-      const chips = m[1].split(/\s*,\s*/).map((p) => { const x = /^(?:(R\d+):)?(\d+)$/.exec(p); if (!x) return ''; label = x[1] || label; const r = find(label, Number(x[2])); return r ? chipFor(r, recs) : ''; }).join('');
+      const chips = m[1].split(/\s*,\s*/).map((p) => { const x = /^(?:(R\d+):)?(\d+)$/.exec(p); if (!x) return ''; label = x[1] || label; const r = find(label, Number(x[2])); return r ? chipFor(r, item) : ''; }).join('');
       out += chips ? `<span class="ax-cites">${chips}</span>` : '';
       last = m.index + m[0].length;
     }
     return out + esc(t.slice(last));
   };
-  const lines = String(text || '').split('\n');
   const html = [];
   let list = null;
-  for (const l of lines) {
+  for (const l of String(text || '').split('\n')) {
     if (/^\s*[-•]\s+/.test(l)) { (list ||= []).push(`<li>${inline(l.replace(/^\s*[-•]\s+/, ''))}</li>`); continue; }
     if (list) { html.push(`<ul>${list.join('')}</ul>`); list = null; }
     if (l.trim()) html.push(`<p>${inline(l)}</p>`);
@@ -171,25 +184,36 @@ function richAnswer(text, refs, recs) {
   if (list) html.push(`<ul>${list.join('')}</ul>`);
   return html.join('');
 }
-// what changed since an answer was made: deleted or edited recordings
-function staleNote(versions) {
-  const gone = [], edited = [];
-  for (const v of versions || []) {
-    const m = st.meta.get(v.id);
-    if (!m) gone.push(v.title);
-    else if (m.content_version != null && v.version != null && m.content_version !== v.version) edited.push(m.title);
-  }
+// what changed since an answer was made: deleted or edited recordings (renames don't count: names are always current)
+function staleNote(item) {
+  const gone = item.recordings.filter((r) => r.status === 'deleted').map((r) => r.title);
+  const edited = item.recordings.filter((r) => r.status === 'edited').map((r) => r.title);
   const parts = [];
   if (gone.length) parts.push(`${gone.map((t) => `“${esc(t)}”`).join(', ')} ${gone.length === 1 ? 'was' : 'were'} deleted; ${gone.length === 1 ? 'its' : 'their'} links are disabled.`);
-  if (edited.length) parts.push(`${edited.map((t) => `“${esc(t)}”`).join(', ')} ${edited.length === 1 ? 'was' : 'were'} edited after this was made; ask again for an up-to-date answer.`);
+  if (edited.length) parts.push(`${edited.map((t) => `“${esc(t)}”`).join(', ')} ${edited.length === 1 ? 'was' : 'were'} edited after this was made, so it may be out of date.`);
   return parts.length ? `<p class="ax-stale" role="note">${parts.join(' ')}</p>` : '';
 }
-
-function sourcesHtml(refs, recs) {
+function sourcesHtml(refs, item) {
   const by = new Map();
   for (const r of refs) { if (!by.has(r.transcriptionId)) by.set(r.transcriptionId, []); by.get(r.transcriptionId).push(r); }
   if (!by.size) return '';
-  return `<details class="ax-sources"><summary>Sources · ${by.size} recording${by.size === 1 ? '' : 's'}</summary><ul>${[...by.values()].map((list) => `<li><b>${esc(list[0].title)}</b> <span class="ax-cites">${list.sort((a, b) => a.start - b.start).map((r) => chipFor(r, recs)).join('')}</span></li>`).join('')}</ul></details>`;
+  return `<details class="ax-sources"><summary>Sources · ${by.size} recording${by.size === 1 ? '' : 's'}</summary><ul>${[...by.values()].map((list) => `<li><b>${esc(list[0].title)}</b> <span class="ax-cites">${list.sort((a, b) => a.start - b.start).map((r) => chipFor(r, item)).join('')}</span></li>`).join('')}</ul></details>`;
+}
+const when = (iso) => new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+// ---------- the plan ----------
+function lockedHtml(kind) {
+  const what = kind === 'guide'
+    ? 'One study guide from up to 10 of your recordings: the themes they share, where each was taught, how they differ, and questions to check yourself.'
+    : 'Ask one question across up to 12 of your recordings. Each point names the recording it comes from and links to the exact passage; if the recordings don’t answer it, SparkScribe says so.';
+  const back = `/across?ids=${st.ids.join(',')}${kind === 'guide' ? '&tab=guide' : ''}`;
+  return `<div class="panel ax-locked" role="region" aria-label="Included with Thunder">
+    <span class="ax-locked-badge mono">Thunder</span>
+    <h2>${kind === 'guide' ? 'Combined study guides' : 'Ask across recordings'}</h2>
+    <p>${what}</p>
+    <p class="ax-fine">Included with Thunder${st.plan?.planName ? `. You’re on ${esc(st.plan.planName)}` : ''}. Your selection is kept, and everything you’ve saved stays available on every plan.</p>
+    <div class="ax-empty-actions"><a class="btn btn-primary" href="/pricing?plan=thunder&next=${encodeURIComponent(back)}">See Thunder</a><a class="btn btn-ghost" href="/library">Back to My Library</a></div>
+  </div>`;
 }
 
 // ---------- Ask ----------
@@ -197,39 +221,47 @@ const SUGGEST = {
   study: ['Which concepts came up in more than one of these?', 'What changed between the first and the last recording?', 'Summarize what I need to know for an exam on these.'],
   work: ['What decisions were made across these meetings?', 'Which action items came up more than once?', 'Where did people disagree, and how was it resolved?'],
 };
+function qaHtml(qa) {
+  const c = qa.content;
+  return `<article class="panel ax-qa${qa.unsaved ? ' unsaved' : ''}" data-item="${esc(qa.id)}"><p class="ax-q">${esc(qa.question)}</p>
+    <div class="ax-a">${richAnswer(c.answer, c.refs || [], qa)}</div>
+    ${staleNote(qa)}
+    ${sourcesHtml(c.refs || [], qa)}
+    ${qa.unsaved ? '<p class="ax-stale" role="note">This answer couldn’t be saved to your account, so it will be gone when you leave this page.</p>' : ''}
+    <p class="ax-meta mono">${esc(`${qa.recordings.length} recordings · ${when(qa.createdAt)}`)}${qa.unsaved ? '' : `<button class="ax-del" type="button" data-del="${esc(qa.id)}" aria-label="Delete this answer">Delete</button>`}</p></article>`;
+}
 function renderAsk() {
   const p = $('askPanel');
   const recs = ordered();
   if (recs.length < MIN) {
-    p.innerHTML = `<div class="panel ax-empty"><h2>Choose recordings to ask about</h2><p>Select at least two recordings. You can add them here, or select them in My Library and choose <b>Ask across</b>.</p>
+    p.innerHTML = `<div class="panel ax-empty"><h2>Choose recordings to ask about</h2><p>Select at least two recordings. You can add them here, or select them in My Library and choose <b>Ask across</b>.${st.history?.length ? ' Or reopen something you saved: it’s listed on the left.' : ''}</p>
       <div class="ax-empty-actions"><button class="btn btn-primary" type="button" data-act="open-add">Add recordings</button><a class="btn btn-ghost" href="/library">Open My Library</a></div></div>`;
     return;
   }
   const work = recs.filter((r) => ['meeting', 'interview', 'voice_message'].includes(r.recording_type)).length > recs.length / 2;
   const pend = st.pending;
   const busy = st.asking;
-  p.innerHTML = `<form class="panel ax-ask" id="askForm" novalidate>
+  const form = st.plan && !can('across_ask') ? lockedHtml('ask') : `<form class="panel ax-ask" id="askForm" novalidate>
       <label class="ax-ask-label" for="askQ">Ask about these ${recs.length} recordings</label>
       <div class="ax-ask-row"><textarea id="askQ" maxlength="500" rows="2" placeholder="${work ? 'e.g. What decisions changed between these meetings?' : 'e.g. How did the explanation of this topic change between lectures?'}"${busy ? ' disabled' : ''}></textarea>
       <button class="btn btn-primary" type="submit"${busy ? ' disabled' : ''}>${busy ? 'Answering…' : 'Ask'}</button></div>
       <div class="ax-suggest" role="group" aria-label="Suggestions">${(work ? SUGGEST.work : SUGGEST.study).map((s) => `<button class="chip-btn" type="button" data-suggest="${esc(s)}"${busy ? ' disabled' : ''}>${esc(s)}</button>`).join('')}</div>
-      <p class="ax-fine">Answers use your saved transcripts (never audio) and cite the passages they come from. Each question uses a small amount of your AI allowance.</p>
-    </form>
-    ${st.askErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.askErr)}</span></div>` : ''}
-    <div class="ax-thread" aria-live="polite">
+      <p class="ax-fine">Answers use your saved transcripts (never audio), cite the passages they come from, and are saved to your account. Each question uses a small amount of your AI allowance.</p>
+    </form>`;
+  p.innerHTML = `${form}
+    ${st.askErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.askErr)}</span>${st.askPlan ? `<a class="btn btn-ghost btn-sm" href="/pricing?plan=${esc(st.askPlan)}">See plans</a>` : ''}</div>` : ''}
+    ${st.loadErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.loadErr)}</span><button class="btn btn-ghost btn-sm" type="button" data-act="reload">Try again</button></div>` : ''}
+    <div class="ax-thread" aria-live="polite" aria-busy="${st.loading}">
       ${pend ? `<article class="panel ax-qa pending"><p class="ax-q">${esc(pend.question)}</p>
-        <div class="ax-a" aria-busy="true">${pend.text ? `<p>${esc(pend.text.replace(CITE, '').replace(/\[R?\d*:?\d*$/, ''))}</p>` : `<p class="ax-status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span>${esc(pend.status)}</p>`}</div></article>` : ''}
-      ${st.thread.map((qa, i) => `<article class="panel ax-qa"><p class="ax-q">${esc(qa.question)}</p>
-        <div class="ax-a">${richAnswer(qa.answer, qa.refs, qa.recordings)}</div>
-        ${staleNote(qa.recordings)}
-        ${sourcesHtml(qa.refs, qa.recordings)}
-        <p class="ax-meta mono">${esc(`${qa.recordings.length} recordings · ${new Date(qa.at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}`)}<button class="ax-del" type="button" data-del="${i}" aria-label="Remove this answer">Remove</button></p></article>`).join('')}
+        <div class="ax-a" aria-busy="true">${pend.text ? `<p>${esc(renderAcrossStreaming(pend.text, pend.names).replace(CITE, '').replace(/\[R?\d*:?\d*$/, ''))}</p>` : `<p class="ax-status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span>${esc(pend.status)}</p>`}</div></article>` : ''}
+      ${st.loading && !st.items.length ? '<p class="ax-status" role="status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span>Loading your saved answers…</p>' : ''}
+      ${asks().map(qaHtml).join('')}
     </div>`;
 }
 
 // recordings with no summary yet are read once first (each summary is saved with its recording, as on its own page)
 async function prepareSummaries() {
-  const key = setKey(st.ids);
+  const key = [...st.ids].sort().join(',');
   if (st.prepared.has(key)) return;
   const s = await acrossStatus(st.ids);
   const todo = s.recordings.filter((r) => !r.hasSummary);
@@ -240,27 +272,34 @@ async function prepareSummaries() {
   st.prepared.add(key);
 }
 
+const namesFns = (n) => ({ title: (l) => n?.titles?.[l], speaker: (c) => n?.speakers?.[c] });
 async function ask(question) {
   question = String(question || '').trim();
   if (!question || st.asking) return;
-  st.asking = true; st.askErr = null;
-  st.pending = { question, text: '', status: 'Finding the relevant passages…' };
+  st.asking = true; st.askErr = null; st.askPlan = null;
+  const requestId = newId(); // a retried request is stored once
+  st.pending = { question, text: '', status: 'Finding the relevant passages…', names: namesFns(null) };
   renderAsk();
   try {
     await prepareSummaries();
     st.pending.status = 'Finding the relevant passages…';
     renderAsk();
-    const r = await askAcross(st.ids, question, {
+    const r = await askAcross(st.ids, question, requestId, {
+      onNames: (n) => { if (st.pending) st.pending.names = namesFns(n); },
       onStatus: (s) => { if (st.pending) { st.pending.status = s === 'answering' ? 'Writing the answer…' : 'Finding the relevant passages…'; renderAsk(); } },
       onDelta: (t) => { if (st.pending) { st.pending.text += t; renderAsk(); } },
     });
-    st.thread.unshift({ question, answer: r.answer, refs: r.refs, recordings: r.recordings.map((x) => ({ label: x.label, id: x.id, title: x.title, version: x.version })), at: Date.now() });
-    saveSet();
+    st.items = [{ ...r.item, unsaved: !r.saved }, ...st.items.filter((x) => x.id !== r.item.id)];
+    if (!r.saved) toast(r.saveError === 'full' ? 'Your saved answers are full (500). Delete older ones to keep new answers.' : 'This answer couldn’t be saved to your account.', 5000);
+    loadHistory();
   } catch (err) {
     if (err.code === 'not_found' && err.details?.missing?.length) {
       st.askErr = err.message;
       await setIds(st.ids.filter((id) => !err.details.missing.includes(id)), { quiet: true });
-    } else st.askErr = err.message || "The answer couldn't be generated. Try again.";
+    } else {
+      st.askErr = err.message || "The answer couldn't be generated. Try again.";
+      if (err.code === 'plan_required') { st.askPlan = err.details?.plan || 'thunder'; st.plan = await myPlan(); }
+    }
   }
   st.asking = false;
   st.pending = null;
@@ -269,81 +308,103 @@ async function ask(question) {
 }
 
 // ---------- Combined study guide ----------
-function guideItemSources(sources, recs) {
-  return sources.length ? `<span class="ax-cites">${sources.map((s) => chipFor({ ...s, line: s.line ?? 0 }, recs)).join('')}</span>` : '';
+function guideItemSources(sources, item) {
+  return sources.length ? `<span class="ax-cites">${sources.map((s) => chipFor(s, item)).join('')}</span>` : '';
 }
 function guideHtml(g) {
-  const c = g.content, recs = c.recordings;
+  const c = g.content, recs = g.recordings;
   const recBadge = (label) => { const i = recs.findIndex((r) => r.label === label); return `<span class="ax-rb mono" title="${esc(recs[i]?.title || '')}">${i + 1}</span>`; };
-  return `<article class="panel ax-guide" aria-labelledby="gH">
+  return `<article class="panel ax-guide" aria-labelledby="gH" data-item="${esc(g.id)}">
     <header class="ax-guide-head"><h2 id="gH">Combined study guide</h2>
-      <p class="ax-meta mono">${esc(`${recs.length} recordings · ${c.themes.length} themes${c.recurring ? ` · ${c.recurring} across several recordings` : ''} · ${new Date(g.at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`)}</p></header>
-    ${staleNote(recs)}
+      <p class="ax-meta mono">${esc(`${recs.length} recordings · ${c.themes.length} themes${c.recurring ? ` · ${c.recurring} across several recordings` : ''}${c.focus === 'exam' ? ' · exam review' : ''} · ${new Date(g.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`)}</p></header>
+    ${staleNote(g)}
+    ${g.unsaved ? '<p class="ax-stale" role="note">This guide couldn’t be saved to your account, so it will be gone when you leave this page. Copy it to keep it.</p>' : ''}
     ${c.overview ? `<p class="ax-overview">${esc(c.overview)}</p>` : ''}
-    <ol class="ax-key" aria-label="Recordings">${recs.map((r, i) => `<li><span class="ax-rb mono" aria-hidden="true">${i + 1}</span>${esc(r.title)}</li>`).join('')}</ol>
+    <ol class="ax-key" aria-label="Recordings">${recs.map((r, i) => `<li${r.status === 'deleted' ? ' class="gone"' : ''}><span class="ax-rb mono" aria-hidden="true">${i + 1}</span>${esc(r.title)}${r.status === 'deleted' ? ' <span class="ax-gone">deleted</span>' : ''}</li>`).join('')}</ol>
     <section aria-labelledby="gThemes"><h3 id="gThemes">Themes</h3>
-      ${c.themes.map((t) => `<div class="ax-theme"><div class="ax-theme-head"><h4>${esc(t.title)}</h4><span class="ax-in" aria-label="In recordings ${t.recordings.map((l) => recs.findIndex((r) => r.label === l) + 1).join(', ')}">${t.recordings.map(recBadge).join('')}${t.recordings.length >= 2 ? '<span class="ax-recurs">recurring</span>' : ''}</span></div>
-        <p>${esc(t.summary)}</p>${t.comparison ? `<p class="ax-compare"><b>How the recordings differ:</b> ${esc(t.comparison)}</p>` : ''}${guideItemSources(t.sources, recs)}</div>`).join('')}
+      ${c.themes.map((t) => `<div class="ax-theme"><div class="ax-theme-head"><h4>${esc(t.title)}</h4><span class="ax-in" aria-label="In recordings ${t.recordings.map((l) => numberOf(g, l)).join(', ')}">${t.recordings.map(recBadge).join('')}${t.recordings.length >= 2 ? '<span class="ax-recurs">recurring</span>' : ''}</span></div>
+        <p>${esc(t.summary)}</p>${t.comparison ? `<p class="ax-compare"><b>How the recordings differ:</b> ${esc(t.comparison)}</p>` : ''}${guideItemSources(t.sources, g)}</div>`).join('')}
     </section>
-    ${c.definitions.length ? `<section aria-labelledby="gDefs"><h3 id="gDefs">Definitions</h3><dl class="ax-defs">${c.definitions.map((d) => `<div><dt>${esc(d.term)}</dt><dd>${esc(d.definition)} ${guideItemSources(d.sources, recs)}</dd></div>`).join('')}</dl></section>` : ''}
-    ${c.distinctions.length ? `<section aria-labelledby="gDist"><h3 id="gDist">Don’t confuse</h3><ul class="ax-list">${c.distinctions.map((d) => `<li>${esc(d.text)} ${guideItemSources(d.sources, recs)}</li>`).join('')}</ul></section>` : ''}
-    ${c.self_check.length ? `<section aria-labelledby="gCheck"><h3 id="gCheck">Check yourself</h3>${c.self_check.map((q) => `<details class="ax-check"><summary>${esc(q.question)}</summary><p>${esc(q.answer)} ${guideItemSources(q.sources, recs)}</p></details>`).join('')}</section>` : ''}
-    <div class="ax-guide-tools"><button class="btn btn-ghost btn-sm" type="button" data-act="guide-copy">Copy</button><button class="btn btn-ghost btn-sm" type="button" data-act="guide-new">Create again</button></div>
+    ${c.definitions.length ? `<section aria-labelledby="gDefs"><h3 id="gDefs">Definitions</h3><dl class="ax-defs">${c.definitions.map((d) => `<div><dt>${esc(d.term)}</dt><dd>${esc(d.definition)} ${guideItemSources(d.sources, g)}</dd></div>`).join('')}</dl></section>` : ''}
+    ${c.distinctions.length ? `<section aria-labelledby="gDist"><h3 id="gDist">Don’t confuse</h3><ul class="ax-list">${c.distinctions.map((d) => `<li>${esc(d.text)} ${guideItemSources(d.sources, g)}</li>`).join('')}</ul></section>` : ''}
+    ${c.self_check.length ? `<section aria-labelledby="gCheck"><h3 id="gCheck">Check yourself</h3>${c.self_check.map((q) => `<details class="ax-check"><summary>${esc(q.question)}</summary><p>${esc(q.answer)} ${guideItemSources(q.sources, g)}</p></details>`).join('')}</section>` : ''}
+    <div class="ax-guide-tools"><button class="btn btn-ghost btn-sm" type="button" data-act="guide-copy">Copy</button>${can('across_guide') ? '<button class="btn btn-ghost btn-sm" type="button" data-act="guide-new">Create again</button>' : ''}${g.unsaved ? '' : `<button class="btn btn-ghost btn-sm" type="button" data-del="${esc(g.id)}">Delete</button>`}</div>
   </article>`;
 }
 function renderGuide() {
   const p = $('guidePanel');
   const recs = ordered();
   if (recs.length < MIN) { p.innerHTML = '<div class="panel ax-empty"><h2>Choose recordings first</h2><p>A combined study guide needs at least two recordings.</p><div class="ax-empty-actions"><button class="btn btn-primary" type="button" data-act="open-add">Add recordings</button></div></div>'; return; }
-  if (recs.length > GUIDE_MAX) { p.innerHTML = `<div class="panel ax-empty"><h2>Too many for one study guide</h2><p>A combined study guide works with up to ${GUIDE_MAX} recordings. Remove ${recs.length - GUIDE_MAX} to continue.</p></div>`; return; }
+  const g = guide();
+  const locked = st.plan && !can('across_guide');
+  if (recs.length > GUIDE_MAX && !g) { p.innerHTML = `<div class="panel ax-empty"><h2>Too many for one study guide</h2><p>A combined study guide works with up to ${GUIDE_MAX} recordings. Remove ${recs.length - GUIDE_MAX} to continue.</p></div>`; return; }
   const busy = st.guideBusy;
+  const showSetup = !locked && (!g || st.guideOpen || busy);
   const intro = `<div class="panel ax-guide-setup">
       <p class="ax-lede2">One study guide for all ${recs.length} recordings: the themes they share, where each was taught, definitions, distinctions and questions to check yourself.</p>
       <div class="seg-toggle" role="group" aria-label="Focus">${[['balanced', 'Balanced'], ['exam', 'Exam review']].map(([v, l]) => `<button type="button" data-focus="${v}" class="${st.focus === v ? 'on' : ''}" aria-pressed="${st.focus === v}"${busy ? ' disabled' : ''}>${l}</button>`).join('')}</div>
-      ${busy ? `<p class="ax-status" role="status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span>${esc(busy)}</p>` : `<button class="btn btn-primary" type="button" data-act="guide">${st.guide ? 'Create again' : 'Create combined study guide'}</button>`}
-      <p class="ax-fine">Built from each recording’s study map. Recordings without one get their own study guide first (saved with the recording, as if you had made it there).</p>
+      ${busy ? `<p class="ax-status" role="status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span>${esc(busy)}</p>` : `<button class="btn btn-primary" type="button" data-act="guide">${g ? 'Create a new version' : 'Create combined study guide'}</button>`}
+      <p class="ax-fine">Built from each recording’s study map. Recordings without one get their own study guide first (saved with the recording, as if you had made it there). The guide is saved to your account.</p>
     </div>`;
-  p.innerHTML = `${st.guideErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.guideErr)}</span></div>` : ''}${st.guide && !busy ? '' : intro}${st.guide && !busy ? guideHtml(st.guide) : ''}`;
+  p.innerHTML = `${st.guideErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.guideErr)}</span></div>` : ''}${locked && !g ? lockedHtml('guide') : ''}${showSetup ? intro : ''}${g && !busy ? guideHtml(g) : ''}${locked && g ? `<p class="ax-fine ax-locked-line">Making new combined guides is included with Thunder. <a href="/pricing?plan=thunder">See Thunder</a></p>` : ''}`;
 }
 async function makeGuide() {
   if (st.guideBusy) return;
   st.guideErr = null;
   st.guideBusy = 'Checking the recordings…';
   renderGuide();
+  const requestId = newId();
   try {
-    let content = null;
-    for (let round = 0; round < 2 && !content; round++) {
-      try { content = (await acrossGuide(st.ids, st.focus)).content; } catch (err) {
+    let r = null;
+    for (let round = 0; round < 2 && !r; round++) {
+      try { r = await acrossGuide(st.ids, st.focus, requestId); } catch (err) {
         if (err.code !== 'needs_maps' || round) throw err;
         const needs = err.details?.needs || [];
         for (const [i, id] of needs.entries()) {
           st.guideBusy = `Making a study map for “${st.meta.get(id)?.title || 'a recording'}” (${i + 1} of ${needs.length})…`;
           renderGuide();
-          const r = await requestTool(id, 'study_guide', {});
+          const t = await requestTool(id, 'study_guide', {});
           // another tab is already making it: wait for it rather than paying twice
-          for (let t = 0; r.artifact?.status === 'generating' && t < 30; t++) { await new Promise((ok) => setTimeout(ok, 4000)); try { const again = await requestTool(id, 'study_guide', {}); if (again.artifact?.status !== 'generating') break; } catch { break; } }
+          for (let k = 0; t.artifact?.status === 'generating' && k < 30; k++) { await new Promise((ok) => setTimeout(ok, 4000)); try { const again = await requestTool(id, 'study_guide', {}); if (again.artifact?.status !== 'generating') break; } catch { break; } }
         }
         st.guideBusy = 'Combining the recordings…';
         renderGuide();
       }
     }
-    st.guide = { content, at: Date.now() };
-    saveSet();
+    st.items = [{ ...r.item, unsaved: !r.saved }, ...st.items.filter((x) => x.id !== r.item.id)];
+    st.guideOpen = false;
+    if (!r.saved) toast('This guide couldn’t be saved to your account. Copy it to keep it.', 5000);
+    loadHistory();
   } catch (err) {
     if (err.code === 'not_found' && err.details?.missing?.length) await setIds(st.ids.filter((id) => !err.details.missing.includes(id)), { quiet: true });
     st.guideErr = err.message || "The combined study guide couldn't be made. Try again.";
+    if (err.code === 'plan_required') st.plan = await myPlan();
   }
   st.guideBusy = null;
   renderGuide();
 }
 function guideText(g) {
-  const c = g.content, recs = c.recordings;
+  const c = g.content, recs = g.recordings;
   const src = (s) => s.map((x) => `${x.title} ${fmtClock(x.start)}`).join('; ');
   return [`Combined study guide (${recs.map((r) => r.title).join(', ')})`, '', c.overview, '',
     'THEMES', ...c.themes.flatMap((t) => [`- ${t.title}: ${t.summary}${t.comparison ? ` (How they differ: ${t.comparison})` : ''} [${src(t.sources)}]`]), '',
     ...(c.definitions.length ? ['DEFINITIONS', ...c.definitions.map((d) => `- ${d.term}: ${d.definition} [${src(d.sources)}]`), ''] : []),
     ...(c.distinctions.length ? ["DON'T CONFUSE", ...c.distinctions.map((d) => `- ${d.text} [${src(d.sources)}]`), ''] : []),
     ...(c.self_check.length ? ['CHECK YOURSELF', ...c.self_check.map((q) => `- Q: ${q.question}\n  A: ${q.answer}`)] : [])].join('\n');
+}
+
+async function remove(id) {
+  const item = st.items.find((x) => x.id === id);
+  if (!item || !confirm(item.kind === 'guide' ? 'Delete this combined study guide from your account?' : 'Delete this answer from your account?')) return;
+  try {
+    await acrossDelete(id);
+  } catch (err) {
+    if (err.status !== 404) { toast(err.message || 'It couldn’t be deleted. Try again.', 4000); return; }
+  }
+  st.items = st.items.filter((x) => x.id !== id);
+  render();
+  loadHistory();
+  toast('Deleted');
 }
 
 // ---------- tabs and events ----------
@@ -357,7 +418,7 @@ function render() {
 }
 
 function bind() {
-  document.querySelectorAll('.ax-tabs [data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; render(); }));
+  document.querySelectorAll('.ax-tabs [data-tab]').forEach((b) => b.addEventListener('click', () => { st.tab = b.dataset.tab; writeUrl(); render(); }));
   $('addBtn').addEventListener('click', () => { st.add.open = !st.add.open; render(); if (st.add.open) { loadAddRows(); $('addQ').focus(); } });
   let t = 0;
   $('addQ').addEventListener('input', (e) => { st.add.q = e.target.value; clearTimeout(t); t = setTimeout(loadAddRows, 250); });
@@ -369,21 +430,34 @@ function bind() {
     setIds(st.ids.includes(id) ? st.ids.filter((x) => x !== id) : [...st.ids, id]);
   });
   $('selList').addEventListener('click', (e) => { const b = e.target.closest('[data-remove]'); if (b) setIds(st.ids.filter((x) => x !== b.dataset.remove)); });
+  $('histList').addEventListener('click', (e) => { const b = e.target.closest('[data-set]'); if (b) { st.tab = 'ask'; setIds(b.dataset.set.split(',')); window.scrollTo({ top: 0, behavior: 'smooth' }); } });
   document.querySelector('.ax-main').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.act === 'open-add') { st.add.open = true; render(); loadAddRows(); $('addQ').focus(); }
     else if (b.dataset.suggest) { const q = $('askQ'); if (q) q.value = b.dataset.suggest; ask(b.dataset.suggest); }
-    else if (b.dataset.del != null) { st.thread.splice(Number(b.dataset.del), 1); saveSet(); renderAsk(); }
+    else if (b.dataset.del) remove(b.dataset.del);
     else if (b.dataset.focus) { st.focus = b.dataset.focus; renderGuide(); }
     else if (b.dataset.act === 'guide') makeGuide();
-    else if (b.dataset.act === 'guide-new') { st.guide = null; renderGuide(); }
-    else if (b.dataset.act === 'guide-copy') navigator.clipboard.writeText(guideText(st.guide)).then(() => toast('Copied the study guide'), () => toast('Copy failed'));
+    else if (b.dataset.act === 'guide-new') { st.guideOpen = true; renderGuide(); }
+    else if (b.dataset.act === 'reload') loadThread();
+    else if (b.dataset.act === 'guide-copy') navigator.clipboard.writeText(guideText(guide())).then(() => toast('Copied the study guide'), () => toast('Copy failed'));
   });
   document.querySelector('.ax-main').addEventListener('submit', (e) => { if (e.target.id === 'askForm') { e.preventDefault(); ask($('askQ').value); } });
   document.querySelector('.ax-main').addEventListener('keydown', (e) => {
     if (e.target.id === 'askQ' && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(e.target.value); }
   });
+  // another device may have added or deleted something: the server's copy wins whenever this tab comes back
+  let last = Date.now();
+  const resync = () => {
+    if (document.visibilityState !== 'visible' || st.asking || st.guideBusy || Date.now() - last < 5000) return;
+    last = Date.now();
+    loadThread({ quiet: true });
+    loadHistory();
+  };
+  document.addEventListener('visibilitychange', resync);
+  window.addEventListener('focus', resync);
+  window.addEventListener('online', () => { last = 0; resync(); });
 }
 
 async function main() {
@@ -392,6 +466,9 @@ async function main() {
   readUrl();
   if (new URLSearchParams(location.search).get('tab') === 'guide') st.tab = 'guide';
   bind();
+  // unknown plan (status unavailable): the forms stay, and the server's answer decides
+  myPlan().then((p) => { st.plan = p; render(); });
+  loadHistory();
   await setIds(st.ids);
 }
 main();

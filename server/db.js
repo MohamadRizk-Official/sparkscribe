@@ -172,6 +172,46 @@ export function supabaseStore(sb) {
       const { error } = await sb.rpc('ai_settle', { p_secret: secret, p_id: id, p_ok: !!ok, p_input_tokens: input | 0, p_output_tokens: output | 0, p_cost_microusd: costMicrousd | 0 });
       if (error) console.error('[ai-usage] settle failed:', error.code || 'error');
     },
+    // ---- plan ----
+    // The signed-in user's effective plan and its capabilities, computed by the database (billing_status: from the
+    // subscription Stripe reported, never from anything the browser sends), plus the four-tier catalogue (which plan
+    // has a capability). Throws if either can't be read: callers refuse rather than guess.
+    async entitlements() {
+      const [st, pl] = await Promise.all([sb.rpc('billing_status'), sb.from('billing_plans').select('key, name, tier, features').not('tier', 'is', null).order('tier')]);
+      if (st.error || !st.data || !Array.isArray(st.data.features)) throw new Error(`entitlements unavailable: ${st.error?.code || 'no features'}`);
+      return { plan: st.data.plan, planName: st.data.planName, tier: st.data.tier, features: st.data.features, plans: pl.data || [] };
+    },
+    // ---- saved Thunder history (public.across_items, written only through across_save with the server secret) ----
+    async saveAcross({ requestId, kind, ids, question, content, sources }) {
+      const secret = process.env.BILLING_DB_SECRET || process.env.AI_DB_SECRET;
+      if (!secret) return { saved: false, reason: 'unavailable' };
+      const { data, error } = await sb.rpc('across_save', { p_secret: secret, p_request: requestId, p_kind: kind, p_ids: ids, p_question: question ?? null, p_content: content, p_sources: sources });
+      if (error || !data) { console.error('[across] save failed:', error?.code || 'no reply'); return { saved: false, reason: 'error' }; }
+      return data;
+    },
+    async listAcross({ limit = 300 } = {}) {
+      const { data, error } = await sb.from('across_items').select('id, kind, set_key, recording_ids, question, created_at').order('created_at', { ascending: false }).limit(limit);
+      check(error, 'load your saved work');
+      return data;
+    },
+    // items whose selection includes all of these recordings (the caller keeps those whose other recordings are gone)
+    async acrossItemsFor(ids, { limit = 60 } = {}) {
+      const { data, error } = await sb.from('across_items').select('id, kind, set_key, recording_ids, question, content, sources, created_at')
+        .contains('recording_ids', ids).order('created_at', { ascending: false }).limit(limit);
+      check(error, 'load your saved work');
+      return data;
+    },
+    async deleteAcross(id) {
+      const { data, error } = await sb.from('across_items').delete().eq('id', id).select('id');
+      check(error, 'delete it');
+      return data.length > 0;
+    },
+    async transcriptionTitles(ids) {
+      if (!ids.length) return [];
+      const { data, error } = await sb.from('transcriptions').select('id, title, created_at').in('id', ids);
+      check(error, 'load recordings');
+      return data;
+    },
     async saveQuestion({ transcriptionId, question, answer, refs, found, version, model, usage }) {
       const { data, error } = await sb.from('transcription_questions').insert({
         transcription_id: transcriptionId, question, answer, refs, found, source_version: version, model,

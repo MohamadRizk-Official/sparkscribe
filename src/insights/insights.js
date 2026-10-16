@@ -10,6 +10,7 @@ import { openExportDialog } from './export.js';
 import { watchNames, renameInText } from '../lib/speaker-names.js';
 import { cleanText } from '../lib/clean.js';
 import { supabase } from '../lib/supabase.js';
+import { myPlan } from '../lib/billing.js';
 import { normalizeToolSettings, describeSettings, ENGINE2_TOOLS, isEngine2Key } from '../lib/tool-settings.js';
 import { resolveContent, transcriptBasis, sameBasis, renderAskSpeakers } from '../lib/speaker-refs.js';
 import { makeDialog } from '../library/dialogs.js';
@@ -714,6 +715,8 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   // fingerprint stays current through plain speaker renames (older results: by version, as before).
   const isStale = (x) => !!x?.content && st.contentVersion != null && x.sourceVersion < st.contentVersion
     && !sameBasis(x.content.basis, transcriptBasis(ctx.getSegments()));
+  let planInfo = null;
+  myPlan().then((p) => { planInfo = p; if (p?.features?.length) render(); });
   const tools = createToolsUI({
     type,
     contentVersion: () => st.contentVersion,
@@ -739,6 +742,8 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
       return shown(st.artifacts.get(akey(r.artifact.kind, r.artifact.settingsKey)));
     },
     toast: (m) => ctx.toast?.(m),
+    // premium capabilities of the signed-in user's plan (display only: the server checks again on every request)
+    can: (capability) => !!planInfo?.features?.includes(capability),
     duration: () => ctx.duration?.() || 0,
     makeDialog,
     showTab,

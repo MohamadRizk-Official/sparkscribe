@@ -4,7 +4,7 @@
 //   getStatus()          the signed-in user's plan, usage and renewal (from public.billing_status())
 //   authorize()          may this user start transcribing a recording of N seconds? (checked before work starts;
 //                        the database re-checks when the transcription is saved)
-//   createCheckout()     Stripe Checkout for Free -> Plus/Pro; a plan change for paid users (Customer Portal)
+//   createCheckout()     Stripe Checkout for Free -> Flash/Bolt/Thunder; a plan change for paid users (Customer Portal)
 //   createPortal()       Stripe Customer Portal for the signed-in user's own customer
 //   handleEvent()        a verified Stripe webhook event -> synchronized subscription state
 //   deleteAccount()      stop billing in Stripe, then delete the account (nobody keeps paying for a deleted account)
@@ -78,7 +78,7 @@ export async function createCheckout(sb, user, planKey, origin) {
   const stripe = getStripe();
   const plans = await loadPlans();
   const plan = plans.find((p) => p.key === planKey && p.billing_interval);
-  if (!plan) throw new BillingError('Choose Plus or Pro.', { status: 400, code: 'bad_plan' });
+  if (!plan) throw new BillingError('Choose Flash, Bolt or Thunder.', { status: 400, code: 'bad_plan' });
   const price = priceIdFor(plan.key);
   if (!price) throw new BillingError('This plan is not available yet.', { status: 503, code: 'billing_not_configured' });
 

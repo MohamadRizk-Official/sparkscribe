@@ -12,6 +12,7 @@ import {
 import { mountMascot } from '../mascot/mascot.js';
 import { mascotSignal } from '../mascot/bus.js';
 import { makeDialog, promptDialog, confirmDialog, confirmDeleteRecordings, folderPicker, toast } from '../library/dialogs.js';
+import { myPlan } from '../lib/billing.js';
 
 const $ = (id) => document.getElementById(id);
 const TYPES = ['lecture', 'meeting', 'voice_message', 'interview', 'podcast', 'general'];
@@ -459,6 +460,8 @@ async function deleteCurrentFolder() {
 function bind() {
   // "Ask across recordings": start selecting, with the hint in the bar
   $('acrossBtn')?.addEventListener('click', () => { st.acrossHint = true; if (!st.selecting) setSelecting(true); else renderBulkBar(); });
+  // a Thunder feature: the tag says so on other plans (the across page explains it, keeping the selection)
+  myPlan().then((p) => { if (p?.features?.includes('across_ask') && $('acrossTag')) $('acrossTag').hidden = true; });
   $('viewTabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-view]');
     if (!b) return;

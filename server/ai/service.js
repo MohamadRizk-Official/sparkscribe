@@ -26,6 +26,7 @@ import { studyItems, studyGuide, followupQuestions } from './studyrun.js';
 import { INSTRUCTIONS_MISSING } from '../../src/lib/tool-settings.js';
 import { selectContext, needsRetrieval, formatExcerpts } from './retrieve.js';
 import { askAcross, guideAcross } from './across.js';
+import { requireCapability } from '../entitlements.js';
 import { segmentsFromRow, modelLine, estimateTokens, normalizeRecordingType, RECORDING_TYPES, isNotFound, refersToPlayback, isFollowUp, fmtClock } from '../../src/lib/segments.js';
 import { speakerTable, dominantSpeaker, codedLine, tokenizeSpeakers, transcriptBasis, sameBasis, speakerResolver, renderSpeakers, origCodes, origResolver } from '../../src/lib/speaker-refs.js';
 
@@ -418,6 +419,8 @@ export async function gradeShortAnswer(db, { transcriptionId, artifactId, index,
 export const MAX_FOLLOWUPS = 30;          // per quiz: bounds what one quiz can cost in follow-ups
 const FOLLOWUP_CONCEPTS = 6;              // per request
 export async function generateFollowups(db, { transcriptionId, artifactId, conceptIds, userId = null }) {
+  // Bolt and up: checked first, before the quiz or transcript is read and before any AI call
+  await requireCapability(db, 'followup_practice');
   const ids = [...new Set((Array.isArray(conceptIds) ? conceptIds : []).map((x) => String(x).slice(0, 20)))].slice(0, FOLLOWUP_CONCEPTS);
   if (!ids.length) throw new AIError('Choose what to practise first.', { status: 400, code: 'bad_request' });
   const quiz = (await db.listArtifacts(transcriptionId)).find((a) => a.id === artifactId && a.kind === 'quiz' && a.status === 'ready');
@@ -628,6 +631,13 @@ export async function askTranscript(db, { transcriptionId, question, at = null, 
   return { id: saved?.id, question, answer: g.answer, refs: g.refs, found: g.found, unsupported: g.unsupported, mode: ctx.mode, cached: false };
 }
 
-// Across recordings (server/ai/across.js): the same usage reservation as every other AI action.
-export const askAcrossRecordings = (db, args, emit) => askAcross(db, args, emit, { reserveAi });
-export const guideAcrossRecordings = (db, args) => guideAcross(db, args, { reserveAi });
+// Across recordings (server/ai/across.js), Thunder: the plan is checked before any recording is read, then the same
+// usage reservation as every other AI action.
+export async function askAcrossRecordings(db, args, emit) {
+  await requireCapability(db, 'across_ask');
+  return askAcross(db, args, emit, { reserveAi });
+}
+export async function guideAcrossRecordings(db, args) {
+  await requireCapability(db, 'across_guide');
+  return guideAcross(db, args, { reserveAi });
+}

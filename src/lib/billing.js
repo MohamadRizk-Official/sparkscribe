@@ -2,15 +2,29 @@
 // server and in the database (entitlements), never here. Plan names, prices and allowances come from the
 // database table billing_plans, the same source the server uses.
 import { supabase, isConfigured } from './supabase.js';
+import { planFromRow } from './pricing-catalog.js';
 
+// The four-tier lineup (Free, Flash, Bolt, Thunder) in tier order. Retired plans (no tier) are never listed.
+// `intro` is the introductory price shown with a plan (Flash: $1 for the first month); what Checkout charges is
+// decided by the server and Stripe.
 let plansPromise = null;
 export function loadPlans() {
   if (!isConfigured) return Promise.resolve([]);
   return (plansPromise ||= supabase.from('billing_plans')
-    .select('key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, sort_order, is_default')
-    .eq('active', true).order('sort_order')
-    .then(({ data, error }) => { if (error) { plansPromise = null; throw error; } return data; }));
+    .select('key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default')
+    .not('tier', 'is', null).order('tier')
+    .then(({ data, error }) => { if (error) { plansPromise = null; throw error; } return (data || []).map(planFromRow); }));
 }
+
+// What the signed-in user's plan includes (premium capabilities), from the server's billing status. Display only: the
+// server checks the plan again on every premium request. Cached for the page; null when it can't be read.
+let featuresPromise = null;
+export function myPlan() {
+  return (featuresPromise ||= getBillingStatus().then((s) => ({ plan: s.plan, planName: s.planName, features: Array.isArray(s.features) ? s.features : [] }), () => { featuresPromise = null; return null; }));
+}
+export const can = (plan, capability) => !!plan?.features?.includes(capability);
+// the lowest plan in the lineup that includes a capability
+export const planWith = (plans, capability) => plans.find((p) => p.features?.includes(capability)) || null;
 
 export class BillingApiError extends Error {
   constructor(message, code, status, extra = {}) { super(message); this.code = code; this.status = status; Object.assign(this, extra); }

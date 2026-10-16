@@ -1,7 +1,9 @@
 // Across recordings in the browser (mock AI): from the Library selection to /across, asking, sources, adding and
 // removing recordings, the combined study guide, errors, AI limits, ids that aren't the user's, and deleted recordings.
-// 1) on /library after addFixtures() + reload:   (await import('/qa/e2e/across.e2e.js')).fromLibrary()   (navigates)
-// 2) then on /across:                             (await import('/qa/e2e/across.e2e.js')).run()
+// 1) on /library after addFixtures(), __qaKnobs({ plan: 'free' }) + reload:  (await import('/qa/e2e/across.e2e.js')).fromLibrary()   (navigates)
+// 2) on /across (still Free):   gate()   — then __qaKnobs({ plan: 'thunder' }) + reload
+// 3) run(), reload, run2(), reload, run3(), reload, run4(), reload, run5()
+// Answers and guides are saved by the server (the harness store stands in for public.across_items).
 import { $, $$, sleep, waitFor, runTests, assert } from './lib.js';
 
 // results survive the reloads between stages (the driver reloads after each stage)
@@ -14,8 +16,17 @@ const text = (el = main()) => (el?.innerText || '').replace(/\s+/g, ' ');
 const btn = (re, root = document) => [...root.querySelectorAll('button')].find((b) => re.test(b.textContent.replace(/\s+/g, ' ').trim()));
 const selIds = () => new URLSearchParams(location.search).get('ids')?.split(',') || [];
 
+const saved = async () => (await fetch('/__harness/across')).json();
+const ledger = async () => (await (await fetch('/__harness/ai-limits')).json()).ledger.length;
+const api = (body) => fetch('/api/across', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-harness': '1' }, body: JSON.stringify(body) });
+
 export async function fromLibrary() {
   return keep('fromLibrary', await runTests([
+    ['The Library labels asking across recordings as a Thunder feature (Free plan)', async () => {
+      await waitFor(() => $('#acrossBtn'), { what: 'library' });
+      await sleep(300);
+      assert($('#acrossTag') && !$('#acrossTag').hidden && /Thunder/.test($('#acrossTag').textContent), 'Thunder tag shown');
+    }],
     ['"Ask across recordings" starts selecting; Ask across needs 2–12 recordings', async () => {
       await waitFor(() => $('#acrossBtn') && $$('.lib-card').length, { what: 'library' });
       $('#acrossBtn').click();
@@ -34,6 +45,32 @@ export async function fromLibrary() {
   ]));
 }
 
+// Free: the page explains Thunder and keeps the selection; nothing is generated; the API refuses before any AI call
+export async function gate() {
+  return keep('gate', await runTests([
+    ['Free: the selection is kept, and Ask explains Thunder instead of asking', async () => {
+      await waitFor(() => $$('.ax-item').length === 2, { what: 'selection', timeout: 10000 });
+      const locked = await waitFor(() => $('#askPanel .ax-locked'), { what: 'Thunder panel' });
+      assert(!$('#askForm'), 'no question form');
+      const a = locked.querySelector('a[href^="/pricing?plan=thunder"]');
+      assert(a && decodeURIComponent(a.getAttribute('href')).includes(`/across?ids=${selIds().join(',')}`), 'See Thunder, coming back to this selection');
+      btn(/Combined study guide/).click();
+      await waitFor(() => $('#guidePanel .ax-locked'), { what: 'guide explains Thunder too' });
+      assert(!btn(/Create combined study guide/, main()), 'no create button');
+      btn(/^Ask$/, $('.ax-tabs')).click();
+    }],
+    ['Free: a direct request is refused (403 plan_required: Thunder) before anything is read or reserved', async () => {
+      const n = await ledger();
+      const r = await api({ action: 'ask', ids: selIds(), question: 'How is osmosis described?' });
+      const b = await r.json();
+      assert(r.status === 403 && b.error === 'plan_required' && b.details.plan === 'thunder', `${r.status} ${b.error}`);
+      const g = await api({ action: 'guide', ids: selIds() });
+      assert(g.status === 403, 'guide refused too');
+      assert((await ledger()) === n && (await saved()).length === 0, 'no AI usage, nothing saved');
+    }],
+  ]));
+}
+
 export async function run() {
   return keep('run', await runTests([
     ['The workspace lists the selection in recording order', async () => {
@@ -43,7 +80,6 @@ export async function run() {
       assert($('#selCount').textContent === '2' && selIds().length === 2, 'count and URL agree');
     }],
     ['Asking returns one answer citing both recordings, with links to the exact passages', async () => {
-      for (const k of Object.keys(localStorage)) if (k.startsWith('sparkscribe.across.')) localStorage.removeItem(k);
       $('#askQ').value = 'How is osmosis described?';
       $('#askForm').requestSubmit();
       await waitFor(() => $$('.ax-qa:not(.pending)').length === 1, { what: 'answer', timeout: 20000 });
@@ -53,8 +89,9 @@ export async function run() {
       assert(links.every((h) => /^\/transcript\?id=[0-9a-f-]{36}&t=[\d.]+&line=\d+$/.test(h)), 'each chip opens the transcript at the passage');
       assert(!/R9|999/.test(qa.innerText), 'the invented citation was removed by the server');
       assert(/Sources · 2 recordings/.test(qa.innerText), 'sources grouped by recording');
-      const key = Object.keys(localStorage).find((k) => k.startsWith('sparkscribe.across.'));
-      assert(key && JSON.parse(localStorage.getItem(key)).sets, 'kept in this browser, per account');
+      const rows = await saved();
+      assert(rows.length === 1 && rows[0].question === 'How is osmosis described?' && /\{\{R\d\}\}/.test(rows[0].content.answer), 'saved to the account by the server, with tokens (not names)');
+      assert(!Object.keys(localStorage).some((k) => k.startsWith('sparkscribe.across.')), 'nothing kept in this browser');
     }],
     ['Add a recording from the library search, and remove one', async () => {
       btn(/Add recordings/, $('.ax-side')).click();
@@ -78,19 +115,41 @@ export async function run() {
       const arts = await (await fetch('/__harness/artifacts')).json();
       assert([L2, L5].every((id) => arts.some((a) => a.transcription_id === id && a.kind === 'study_guide' && a.status === 'ready')), 'each recording got its own study guide (saved with it, reused next time)');
     }],
-    ['A saved answer survives a reload', async () => {
+    ['(setup for the next stage: the first recording is renamed elsewhere)', async () => {
       btn(/^Ask$/, $('.ax-tabs')).click();
-      assert($$('.ax-qa').length === 0 || true, 'Ask tab');
+      const row = window.__qaDb.rows.find((r) => r.id === L2);
+      row.title = 'Bio 2 — osmosis intro';
+      sessionStorage.setItem('__db', JSON.stringify(window.__qaDb));
+      await fetch('/__harness/seed', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(row) });
     }],
   ]));
 }
 
 export async function run2() {
   return keep('run2', await runTests([
-    ['After a reload the saved guide is shown again (no new AI call)', async () => {
+    ['After a reload (nothing kept in this browser) the saved guide is shown again, no new AI call', async () => {
       await waitFor(() => $$('.ax-item').length === 2, { what: 'selection', timeout: 10000 });
+      const n = await ledger();
       btn(/Combined study guide/).click();
-      await waitFor(() => $('.ax-guide'), { what: 'saved guide' });
+      const g = await waitFor(() => $('.ax-guide'), { what: 'saved guide' });
+      assert((await ledger()) === n, 'read from the account, not generated again');
+      assert(/Bio 2 — osmosis intro/.test(g.innerText) && !/Biology Lecture 2/.test(g.querySelector('.ax-key').innerText), 'the renamed recording shows its new title');
+      btn(/^Ask$/, $('.ax-tabs')).click();
+    }],
+    ['A question asked on another device appears when this tab comes back; one deleted there disappears', async () => {
+      const before = $$('.ax-qa:not(.pending)').length;
+      const r = await api({ action: 'ask', ids: selIds(), question: 'What do these say about diffusion?', requestId: crypto.randomUUID() });
+      assert(r.ok, 'the other device asked');
+      await sleep(5200);
+      window.dispatchEvent(new Event('focus'));
+      await waitFor(() => $$('.ax-qa:not(.pending)').length === before + 1, { what: 'new answer synced', timeout: 10000 });
+      const chips = $$('.ax-qa a.ax-chip').map((a) => a.textContent);
+      assert(chips.some((t) => /Bio 2 — osmosis intro/.test(t)) && chips.every((t) => !/Biology Lecture 2/.test(t)), 'sources show the current title');
+      const id = (await saved()).find((x) => x.question === 'What do these say about diffusion?').id;
+      assert((await (await api({ action: 'delete', id })).json()).deleted, 'deleted on the other device');
+      await sleep(5200);
+      window.dispatchEvent(new Event('focus'));
+      await waitFor(() => $$('.ax-qa:not(.pending)').length === before, { what: 'deletion synced', timeout: 10000 });
     }],
     ['AI failures and AI limits are shown plainly, and nothing breaks', async () => {
       btn(/^Ask$/, $('.ax-tabs')).click();
@@ -130,8 +189,9 @@ export async function run4() {
       await waitFor(() => $$('.ax-item').length === 3, { what: 'three selected', timeout: 10000 });
       $('#askQ').value = 'How is osmosis described?'; $('#askForm').requestSubmit();
       await waitFor(() => $$('.ax-qa:not(.pending)').length >= 1, { what: 'answer', timeout: 20000 });
-      // delete Lecture 7 the way the Library does (its row goes; this browser keeps the saved answer)
+      // delete Lecture 7 the way the Library does: its row goes (in the browser's view and on the server)
       const db = window.__qaDb; db.rows = db.rows.filter((r) => r.id !== L7); sessionStorage.setItem('__db', JSON.stringify(db));
+      await fetch(`/__harness/delete-recording?id=${L7}`);
     }],
   ]));
 }
@@ -144,6 +204,14 @@ export async function run5() {
       assert(/Biology Lecture 7.*was deleted; its links are disabled/.test(qa.innerText), 'stale note');
       assert(qa.querySelector('.ax-chip.gone') && !qa.querySelector(`a.ax-chip[href*="${L7}"]`), 'no link into the deleted recording');
       assert(qa.querySelector(`a.ax-chip[href*="${L2}"]`), 'links into the remaining recordings still work');
+    }],
+    ['Deleting an answer here removes it from the account', async () => {
+      const n = (await saved()).length;
+      const orig = window.confirm; window.confirm = () => true;
+      $('.ax-qa:not(.pending) [data-del]').click();
+      window.confirm = orig;
+      for (let i = 0; i < 40 && (await saved()).length !== n - 1; i++) await sleep(200);
+      assert((await saved()).length === n - 1, 'deleted on the server');
     }],
     ['Fewer than two recordings → the empty state', async () => {
       $(`[data-remove="${L5}"]`).click();

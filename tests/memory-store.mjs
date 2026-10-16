@@ -103,6 +103,56 @@ export function memoryStore({ userId = null } = {}) {
       const r = this._ai.find((x) => x.id === id && x.status === 'reserved');
       if (r) Object.assign(r, { status: ok ? 'done' : 'failed', cost: ok ? costMicrousd : 0, input, output });
     },
+    // ---- plan (billing_status) ----
+    // plan: the signed-in user's effective plan; PLANS mirrors the four-tier rows of billing_plans
+    plan: 'free',
+    entitlementsError: null,
+    PLANS: [
+      { key: 'free', name: 'Free', tier: 0, features: [] },
+      { key: 'flash', name: 'Flash', tier: 1, features: [] },
+      { key: 'bolt', name: 'Bolt', tier: 2, features: ['focused_review', 'followup_practice'] },
+      { key: 'thunder', name: 'Thunder', tier: 3, features: ['focused_review', 'followup_practice', 'across_ask', 'across_guide'] },
+    ],
+    async entitlements() {
+      if (this.entitlementsError) throw new Error(this.entitlementsError);
+      const p = this.PLANS.find((x) => x.key === this.plan) || this.PLANS[0];
+      return { plan: p.key, planName: p.name, tier: p.tier, features: [...p.features], plans: this.PLANS };
+    },
+    // ---- saved Thunder history (across_items; the same rules as public.across_save) ----
+    _x: [],
+    acrossSaveError: null,
+    async saveAcross({ requestId, kind, ids, question, content, sources }) {
+      if (this.acrossSaveError) return { saved: false, reason: this.acrossSaveError };
+      const sorted = [...new Set(ids)].sort();
+      if (sorted.length < 2 || sorted.length > 12) throw new Error('bad selection');
+      for (const id of sorted) if (!(await this.getTranscription(id))) throw new Error('unknown recording');
+      const dup = this._x.find((x) => x.request_id === requestId);
+      if (dup) return { saved: true, id: dup.id, created_at: dup.created_at, duplicate: true };
+      if (this._x.length >= 500) return { saved: false, reason: 'full', limit: 500 };
+      const row = { id: randomUUID(), request_id: requestId, kind, set_key: sorted.join(','), recording_ids: sorted, question: kind === 'ask' ? question : null,
+        content: JSON.parse(JSON.stringify(content)), sources: JSON.parse(JSON.stringify(sources)), created_at: new Date(Date.now() + this._x.length).toISOString() };
+      this._x.push(row);
+      return { saved: true, id: row.id, created_at: row.created_at };
+    },
+    async listAcross({ limit = 300 } = {}) {
+      return [...this._x].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, limit)
+        .map(({ id, kind, set_key, recording_ids, question, created_at }) => ({ id, kind, set_key, recording_ids, question, created_at }));
+    },
+    async acrossItemsFor(ids, { limit = 60 } = {}) {
+      return [...this._x].filter((x) => ids.every((id) => x.recording_ids.includes(id))).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, limit)
+        .map((x) => JSON.parse(JSON.stringify(x)));
+    },
+    async deleteAcross(id) {
+      const i = this._x.findIndex((x) => x.id === id);
+      if (i < 0) return false;
+      this._x.splice(i, 1);
+      return true;
+    },
+    async transcriptionTitles(ids) {
+      const out = [];
+      for (const id of ids) { const r = await this.getTranscription(id); if (r) out.push({ id: r.id, title: r.title, created_at: r.created_at || null }); }
+      return out;
+    },
     async listQuestions(tid) { return questions.filter((q) => q.transcription_id === tid); },
     async findAnswer(tid, normalized, version, norm) {
       return [...questions].reverse().find((q) => q.transcription_id === tid && q.source_version === version && norm(q.question) === normalized) || null;

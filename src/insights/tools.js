@@ -653,7 +653,7 @@ export function createToolsUI(api) {
 
   // the quiz's open concepts, from an earlier session: pick the review up where it was left
   function focusResumeHtml(a) {
-    if (!supportsReview(a?.content)) return '';
+    if (!supportsReview(a?.content) || !api.can?.('focused_review')) return '';
     const open = openConcepts(reviewList(readState(a.progress), a.content));
     if (!open.length) return '';
     return `<div class="fr-resume" role="group" aria-label="Focused Review">
@@ -732,7 +732,10 @@ export function createToolsUI(api) {
   function quizResultHtml(a, v, byId) {
     const qs = allQuestions(a.content), r = summary(v.run), given = givenOf(v.run);
     // Focused Review: what was missed, as concepts (quizzes made by study engine 3 carry the study map)
-    const focus = supportsReview(a.content) ? reviewList(readState(a.progress), a.content) : null;
+    // (Bolt and Thunder; on other plans the result offers the per-question review, plus one line about Focused Review)
+    const canFocus = !!api.can?.('focused_review');
+    const focus = supportsReview(a.content) && canFocus ? reviewList(readState(a.progress), a.content) : null;
+    const lockedConcepts = !canFocus && supportsReview(a.content) && r.missed.length ? openConcepts(reviewList(readState(a.progress), a.content)).length : 0;
     const open = focus ? openConcepts(focus) : [];
     const checks = focus ? focus.filter((x) => x.state === STATE.CHECK) : [];
     const pct = Math.round((r.score / r.total) * 100), perfect = r.score === r.total;
@@ -769,7 +772,18 @@ export function createToolsUI(api) {
         <button class="study-back" type="button" data-act="tools">← Back to Create</button>
       </section>
       ${focus ? conceptListHtml(open, checks) : r.missed.length ? `<section class="miss-list" aria-label="Questions to review"><h4 class="miss-head">To review</h4>${r.missed.map((qi) => missCardHtml(qs[qi], given.get(qi), byId)).join('')}</section>` : ''}
+      ${lockedConcepts ? focusUpsellHtml(lockedConcepts) : ''}
     </div>`;
+  }
+
+  // one calm line for plans without Focused Review: what it would do with THIS result, and where it is included
+  function focusUpsellHtml(n) {
+    return `<aside class="fr-upsell" aria-label="Focused Review">
+      <span class="fr-upsell-ic" aria-hidden="true">${ICON.loop}</span>
+      <span class="fr-upsell-text"><b>Focused Review <span class="fr-plan">Bolt</span></b>
+        <span>Your missed answers come down to ${n} concept${n === 1 ? '' : 's'}. Focused Review shows each one with the exact lines from the recording, then lets you practise just those.</span></span>
+      <a class="btn btn-ghost btn-sm" href="/pricing?plan=bolt">See Bolt</a>
+    </aside>`;
   }
 
   // ---------- Focused Review (Quiz Result → Concepts to Review → Review → Practice Again) ----------
@@ -846,7 +860,7 @@ export function createToolsUI(api) {
       <section class="study-card fr-card" aria-labelledby="frPracticeH">
         <h3 class="study-title" id="frPracticeH" tabindex="-1">Practice again</h3>
         <p class="study-sub">You’ve already seen every question about ${fresh.length === 1 ? `“${esc(name(fresh[0]))}”` : `${fresh.length} of these concepts`}. New questions test the same ideas a different way.</p>
-        ${v.followErr ? `<div class="ins-msg warn" role="alert"><span>${esc(v.followErr)}</span></div>` : ''}
+        ${v.followErr ? `<div class="ins-msg warn" role="alert"><span>${esc(v.followErr)}</span>${v.followPlan ? `<a class="btn btn-ghost btn-sm" href="/pricing?plan=${esc(v.followPlan)}">See plans</a>` : ''}</div>` : ''}
         ${v.following ? api.loading('Writing new practice questions') : `<div class="qr-actions">
           <button class="btn btn-primary qr-main" type="button" data-act="focus-new">Write new questions <span aria-hidden="true">→</span></button>
           <button class="btn qr-second" type="button" data-act="focus-go">${ICON.loop}Practice with the same questions</button></div>
@@ -1034,6 +1048,7 @@ export function createToolsUI(api) {
       api.refresh();
     };
     on('[data-act="focus"]', () => {
+      if (!api.can?.('focused_review')) return;
       const open = openConcepts(reviewList(reviewNow(), a.content));
       if (!open.length) return;
       v.focus = { ids: open.map((x) => x.id), i: 0 };
@@ -1060,6 +1075,7 @@ export function createToolsUI(api) {
       } catch (err) {
         v.following = false;
         v.followErr = err?.message || "New questions couldn't be written. You can still practise with the same ones.";
+        v.followPlan = err?.code === 'plan_required' ? err.details?.plan || 'bolt' : null;
         rerender('focus-practice');
       }
     });

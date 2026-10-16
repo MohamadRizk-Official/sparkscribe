@@ -30,6 +30,19 @@ const own = quiz.content.questions[0].concept;
 const before = JSON.stringify(quiz.content.questions);
 await db._a.find((a) => a.id === quiz.id) && Object.assign(db._a.find((a) => a.id === quiz.id), { progress: { last_score: 1, total: 3, review: { v: 1, c: { [own]: { s: 'review', m: 1, ok: 0, q: [0], t: 1 } }, flag: [] } } });
 
+// the plan: Bolt and Thunder only, checked before the quiz is read or any AI call is reserved
+for (const plan of ['free', 'flash']) {
+  db.plan = plan;
+  const n = db._ai.length;
+  let e = null; try { await svc.generateFollowups(db, { transcriptionId: T, artifactId: quiz.id, conceptIds: [own], userId: U }); } catch (x) { e = x; }
+  ok(e?.code === 'plan_required' && e.status === 403 && e.details.plan === 'bolt' && /Bolt and Thunder/.test(e.message) && db._ai.length === n && !(db._a.find((a) => a.id === quiz.id).content.followups || []).length,
+    `${plan}: new practice questions are refused (included with Bolt and Thunder); no AI call, the quiz untouched`);
+}
+db.plan = 'thunder';
+db.entitlementsError = 'down';
+ok(await rejects(svc.generateFollowups(db, { transcriptionId: T, artifactId: quiz.id, conceptIds: [own], userId: U }), 'plan_unavailable'), 'the plan cannot be read → refused, not treated as entitled');
+db.entitlementsError = null;
+db.plan = 'bolt';
 const r = await svc.generateFollowups(db, { transcriptionId: T, artifactId: quiz.id, conceptIds: [own, own, 'zzz'], userId: U });
 const f = r.artifact.content.followups || [];
 ok(r.added >= 1 && f.length === r.added && f.every((q) => q.followup && q.concept === own), 'new questions are written for the asked concept only (unknown ids ignored)');

@@ -1,7 +1,9 @@
 // Focused Review in the browser (mock AI): Quiz Result → Concepts to Review → Review → Practice Again, kept across a
 // reload, flags not counted, follow-up questions written on request, and the quiz itself unchanged.
 // Run on /transcript?id=bbbbbbbb-0000-4000-8000-000000000001 after addFixtures() + reload:
-//   const m = await import('/qa/e2e/focus-review.e2e.js'); await m.run()
+//   const m = await import('/qa/e2e/focus-review.e2e.js'); await m.run()        (sets the Bolt plan itself)
+// The plan gate: on /transcript?id=bbbbbbbb-0000-4000-8000-000000000002 with __qaKnobs({ plan: 'flash' }) + reload:
+//   await (await import('/qa/e2e/focus-review.e2e.js')).gate()
 import { $$, sleep, waitFor, runTests, assert } from './lib.js';
 
 const ID = 'bbbbbbbb-0000-4000-8000-000000000001';
@@ -9,7 +11,8 @@ const panel = () => document.querySelector('#insightsHost [data-panel="create"]'
 const text = () => (panel()?.innerText || '').replace(/\s+/g, ' ');
 const btn = (re, root = panel()) => [...(root?.querySelectorAll('button') || [])].find((b) => re.test(b.textContent.replace(/\s+/g, ' ').trim()));
 const tab = (name) => { const b = [...$$('#resTabs [role="tab"], #resTabs button')].find((x) => new RegExp(name, 'i').test(x.textContent)); assert(b, `tab ${name}`); b.click(); };
-const quizRow = async () => (await (await fetch('/__harness/artifacts')).json()).find((a) => a.transcription_id === ID && a.kind === 'quiz' && a.status === 'ready');
+const pageId = () => new URLSearchParams(location.search).get('id') || ID;
+const quizRow = async () => (await (await fetch('/__harness/artifacts')).json()).find((a) => a.transcription_id === pageId() && a.kind === 'quiz' && a.status === 'ready');
 const openQuiz = async () => {
   tab('Create');
   const back = btn(/^(← )?All tools$|Back to Create|^Create$/);
@@ -42,7 +45,40 @@ async function playAll(right) {
   for (let i = 0; i < 40 && document.querySelector('#qText'); i++) await answer(typeof right === 'function' ? right(i) : right);
 }
 
+// Flash (no Focused Review): the result keeps the per-question review and retakes, plus one calm line about Bolt;
+// asking the server for new practice questions directly is refused before any AI call.
+export async function gate() {
+  return runTests([
+    ['Flash: after a quiz, the per-question review and retakes, one line about Focused Review, no concept list', async () => {
+      await openQuiz();
+      if (btn(/End quiz/)) { btn(/End quiz/).click(); await sleep(200); }
+      const start = await waitFor(() => btn(/Start Quiz/), { what: 'start (the quiz is written first)', timeout: 60000 });
+      start.click();
+      await waitFor(() => document.querySelector('#qText'), { what: 'first question' });
+      await playAll(false);
+      await waitFor(() => /Quiz complete/i.test(text()), { what: 'result' });
+      assert(btn(/Review missed questions/) && btn(/Retake missed/) && !btn(/^Review \d+ concepts?/), 'Free/Flash review actions, no "Review N concepts"');
+      assert(!panel().querySelector('.fr-list') && panel().querySelector('.miss-list'), 'missed questions listed, not concepts');
+      const up = panel().querySelector('.fr-upsell');
+      assert(up && /Focused Review/.test(up.innerText) && /Bolt/.test(up.innerText) && up.querySelector('a[href="/pricing?plan=bolt"]'), 'one line about Focused Review with a link to Bolt');
+      btn(/Review missed questions/).click();
+      await waitFor(() => /Missed question 1 of|Question 1 of/i.test(text()) && panel().querySelector('.miss-card.full'), { what: 'per-question review still works' });
+    }],
+    ['Flash: the server refuses new practice questions (403) without any AI call', async () => {
+      const row = await quizRow();
+      const before = (await (await fetch('/__harness/ai-limits')).json()).ledger.length;
+      const r = await fetch('/api/tools', { method: 'POST', headers: { 'content-type': 'application/json', 'x-dev-harness': '1' }, body: JSON.stringify({ action: 'followups', transcriptionId: pageId(), artifactId: row.id, concepts: [row.content.map.concepts[0].id] }) });
+      const body = await r.json();
+      const after = (await (await fetch('/__harness/ai-limits')).json()).ledger.length;
+      assert(r.status === 403 && body.error === 'plan_required' && body.details?.plan === 'bolt', `403 plan_required → Bolt (${r.status} ${body.error})`);
+      assert(after === before && !((await quizRow()).content.followups || []).length, 'nothing reserved, the quiz unchanged');
+    }],
+  ]);
+}
+
 export async function run() {
+  window.__qaKnobs({ plan: 'bolt' });
+  await sleep(150);
   return runTests([
     ['A quiz with every answer wrong ends on "Review N concepts", listing concepts (not questions)', async () => {
       await openQuiz();

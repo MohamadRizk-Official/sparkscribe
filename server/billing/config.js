@@ -2,7 +2,7 @@
 //
 // Plans (names, prices, monthly allowances) come from the database table billing_plans, the single source of
 // truth shared with the browser. Stripe price IDs differ between test and live mode, so they come from
-// server environment variables named after the plan: STRIPE_PLUS_PRICE_ID, STRIPE_PRO_PRICE_ID, ...
+// server environment variables named after the plan: STRIPE_FLASH_PRICE_ID, STRIPE_BOLT_PRICE_ID, STRIPE_THUNDER_PRICE_ID.
 // Secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, BILLING_DB_SECRET) are read here only, on the server.
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
@@ -47,7 +47,7 @@ export function portalAllowed(env = process.env) {
 }
 // Stripe Tax (STRIPE_AUTOMATIC_TAX=1): Checkout collects the billing address and adds the tax Stripe calculates for
 // the places where the business is registered to collect it (registrations are made in the Stripe Dashboard, not
-// here). Prices stay $7.99 / $14.99 with tax added on top and shown before payment. Off by default.
+// here). Prices stay $5.99 / $9.99 / $14.99 with tax added on top and shown before payment. Off by default.
 export const automaticTax = (env = process.env) => env.STRIPE_AUTOMATIC_TAX === '1';
 export function assertPaymentsEnabled() {
   if (!paymentsEnabled()) throw new BillingError("Paid plans aren't available yet. Nothing was charged.", { status: 503, code: 'payments_unavailable' });
@@ -85,11 +85,13 @@ export function billingDb() {
 }
 
 // ---------- plans ----------
+export const PLAN_COLUMNS = 'key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default';
 let plansCache = null;
 export async function loadPlans() {
   if (plansCache && plansCache.at > Date.now() - 60_000) return plansCache.plans;
   const sb = createClient(supabaseUrl(), supabaseKey(), { auth: noSession });
-  const { data, error } = await sb.from('billing_plans').select('key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, sort_order, is_default').eq('active', true).order('sort_order');
+  // the four-tier lineup (tier 0 Free … 3 Thunder); retired plans (Plus, Pro) have no tier and are never offered
+  const { data, error } = await sb.from('billing_plans').select(PLAN_COLUMNS).not('tier', 'is', null).order('tier');
   if (error || !data?.length) throw new BillingError('Plans are unavailable right now. Try again.', { status: 503, code: 'plans_unavailable' });
   plansCache = { at: Date.now(), plans: data };
   return data;

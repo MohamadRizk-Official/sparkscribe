@@ -1,18 +1,9 @@
-// The PROPOSED four-plan lineup (Free, Flash, Bolt, Thunder), for the pricing design preview only.
-//
-// This is presentation data. Nothing on the server reads it: what a user is entitled to and what Checkout charges
-// still come from the database (billing_plans) and the server's Stripe price IDs. The pricing page uses it only in
-// a build made with VITE_PRICING_PREVIEW=1 (a Vercel Preview), and a production build refuses that flag
-// (vite.config.js), so these prices can never be shown on, or bought from, the live site by accident.
-// Phase 2 moves the approved lineup into billing_plans; this file then goes away.
+// How plans and prices are written on the page (pricing, account). Formatting only: the plans themselves (prices,
+// allowances, introductory prices, what each includes) come from the database (billing_plans, lib/billing.js
+// loadPlans), the same rows the server uses; what Checkout charges is decided by the server and Stripe.
 
-export const PREVIEW_PLANS = Object.freeze([
-  { key: 'free', name: 'Free', price_cents: 0, monthly_seconds: 30 * 60 },
-  // $1 for the first monthly period only, then $5.99 every month (enforced server-side in Phase 3, never by the browser)
-  { key: 'flash', name: 'Flash', price_cents: 599, intro: { price_cents: 100, months: 1 }, monthly_seconds: 3 * 3600 },
-  { key: 'bolt', name: 'Bolt', price_cents: 999, monthly_seconds: 9 * 3600 },
-  { key: 'thunder', name: 'Thunder', price_cents: 1499, monthly_seconds: 20 * 3600 },
-].map((p) => Object.freeze({ currency: 'usd', billing_interval: p.price_cents ? 'month' : null, ...p })));
+// a billing_plans row -> the page's plan: features always a list, the introductory price as { price_cents, months }
+export const planFromRow = (r) => ({ ...r, features: r.features || [], intro: r.intro_price_cents != null ? { price_cents: r.intro_price_cents, months: r.intro_months || 1 } : null });
 
 // $1, $5.99, $0 (whole dollars without cents)
 export const money = (cents) => (cents % 100 ? `$${(cents / 100).toFixed(2)}` : `$${cents / 100}`);

@@ -2,7 +2,7 @@
 // and the mock AI provider. No Supabase or Anthropic calls leave this machine for /api/*, and the browser
 // mock (browser-mock.js) answers the Supabase REST/auth calls the pages make.
 //   node qa/harness/dev-mock.mjs [port]      (default 5190)
-// Test-only endpoints under /__harness/: seed, artifact(s), state, fail (mock AI failure), model (model override), ai-limits.
+// Test-only endpoints under /__harness/: seed, artifact(s), state, fail (mock AI failure), model (model override), ai-limits, plan, across.
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -77,6 +77,17 @@ const server = await createServer({
         res.setHeader('content-type', 'application/json');
         res.end(JSON.stringify({ limits: store.aiLimits, ledger: store._ai }));
       });
+      // the signed-in user's plan for the server's entitlement checks (mirrored from the browser mock's plan knob)
+      s.middlewares.use('/__harness/plan', (req, res) => {
+        const k = new URL(req.url, 'http://x').searchParams.get('key') || 'free';
+        if (!store.PLANS.some((p) => p.key === k)) { res.statusCode = 400; return res.end('bad plan'); }
+        store.plan = k;
+        res.end(`plan=${k}`);
+      });
+      // a recording deleted on the server side (as the Library's delete does in the real database)
+      s.middlewares.use('/__harness/delete-recording', (req, res) => { store._t.delete(new URL(req.url, 'http://x').searchParams.get('id')); res.end('ok'); });
+      // saved Thunder history as the server stored it (inspection only)
+      s.middlewares.use('/__harness/across', (req, res) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(store._x)); });
       s.middlewares.use('/__harness/fail', (req, res) => {
         process.env.AI_MOCK_FAIL = req.url.includes('on=1') ? '1' : '';
         res.end('fail=' + process.env.AI_MOCK_FAIL);

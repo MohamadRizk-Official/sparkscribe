@@ -7,20 +7,32 @@ const checkoutCalls = () => (window.__qaBilling || []).filter((a) => a === 'chec
 
 export async function pricing() {
   return runTests([
-    ['pricing (signed in, Free): paid plans say "Coming soon", nothing can start a payment', async () => {
-      await waitFor(() => $$('.plan-card').length === 3, { what: 'plan cards' });
-      const cards = $$('.plan-card');
+    ['pricing (signed in, Free): four plans from the plan table; paid plans say "Coming soon"; nothing can start a payment', async () => {
+      await waitFor(() => $$('.pz-card').length === 4, { what: 'plan cards' });
+      const cards = $$('.pz-card');
+      eq(cards.map((c) => text(c.querySelector('h3'))).join(), 'Free,Flash,Bolt,Thunder', 'lineup');
       assert(/Your current plan/.test(text(cards[0])), 'Free is the current plan');
-      assert(/Coming soon/.test(text(cards[1])) && /Coming soon/.test(text(cards[2])), 'Plus and Pro: Coming soon');
-      eq($$('[data-plan], .plan-card a[href*="plan="]').length, 0, 'upgrade buttons/links');
+      assert(cards.slice(1).every((c) => /Coming soon/.test(text(c))), 'Flash, Bolt, Thunder: Coming soon');
+      eq($$('button[data-plan], .pz-card a[href*="plan="]').length, 0, 'upgrade buttons/links');
       assert(/Paid plans are coming soon/.test(text($('.bill-notice') || document.body)), 'notice explains it');
-      assert(/\$7\.99/.test(text(cards[1])) && /\$14\.99/.test(text(cards[2])), 'prices still shown from the plan table');
+      assert(/30\s*min/.test(text(cards[0])) && /\$1\b/.test(text(cards[1])) && /Then \$5\.99\/month/.test(text(cards[1])) && /\$9\.99/.test(text(cards[2])) && /\$14\.99/.test(text(cards[3])), 'prices and allowances from the plan table, Flash with its renewal price');
+      assert(/9\s*hours/.test(text(cards[2])) && /20\s*hours/.test(text(cards[3])) && /3\s*hours/.test(text(cards[1])), 'allowances: 3, 9, 20 hours');
       eq(checkoutCalls(), 0, 'checkout/portal requests');
       assert(/coming soon/i.test(text($('#billFoot'))) && !/Stripe/.test(text($('#billFoot'))), `footer doesn't advertise payments (${text($('#billFoot'))})`);
       assert(/save to your library/.test($('.faq-list').textContent), 'FAQ: only saved recordings count');
     }],
-    ['pricing ?plan=plus after sign-in does not auto-start checkout', async () => {
-      history.replaceState(null, '', '/pricing?plan=plus');
+    ['the comparison names what Bolt and Thunder add, from the plans themselves; nothing is labelled "in development"', async () => {
+      const table = await waitFor(() => $('#compareTable table'), { what: 'comparison' });
+      const row = (name) => [...table.querySelectorAll('tbody tr')].find((r) => r.querySelector('th').textContent.startsWith(name));
+      const cells = (r) => [...r.querySelectorAll('td')].map((td) => (td.querySelector('.pz-yes') ? 'Y' : '-')).join('');
+      eq(cells(row('Focused Review')), '--YY', 'Focused Review: Bolt and Thunder');
+      eq(cells(row('Ask across recordings')), '---Y', 'Ask across recordings: Thunder');
+      eq(cells(row('Combined study guides')), '---Y', 'Combined study guides: Thunder');
+      assert(!/in development|not included in thunder yet/i.test(document.body.innerText), 'no "in development" label');
+      assert(/What is Focused Review\?/.test($('.faq-list').textContent) && /asking across recordings/.test($('.faq-list').textContent), 'FAQ explains both');
+    }],
+    ['pricing ?plan=flash after sign-in does not auto-start checkout', async () => {
+      history.replaceState(null, '', '/pricing?plan=flash');
       const mod = await import('/src/pages/pricing.js?again=' + Date.now()).catch(() => null);
       await sleep(600);
       eq(checkoutCalls(), 0, 'checkout requests');
@@ -30,15 +42,25 @@ export async function pricing() {
   ]);
 }
 
-export async function account() {
+// /account, run once per plan knob: account('free') then (after __qaKnobs({ plan: 'thunder' }) + reload) account('thunder')
+export async function account(plan = 'free') {
   return runTests([
-    ['account page: plan, usage meter, no upgrade or billing buttons while payments are off', async () => {
+    [`account page (${plan}): plan, allowance, what it includes, upgrade paths; no billing buttons while payments are off`, async () => {
       await waitFor(() => $('.acct-plan h2'), { what: 'plan card' });
-      eq(text($('.acct-plan h2')), 'Free', 'plan');
-      assert($('.meter') && /min/.test(text($('.meter'))), 'usage meter');
-      eq($$('[data-up], [data-act="portal"]').length, 0, 'upgrade / manage billing buttons');
+      const want = { free: ['Free', '30 minutes'], flash: ['Flash', '3 hours'], bolt: ['Bolt', '9 hours'], thunder: ['Thunder', '20 hours'] }[plan];
+      eq(text($('.acct-plan h2')), want[0], 'plan');
+      assert(text($('.acct-allow')).includes(want[1]), `allowance: ${text($('.acct-allow'))}`);
+      assert($('.meter') && /(min|hr)/.test(text($('.meter'))), 'usage meter');
+      const feats = $$('.acct-feats li').map(text).join();
+      eq(feats, { free: '', flash: '', bolt: 'Focused Review', thunder: 'Focused Review,Ask across recordings,Combined study guides' }[plan], 'included capabilities');
+      const paths = $$('.acct-paths li b').map(text).join();
+      eq(paths, { free: 'Flash,Bolt,Thunder', flash: 'Bolt,Thunder', bolt: 'Thunder', thunder: '' }[plan], 'upgrade paths (every higher plan)');
+      if (plan === 'free') assert(/\$1 first month, then \$5\.99\/month/.test(text($('.acct-paths'))), 'Flash shows its first-month price with the renewal price');
+      eq($$('[data-up]').length, 0, 'upgrade buttons while payments are off');
+      // a subscriber can always reach Manage Billing (to cancel or fix a card); Free has nothing to manage
+      eq($$('[data-act="portal"]').length, plan === 'free' ? 0 : 1, 'Manage Billing');
       assert($('a[href="/pricing"]'), 'Compare plans link');
-      assert(!/Stripe/.test(text($('#acctFoot'))), `footer doesn't mention payments (${text($('#acctFoot'))})`);
+      if (plan === 'free') assert(!/Stripe/.test(text($('#acctFoot'))), `footer doesn't mention payments (${text($('#acctFoot'))})`);
     }],
   ]);
 }
@@ -56,10 +78,10 @@ export async function home() {
     ['usage line under the upload area for signed-in users', async () => {
       reset();
       await waitFor(() => visible($('#usageLine')), { what: 'usage line' });
-      assert(/Free · 0 \/ 60 min used this month/.test(text($('#usageLine'))), `line: ${text($('#usageLine'))}`);
+      assert(/Free · 0 \/ 30 min used this month/.test(text($('#usageLine'))), `line: ${text($('#usageLine'))}`);
     }],
     ['quota enforced and the recording is too long: clear message, no upgrade button (payments off), nothing transcribed', async () => {
-      reset(); knobs({ enforced: true, usedSeconds: 3590 });
+      reset(); knobs({ enforced: true, usedSeconds: 1790 });
       feed(makeWav(30));
       await waitFor(() => visible($('#gatePanel')), { what: 'quota message' });
       assert(/Not enough transcription time left/.test(text($('#gatePanel'))), text($('#gatePanel')));
@@ -68,10 +90,10 @@ export async function home() {
       await toDrop();
     }],
     ['…with payments switched on, the same message offers the upgrade (UI mirrors the server)', async () => {
-      reset(); knobs({ enforced: true, usedSeconds: 3590, upgrades: true });
+      reset(); knobs({ enforced: true, usedSeconds: 1790, upgrades: true });
       feed(makeWav(30));
       await waitFor(() => visible($('#gatePanel')), { what: 'quota message' });
-      assert($('#gatePanel [data-upgrade="plus"]'), 'upgrade to Plus offered');
+      assert($('#gatePanel [data-upgrade="flash"]'), 'upgrade to Flash (the next plan) offered');
       await toDrop();
       reset();
     }],

@@ -4,6 +4,10 @@
 import { isConfigured } from '../lib/supabase.js';
 import { mountAccountMenu, requireUser, esc } from '../lib/account.js';
 import { loadPlans, getBillingStatus, startCheckout, openPortal, price, perInterval, allowanceLabel, usageParts, usageLevel, durationText, dateText } from '../lib/billing.js';
+import { money } from '../lib/pricing-catalog.js';
+
+// what a premium capability is called on this page
+const FEATURE_NAME = { focused_review: 'Focused Review', across_ask: 'Ask across recordings', across_guide: 'Combined study guides' };
 
 const $ = (id) => document.getElementById(id);
 let plans = [];
@@ -29,9 +33,13 @@ export function meterHtml(s) {
 
 function render() {
   const s = status;
-  const plan = plans.find((p) => p.key === s.plan) || { name: s.planName, price_cents: 0 };
+  const plan = plans.find((p) => p.key === s.plan) || { name: s.planName, price_cents: 0, tier: null, features: s.features || [] };
   const paid = s.plan !== 'free';
-  const next = plans.find((p) => p.billing_interval && p.monthly_seconds > s.monthlySeconds);
+  // every higher plan in the lineup is an upgrade path; the next one is offered first
+  const tier = plan.tier ?? -1;
+  const higher = plans.filter((p) => p.billing_interval && (p.tier ?? -1) > tier);
+  const next = higher[0] || null;
+  const features = (s.features || []).filter((f) => FEATURE_NAME[f]);
   const level = usageLevel(Number(s.usedSeconds), s.monthlySeconds);
   let when;
   if (!paid) when = `Resets ${dateText(s.periodEnd)}`;
@@ -47,8 +55,15 @@ function render() {
     ? `<p class="meter-hint">${Number(s.remainingSeconds) < 1 ? `You've used your ${esc(allowanceLabel(s.monthlySeconds))} for this ${paid ? 'billing period' : 'month'}.` : 'You’re almost out of transcription time.'} <b>${esc(next.name)}</b> includes ${esc(allowanceLabel(next.monthly_seconds))} a month.</p>`
     : level === 'warn' && next ? `<p class="meter-hint">You’ve used most of this ${paid ? 'period' : 'month'}’s time.</p>` : '';
 
+  const priceOf = (p) => (p.intro && !paid && s.introEligible !== false ? `${money(p.intro.price_cents)} first month, then ${price(p)}${perInterval(p)}` : `${price(p)}${perInterval(p)}`);
   const upgradeBtn = next && s.upgradesAvailable
-    ? `<button class="btn btn-primary" type="button" data-up="${esc(next.key)}"${busy ? ' disabled' : ''}>${busy === next.key ? 'Opening…' : `${paid ? 'Switch' : 'Upgrade'} to ${esc(next.name)} · ${esc(price(next))}${esc(perInterval(next))}`}</button>`
+    ? `<button class="btn btn-primary" type="button" data-up="${esc(next.key)}"${busy ? ' disabled' : ''}>${busy === next.key ? 'Opening…' : `${paid ? 'Switch' : 'Upgrade'} to ${esc(next.name)} · ${esc(priceOf(next))}`}</button>`
+    : '';
+  const included = features.length
+    ? `<ul class="acct-feats" aria-label="Included with ${esc(plan.name)}">${features.map((f) => `<li>${esc(FEATURE_NAME[f])}</li>`).join('')}</ul>`
+    : '<p class="acct-fine">Includes the AI study workspace: summaries, notes, Ask, flashcards, quizzes and study guides.</p>';
+  const paths = higher.length
+    ? `<div class="panel acct-card"><div class="ins-label">${paid ? 'Other plans' : 'Upgrade'}</div><ul class="acct-paths">${higher.map((p) => `<li><b>${esc(p.name)}</b><span>${esc(allowanceLabel(p.monthly_seconds))} a month${(p.features || []).filter((f) => FEATURE_NAME[f] && !(s.features || []).includes(f)).map((f) => ` · ${esc(FEATURE_NAME[f])}`).join('')}</span><span class="mono">${esc(priceOf(p))}</span></li>`).join('')}</ul><a class="btn btn-ghost btn-sm" href="/pricing">See what each plan includes</a></div>`
     : '';
   const manage = s.hasBillingAccount
     ? `<button class="btn ${paid ? 'btn-primary' : 'btn-ghost'}" type="button" data-act="portal"${busy ? ' disabled' : ''}>${busy === 'portal' ? 'Opening…' : 'Manage Billing'}</button>` : '';
@@ -60,6 +75,8 @@ function render() {
       <div class="ins-label">Current plan</div>
       <div class="acct-plan"><h2>${esc(plan.name)}</h2><span class="acct-price">${paid ? `${esc(price(plan))}${esc(perInterval(plan))}` : 'Free'}</span></div>
       <p class="acct-when">${when}</p>
+      <p class="acct-allow"><b>${esc(allowanceLabel(s.monthlySeconds))}</b> of transcription a ${paid ? 'billing period' : 'month'}</p>
+      ${included}
       <div class="acct-actions">${s.paymentProblem ? manage + upgradeBtn : upgradeBtn + manage}<a class="btn btn-ghost" href="/pricing">Compare plans</a></div>
     </div>
     <div class="panel acct-card">
@@ -68,6 +85,7 @@ function render() {
       ${limitMsg}
       <p class="acct-fine">Counts the length of recordings you transcribe. Summaries, notes, Ask, study tools, exports and opening old recordings don’t use time. ${s.meteringStarted ? '' : 'Usage tracking starts when plans launch; recordings you already have are never counted.'}</p>
     </div>
+    ${paths}
     ${s.testMode ? '<p class="acct-fine test">Test mode: Stripe test payments only. No real card is charged.</p>' : ''}`;
   $('account').querySelectorAll('[data-up]').forEach((b) => b.addEventListener('click', () => act(b.dataset.up, () => startCheckout(b.dataset.up))));
   $('account').querySelector('[data-act="portal"]')?.addEventListener('click', () => act('portal', openPortal));
@@ -112,7 +130,10 @@ async function main() {
     history.replaceState(null, '', '/account');
     if (status.plan === 'free') {
       const s = await waitForActivation(status.plan);
-      if (s) { status = s; notice(`You're on <b>${esc(s.planName)}</b>. Thanks for subscribing!`, 'ok'); }
+      let back = null;
+      try { back = sessionStorage.getItem('sparkscribe.afterUpgrade'); sessionStorage.removeItem('sparkscribe.afterUpgrade'); } catch {}
+      const cont = back && /^\/(?!\/)/.test(back) ? ` <a href="${esc(back)}">Continue where you left off</a>` : '';
+      if (s) { status = s; notice(`You're on <b>${esc(s.planName)}</b>. Thanks for subscribing!${cont}`, 'ok'); }
       else notice('Your payment is being confirmed. It can take a minute; refresh this page shortly. You won’t be charged twice.', 'warn');
     } else notice(`You're on <b>${esc(status.planName)}</b>.`, 'ok');
   } else if (q.get('changed') === '1') {

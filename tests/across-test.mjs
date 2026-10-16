@@ -17,6 +17,7 @@ const U = '11111111-1111-4111-8111-111111111111';
 const id = (n) => `aaaaaaaa-0000-4000-8000-${String(n).padStart(12, '0')}`;
 const seg = (lines) => lines.map(([sp, t], i) => ({ s: i * 20, e: i * 20 + 18, sp, t }));
 const db = memoryStore({ userId: U });
+db.plan = 'thunder';
 // three short lectures, recorded on different days (seeded out of order), one meeting, and someone else's recording
 db.seed({ id: id(2), user_id: U, created_at: '2026-10-08T10:00:00Z', title: 'Biology Lecture 5', duration_seconds: 120, transcript_text: 'x', recording_type: 'lecture', segments: seg([
   ['Speaker 1', 'Today we revisit osmosis, the movement of water across a membrane.'],
@@ -62,16 +63,33 @@ ok(['R1', 'R2', 'R3', 'R5'].every((l) => sel.ids.get(l).includes(200)), 'every r
 ok(!sel.ids.get('R4').includes(200), 'a recording without a match gets no passage on that topic');
 ok(X.selectAcross(recs, { question: 'osmosis' }).mode === 'full', 'short collections are sent whole (cheaper, and nothing can be missed)');
 
+// ---------- the plan: Thunder only, checked before anything is read or reserved ----------
+for (const plan of ['free', 'flash', 'bolt']) {
+  db.plan = plan;
+  const n = db._ai.length;
+  const ea = await err(svc.askAcrossRecordings(db, { ids: [id(2), id(1)], question: 'Does osmosis need ATP?', userId: U }));
+  const eg = await err(svc.guideAcrossRecordings(db, { ids: [id(2), id(1)], userId: U }));
+  ok(ea?.code === 'plan_required' && ea.status === 403 && ea.details.plan === 'thunder' && ea.details.capability === 'across_ask' && eg?.code === 'plan_required' && eg.details.capability === 'across_guide' && db._ai.length === n,
+    `${plan}: asking across and combined guides are refused with the plan that has them (Thunder); no AI call, nothing reserved`);
+}
+ok((await err(svc.askAcrossRecordings(db, { ids: [id(1), id(9)], question: 'x', userId: U })))?.code === 'plan_required', "the plan is checked before the recordings: a refused user learns nothing about the ids they sent");
+db.plan = 'thunder';
+db.entitlementsError = 'billing_status failed';
+const unk = await err(svc.askAcrossRecordings(db, { ids: [id(2), id(1)], question: 'x', userId: U }));
+ok(unk?.code === 'plan_unavailable' && unk.status === 503, 'the plan cannot be read → refused (never treated as entitled)');
+db.entitlementsError = null;
+
 // ---------- ask across ----------
 const events = [];
-const a = await svc.askAcrossRecordings(db, { ids: [id(2), id(1)], question: 'Does osmosis need energy from ATP?', userId: U }, (e) => events.push(e.type));
+const a0 = await svc.askAcrossRecordings(db, { ids: [id(2), id(1)], question: 'Does osmosis need energy from ATP?', userId: U }, (e) => events.push(e.type));
+const a = { ...a0.item.content, recordings: a0.item.recordings };
 ok(a.refs.some((r) => r.label === 'R1') && a.refs.some((r) => r.label === 'R2'), 'the answer cites both recordings');
 ok(!a.answer.includes('R9:999') && a.refs.every((r) => [id(1), id(2)].includes(r.transcriptionId)), 'a citation of a recording that was never given is removed');
 const r2 = a.refs.find((r) => r.label === 'R2');
 ok(r2.title === 'Biology Lecture 5' && Number.isFinite(r2.start) && r2.line >= 0, 'each source names its recording and the passage time (to open it)');
-ok(events.includes('delta') && a.recordings.map((r) => r.label).join() === 'R1,R2', 'the answer is streamed, and lists the recordings in order');
+ok(events.includes('delta') && events.includes('names') && a.recordings.map((r) => r.label).join() === 'R1,R2', 'the answer is streamed, and lists the recordings in order');
 ok(db._ai.some((x) => x.feature === 'across:ask' && x.status === 'done'), 'the question is reserved and settled in the AI usage ledger');
-const none = await svc.askAcrossRecordings(db, { ids: [id(1), id(3)], question: 'What did they say about quantum chromodynamics?', userId: U });
+const none = (await svc.askAcrossRecordings(db, { ids: [id(1), id(3)], question: 'What did they say about quantum chromodynamics?', userId: U })).item.content;
 ok(none.refs.length === 0 && none.unsupported === false, 'nothing relevant → an uncited “not mentioned” answer, not a made-up one');
 
 // ---------- guards ----------
@@ -94,7 +112,8 @@ const needs = await err(svc.guideAcrossRecordings(db, { ids: [id(1), id(2)], use
 ok(needs?.code === 'needs_maps' && needs.details.needs.length === 2, 'recordings without a study map are named, so the page can create their study guides first');
 for (const t of [id(1), id(2)]) await svc.generateArtifact(db, { transcriptionId: t, kind: 'study_guide' });
 const before = db._ai.length;
-const gd = await svc.guideAcrossRecordings(db, { ids: [id(1), id(2)], userId: U });
+const gd0 = await svc.guideAcrossRecordings(db, { ids: [id(1), id(2)], userId: U });
+const gd = { content: gd0.item.content, dropped: gd0.dropped };
 ok(db._ai.length === before + 1, 'the combined guide is one AI call (the maps are reused, not rebuilt)');
 ok(gd.content.themes.length && !gd.content.themes.some((t) => t.title === 'Invented theme') && gd.dropped >= 1, 'an item resting on a concept that doesn’t exist is dropped');
 const shared = gd.content.themes.find((t) => t.title === 'Shared idea');

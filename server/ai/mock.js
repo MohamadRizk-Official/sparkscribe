@@ -217,15 +217,17 @@ function acrossAnswer(prompt) {
   const qw = new Set(words(question));
   const recs = [...prompt.matchAll(/<recording label="(R\d+)" title="([^"]*)"[^>]*>([\s\S]*?)<\/recording>/g)];
   const parts = [];
-  for (const [, label, title, body] of recs) {
+  // like the real prompt asks: recordings as {{R2}}, speakers as {{R2.S1}}; one bare label ("R1") and one unknown
+  // speaker code are left in, which the server must turn into a token / a neutral word
+  for (const [, label, , body] of recs) {
     let best = null, score = 0;
-    for (const m of body.matchAll(/^\[(R\d+):(\d+)\] (?:\d+:\d+(?::\d+)? \S[^:]*: )?(.+)$/gm)) {
-      const s = words(m[3]).filter((w) => qw.has(w)).length;
-      if (s > score) { best = { line: m[2], text: m[3] }; score = s; }
+    for (const m of body.matchAll(/^\[(R\d+):(\d+)\] (?:\d+:\d+(?::\d+)? (\S[^:]*): )?(.+)$/gm)) {
+      const s = words(m[4]).filter((w) => qw.has(w)).length;
+      if (s > score) { best = { line: m[2], code: /^R\d+\.S\d+$/.test(m[3] || '') ? m[3] : null, text: m[4] }; score = s; }
     }
-    if (best) parts.push(`In ${title}, the closest passage says: "${firstSentence(best.text)}" [${label}:${best.line}].`);
+    if (best) parts.push(`In {{${label}}}, ${best.code ? `{{${best.code}}}` : 'the speaker'} says: "${firstSentence(best.text)}" [${label}:${best.line}].`);
   }
-  return parts.length ? `[Mock] ${parts.join(' ')} One invented link [R9:999].` : '[Mock] None of the selected recordings mention that.';
+  return parts.length ? `[Mock] ${parts.join(' ')} Compare R1 with the others; {{R1.S9}} said nothing. One invented link [R9:999].` : '[Mock] None of the selected recordings mention that.';
 }
 // Combined guide: one theme joining the first concept of every recording (a recurring theme), one theme per
 // recording, and one item resting only on a concept that doesn't exist (dropped by grounding).
@@ -235,7 +237,7 @@ function acrossGuide(text) {
   return {
     overview: '[Mock] What these recordings teach together.',
     themes: [
-      { title: 'Shared idea', summary: '[Mock] An idea that comes up in several recordings.', comparison: first.length > 1 ? '[Mock] The later recording refines the earlier one.' : null, concepts: first },
+      { title: 'Shared idea', summary: '[Mock] An idea that comes up in several recordings.', comparison: first.length > 1 ? `[Mock] {{${first[1].split('.')[0]}}} refines {{${first[0].split('.')[0]}}}.` : null, concepts: first },
       ...first.map((r, i) => ({ title: `Theme of recording ${i + 1}`, summary: '[Mock] Taught in one recording.', comparison: null, concepts: [r] })),
       { title: 'Invented theme', summary: 'Rests on nothing real.', comparison: null, concepts: ['R9.c99'] },
     ],

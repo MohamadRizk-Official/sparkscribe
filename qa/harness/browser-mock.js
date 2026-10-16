@@ -9,7 +9,10 @@
   const REF = 'strkrrdndoofpcenopxk';
   const USER = { id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email: 'tester@example.com', user_metadata: { full_name: 'Test User' }, app_metadata: { provider: 'email' }, created_at: '2026-10-07T00:00:00Z' };
   const knobs = () => { try { return JSON.parse(sessionStorage.getItem('__qa') || '{}'); } catch { return {}; } };
-  window.__qaKnobs = (k) => { sessionStorage.setItem('__qa', JSON.stringify({ ...knobs(), ...k })); return knobs(); };
+  // the plan knob is mirrored to the dev server, whose entitlement checks (server code) read it like billing_status
+  const mirrorPlan = (plan) => fetch('/__harness/plan?key=' + encodeURIComponent(plan || 'free')).catch(() => {});
+  window.__qaKnobs = (k) => { sessionStorage.setItem('__qa', JSON.stringify({ ...knobs(), ...k })); if ('plan' in k) mirrorPlan(k.plan); return knobs(); };
+  mirrorPlan(knobs().plan);
   window.__qaLog = [];
   const log = (e) => { window.__qaLog.push({ t: Math.round(performance.now()), ...e }); };
   const now = Math.floor(Date.now() / 1000);
@@ -37,11 +40,13 @@
   const speakers = (r) => Array.isArray(r.segments) && r.segments.length ? new Set(r.segments.map((s) => s.sp).filter((s) => s !== 'Unknown')).size
     : new Set([...(r.transcript_text || '').matchAll(/^\[\d{1,2}(?::\d{2}){1,2}\] ([^\n]+):$/gm)].map((m) => m[1]).filter((s) => s !== 'Unknown')).size;
 
-  // ---- billing (knobs: plan 'free'|'plus'|'pro', usedSeconds, enforced, upgrades, cancelAtPeriodEnd, paymentProblem) ----
+  // ---- billing (knobs: plan 'free'|'flash'|'bolt'|'thunder', usedSeconds, enforced, upgrades, cancelAtPeriodEnd, paymentProblem, introEligible) ----
+  // the same rows as supabase/migrations/20261016100000_four_tier.sql
   const PLANS = [
-    { key: 'free', name: 'Free', tagline: 'Start free', price_cents: 0, currency: 'usd', billing_interval: null, monthly_seconds: 3600, sort_order: 0, is_default: true },
-    { key: 'plus', name: 'Plus', tagline: 'For everyday use', price_cents: 799, currency: 'usd', billing_interval: 'month', monthly_seconds: 72000, sort_order: 1, is_default: false },
-    { key: 'pro', name: 'Pro', tagline: 'For heavy recording', price_cents: 1499, currency: 'usd', billing_interval: 'month', monthly_seconds: 180000, sort_order: 2, is_default: false },
+    { key: 'free', name: 'Free', tagline: 'Try the real product', price_cents: 0, currency: 'usd', billing_interval: null, monthly_seconds: 1800, tier: 0, features: [], intro_price_cents: null, intro_months: null, is_default: true },
+    { key: 'flash', name: 'Flash', tagline: 'Everyday studying', price_cents: 599, currency: 'usd', billing_interval: 'month', monthly_seconds: 10800, tier: 1, features: [], intro_price_cents: 100, intro_months: 1, is_default: false },
+    { key: 'bolt', name: 'Bolt', tagline: 'Focused Review', price_cents: 999, currency: 'usd', billing_interval: 'month', monthly_seconds: 32400, tier: 2, features: ['focused_review', 'followup_practice'], intro_price_cents: null, intro_months: null, is_default: false },
+    { key: 'thunder', name: 'Thunder', tagline: 'Connected recordings', price_cents: 1499, currency: 'usd', billing_interval: 'month', monthly_seconds: 72000, tier: 3, features: ['focused_review', 'followup_practice', 'across_ask', 'across_guide'], intro_price_cents: null, intro_months: null, is_default: false },
   ];
   window.__qaBilling = [];
   async function billingApi(init) {
@@ -52,7 +57,7 @@
     const plan = PLANS.find((p) => p.key === (K.plan || 'free'));
     const used = Number(K.usedSeconds || 0), remaining = Math.max(plan.monthly_seconds - used, 0);
     const end = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)).toISOString();
-    const st = { plan: plan.key, planName: plan.name, status: plan.key === 'free' ? 'free' : 'active', monthlySeconds: plan.monthly_seconds, usedSeconds: used, remainingSeconds: remaining,
+    const st = { plan: plan.key, planName: plan.name, tier: plan.tier, features: plan.features, ...(K.introEligible != null && { introEligible: !!K.introEligible }), status: plan.key === 'free' ? 'free' : 'active', monthlySeconds: plan.monthly_seconds, usedSeconds: used, remainingSeconds: remaining,
       periodStart: new Date().toISOString(), periodEnd: end, periodKind: plan.key === 'free' ? 'calendar_month' : 'billing', cancelAtPeriodEnd: !!K.cancelAtPeriodEnd,
       hasBillingAccount: plan.key !== 'free', paymentProblem: !!K.paymentProblem, meteringStarted: !!K.enforced, enforced: !!K.enforced, upgradesAvailable: !!K.upgrades, testMode: false };
     if (body.action === 'status') return json(st);

@@ -75,9 +75,13 @@ export async function askQuestion(id, question, at, { onStatus, onDelta } = {}) 
 
 // ---- Across recordings (/api/across) ----
 export const acrossStatus = (ids) => call('/api/across', { method: 'POST', body: JSON.stringify({ action: 'status', ids }) });
-export const acrossGuide = (ids, focus) => call('/api/across', { method: 'POST', body: JSON.stringify({ action: 'guide', ids, focus }) });
+export const acrossGuide = (ids, focus, requestId) => call('/api/across', { method: 'POST', body: JSON.stringify({ action: 'guide', ids, focus, requestId }) });
+// saved answers and guides (account-wide, any device)
+export const acrossHistory = () => call('/api/across', { method: 'POST', body: JSON.stringify({ action: 'history' }) });
+export const acrossThread = (ids) => call('/api/across', { method: 'POST', body: JSON.stringify({ action: 'thread', ids }) });
+export const acrossDelete = (id) => call('/api/across', { method: 'POST', body: JSON.stringify({ action: 'delete', id }) });
 // errors keep the server's `details` (e.g. which recordings are gone)
-async function streamSse(path, payload, { onStatus, onDelta } = {}) {
+async function streamSse(path, payload, { onStatus, onDelta, onNames } = {}) {
   let res;
   try {
     res = await fetch(path, { method: 'POST', headers: await headers(), body: JSON.stringify(payload) });
@@ -108,6 +112,7 @@ async function streamSse(path, payload, { onStatus, onDelta } = {}) {
         const p = JSON.parse(data);
         if (event === 'delta') onDelta?.(p.text);
         else if (event === 'status') onStatus?.(p.status);
+        else if (event === 'names') onNames?.(p);
         else if (event === 'done') result = p;
         else if (event === 'error') throw Object.assign(new ApiError(p.message, p.error, 500), { details: p.details || null });
       }
@@ -119,7 +124,7 @@ async function streamSse(path, payload, { onStatus, onDelta } = {}) {
   if (!result) throw new ApiError("The answer couldn't be generated. Try again.", 'incomplete', 500);
   return result;
 }
-export const askAcross = (ids, question, handlers) => streamSse('/api/across', { action: 'ask', ids, question }, handlers);
+export const askAcross = (ids, question, requestId, handlers) => streamSse('/api/across', { action: 'ask', ids, question, requestId }, handlers);
 
 // Phase 5 (Create tab): generate one tool output, or get the stored one back if it is still current.
 // Practice Quiz: check one short answer by meaning (the server reads the question from the stored quiz)

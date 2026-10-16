@@ -36,7 +36,7 @@ const rest = http.createServer(async (req, res) => {
       return send(200, r.rows[0].r);
     }
     if (url.pathname === '/rest/v1/billing_plans' && req.method === 'GET') {
-      const r = await P.asAnon((d) => d.query(`select key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, sort_order, is_default from public.billing_plans where active order by sort_order`));
+      const r = await P.asAnon((d) => d.query(`select key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default from public.billing_plans where tier is not null order by tier`));
       return send(200, r.rows);
     }
     send(404, { code: 'PGRST125', message: 'not in the stand-in' });
@@ -92,7 +92,7 @@ const stripePort = await listen(fake);
 Object.assign(process.env, {
   NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${restPort}`, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_qa',
   BILLING_DB_SECRET: SECRET, STRIPE_WEBHOOK_SECRET: 'whsec_qa_test', STRIPE_API_HOST: `127.0.0.1:${stripePort}`,
-  STRIPE_PLUS_PRICE_ID: 'price_plus', STRIPE_PRO_PRICE_ID: 'price_pro',
+  STRIPE_FLASH_PRICE_ID: 'price_flash', STRIPE_BOLT_PRICE_ID: 'price_bolt', STRIPE_THUNDER_PRICE_ID: 'price_thunder',
 });
 delete process.env.VERCEL;
 const quiet = console.log; console.log = (...a) => { if (!String(a[0]).startsWith('[billing]')) quiet(...a); };
@@ -110,7 +110,7 @@ ok(config.paymentsEnabled(env({ STRIPE_SECRET_KEY: 'sk_live_x', BILLING_PAYMENTS
 ok(!config.paymentsEnabled(env({ STRIPE_SECRET_KEY: 'pk_live_x', BILLING_PAYMENTS_ENABLED: '1', BILLING_LIVE_APPROVED: '1' })), 'a publishable key is never accepted as a secret key');
 
 const fakeSb = (uid) => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [uid])).rows[0] || null }) }) }) }) });
-const tryCheckout = async (plan = 'plus') => { try { return await service.createCheckout(fakeSb(user), { id: user, email: 'payer@example.com' }, plan, 'http://localhost:5173'); } catch (e) { return e; } };
+const tryCheckout = async (plan = 'flash') => { try { return await service.createCheckout(fakeSb(user), { id: user, email: 'payer@example.com' }, plan, 'http://localhost:5173'); } catch (e) { return e; } };
 for (const [label, vars] of [['no key', {}], ['test key without the switch', { STRIPE_SECRET_KEY: 'sk_test_qa' }], ['live key without approval', { STRIPE_SECRET_KEY: 'sk_live_qa', BILLING_PAYMENTS_ENABLED: '1' }]]) {
   Object.assign(process.env, env(vars));
   const before = stripeCalls.length;
@@ -122,15 +122,15 @@ ok(authorized.ok && authorized.upgradesAvailable === false, 'authorize: recordin
 
 // ---------- 2. test mode on: checkout happens entirely against the fake Stripe ----------
 Object.assign(process.env, env({ STRIPE_SECRET_KEY: 'sk_test_qa', BILLING_PAYMENTS_ENABLED: '1' }));
-const c = await tryCheckout('plus');
+const c = await tryCheckout('flash');
 ok(/^https:\/\/checkout\.stripe\.test\/cs_test_\d+$/.test(c.url) && stripeCalls.includes('POST /v1/customers') && stripeCalls.includes('POST /v1/checkout/sessions'), 'test mode + switch: Checkout session created (fake Stripe)');
-const c2 = await tryCheckout('plus');
+const c2 = await tryCheckout('flash');
 ok(c2.url !== c.url && openSessions.size === 1 && !openSessions.has(c.url.split('/').pop()), 'a second Checkout (another tab, double click) closes the first one: only one can be paid');
 const linked = (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [user])).rows[0];
 ok(linked?.stripe_customer_id?.startsWith('cus_') && linked.livemode === false, 'the Stripe customer is linked to this account (test mode)');
 ok(!lastCheckout.has('automatic_tax[enabled]') && !lastCheckout.has('billing_address_collection'), 'Stripe Tax off by default: Checkout adds no tax and asks for no address');
 process.env.STRIPE_AUTOMATIC_TAX = '1';
-const taxed = await tryCheckout('plus');
+const taxed = await tryCheckout('flash');
 ok(taxed.url && lastCheckout.get('automatic_tax[enabled]') === 'true' && lastCheckout.get('billing_address_collection') === 'required' && lastCheckout.get('customer_update[address]') === 'auto', 'STRIPE_AUTOMATIC_TAX=1: Checkout collects the billing address and adds the tax Stripe calculates');
 delete process.env.STRIPE_AUTOMATIC_TAX;
 const bad = await tryCheckout('enterprise');
@@ -150,7 +150,7 @@ const deliver = async (event, opts = {}) => {
 };
 const now = Math.floor(Date.now() / 1000);
 const customer = linked.stripe_customer_id;
-const subscription = (o = {}) => ({ id: 'sub_qa_1', object: 'subscription', customer, status: 'active', livemode: false, metadata: { supabase_user_id: user }, cancel_at_period_end: false, cancel_at: null, canceled_at: null, items: { data: [{ id: 'si_1', price: { id: 'price_plus' }, current_period_start: now, current_period_end: now + 30 * 86400 }] }, ...o });
+const subscription = (o = {}) => ({ id: 'sub_qa_1', object: 'subscription', customer, status: 'active', livemode: false, metadata: { supabase_user_id: user }, cancel_at_period_end: false, cancel_at: null, canceled_at: null, items: { data: [{ id: 'si_1', price: { id: 'price_flash' }, current_period_start: now, current_period_end: now + 30 * 86400 }] }, ...o });
 const event = (id, type, object, o = {}) => ({ id, object: 'event', type, livemode: false, data: { object }, ...o });
 
 ok((await deliver(event('evt_a', 'customer.subscription.updated', { id: 'sub_qa_1' }), { method: 'GET' })).statusCode === 405, 'webhook: only POST');
@@ -161,17 +161,17 @@ ok((await statusOf(user)).plan === 'free', '…and none of those changed anythin
 
 subs.set('sub_qa_1', subscription());
 const r1 = await deliver(event('evt_checkout', 'checkout.session.completed', { id: 'cs_test_1', mode: 'subscription', subscription: 'sub_qa_1', customer, client_reference_id: user, metadata: { supabase_user_id: user } }));
-ok(r1.statusCode === 200 && (await statusOf(user)).plan === 'plus', 'checkout.session.completed (valid signature) → Plus, from Stripe’s own subscription record');
+ok(r1.statusCode === 200 && (await statusOf(user)).plan === 'flash', 'checkout.session.completed (valid signature) → Flash, from Stripe’s own subscription record');
 const dup = await deliver(event('evt_checkout', 'checkout.session.completed', { id: 'cs_test_1', mode: 'subscription', subscription: 'sub_qa_1', customer, client_reference_id: user }));
 ok(dup.statusCode === 200 && dup.body.duplicate === true, 'the same event again → acknowledged as duplicate, not re-applied');
 
-subs.set('sub_qa_1', subscription({ items: { data: [{ id: 'si_1', price: { id: 'price_pro' }, current_period_start: now, current_period_end: now + 30 * 86400 }] } }));
+subs.set('sub_qa_1', subscription({ items: { data: [{ id: 'si_1', price: { id: 'price_bolt' }, current_period_start: now, current_period_end: now + 30 * 86400 }] } }));
 await deliver(event('evt_up', 'customer.subscription.updated', { id: 'sub_qa_1' }));
-ok((await statusOf(user)).plan === 'pro', 'upgrade (subscription.updated) → Pro');
+ok((await statusOf(user)).plan === 'bolt', 'upgrade (subscription.updated) → Bolt');
 subs.set('sub_qa_1', subscription({ status: 'past_due' }));
 const pf = await deliver(event('evt_fail', 'invoice.payment_failed', { id: 'in_1', subscription: 'sub_qa_1', customer }));
 const sp = await statusOf(user);
-ok(pf.statusCode === 200 && sp.plan === 'plus' && sp.paymentProblem, 'invoice.payment_failed → access kept while Stripe retries, problem shown');
+ok(pf.statusCode === 200 && sp.plan === 'flash' && sp.paymentProblem, 'invoice.payment_failed → access kept while Stripe retries, problem shown');
 subs.set('sub_qa_1', subscription({ cancel_at_period_end: true }));
 await deliver(event('evt_cancel', 'customer.subscription.updated', { id: 'sub_qa_1' }));
 ok((await statusOf(user)).cancelAtPeriodEnd === true, 'cancellation at period end is reflected');
@@ -202,16 +202,16 @@ const dupDone = await deliver(event('evt_second', 'checkout.session.completed', 
 ok(dupDone.statusCode === 200 && subs.get('sub_second').status === 'canceled' && subs.get('sub_first').status === 'active', 'two paid checkouts: the second subscription is canceled at once, the first kept');
 ok(refunds.some((r) => r.pi === 'pi_second' && r.reason === 'duplicate'), '…and its payment is refunded (reason: duplicate)');
 const afterDup = await statusOf(user);
-ok(afterDup.plan === 'plus' && afterDup.subscriptionStatus === 'active', '…and the account keeps one active Plus plan');
+ok(afterDup.plan === 'flash' && afterDup.subscriptionStatus === 'active', '…and the account keeps one active Flash plan');
 const again = await deliver(event('evt_second_retry', 'customer.subscription.updated', { id: 'sub_second' }));
-ok(again.statusCode === 200 && (await statusOf(user)).plan === 'plus', 'a late event for the canceled duplicate doesn’t take access away');
+ok(again.statusCode === 200 && (await statusOf(user)).plan === 'flash', 'a late event for the canceled duplicate doesn’t take access away');
 // the order seen in real Stripe test mode: the duplicate's own "created" event, then its "deleted" event
-subs.set('sub_third', sub2('sub_third', now + 5, { items: { data: [{ id: 'si_3', price: { id: 'price_pro' }, current_period_start: now, current_period_end: now + 30 * 86400 }] } }));
+subs.set('sub_third', sub2('sub_third', now + 5, { items: { data: [{ id: 'si_3', price: { id: 'price_bolt' }, current_period_start: now, current_period_end: now + 30 * 86400 }] } }));
 invoices.set('in_third', { id: 'in_third', object: 'invoice', subscription: 'sub_third', amount_paid: 1499, status: 'paid', pi: 'pi_third' });
 await deliver(event('evt_third_created', 'customer.subscription.created', { id: 'sub_third', object: 'subscription' }));
 await deliver(event('evt_third_deleted', 'customer.subscription.deleted', { id: 'sub_third', object: 'subscription' }));
 const kept = await statusOf(user);
-ok(subs.get('sub_third').status === 'canceled' && refunds.some((r) => r.pi === 'pi_third') && kept.plan === 'plus' && kept.subscriptionStatus === 'active',
+ok(subs.get('sub_third').status === 'canceled' && refunds.some((r) => r.pi === 'pi_third') && kept.plan === 'flash' && kept.subscriptionStatus === 'active',
   `a duplicate made outside Checkout is canceled and refunded, and the account keeps the subscription that stays (got ${kept.plan}/${kept.subscriptionStatus})`);
 
 // a Checkout completed after the account was deleted: canceled and refunded, never charging a missing account
@@ -232,7 +232,7 @@ ok(subs.get('sub_foreign').status === 'active', 'a subscription not created by S
 const third = await P.createUser('relink@example.com');
 subs.set('sub_relink', subscription({ id: 'sub_relink', customer: 'cus_relink', metadata: { supabase_user_id: third } }));
 const rl = await deliver(event('evt_relink', 'customer.subscription.updated', { id: 'sub_relink' }));
-ok(rl.statusCode === 200 && subs.get('sub_relink').status === 'active' && (await statusOf(third)).plan === 'plus', 'an existing account whose link was lost is relinked from Stripe metadata (not canceled)');
+ok(rl.statusCode === 200 && subs.get('sub_relink').status === 'active' && (await statusOf(third)).plan === 'flash', 'an existing account whose link was lost is relinked from Stripe metadata (not canceled)');
 
 // account deletion with an active subscription: canceled in Stripe first, then the account is deleted
 const asUserSb = (uid, claims) => ({
@@ -257,10 +257,10 @@ ok(late.statusCode === 200 && late.body.refused, 'Stripe’s later events for th
 // a test-mode server (Preview on the shared database) can't touch an account with real billing
 {
   const realUser = await P.createUser('real@example.com');
-  await db.query(`insert into public.subscriptions (user_id, stripe_customer_id, livemode, plan, status) values ($1, 'cus_LIVE_real', true, 'plus', 'active')`, [realUser]);
+  await db.query(`insert into public.subscriptions (user_id, stripe_customer_id, livemode, plan, status) values ($1, 'cus_LIVE_real', true, 'flash', 'active')`, [realUser]);
   const before = stripeCalls.length;
   let err = null;
-  try { await service.createCheckout(fakeSb(realUser), { id: realUser, email: 'real@example.com' }, 'pro', 'http://localhost:5173'); } catch (e) { err = e; }
+  try { await service.createCheckout(fakeSb(realUser), { id: realUser, email: 'real@example.com' }, 'bolt', 'http://localhost:5173'); } catch (e) { err = e; }
   const row = (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [realUser])).rows[0];
   ok(err?.code === 'live_account' && row.stripe_customer_id === 'cus_LIVE_real' && row.livemode === true && !stripeCalls.slice(before).includes('POST /v1/customers'),
     'a test checkout never replaces a live customer link (the real subscription stays attached)');
