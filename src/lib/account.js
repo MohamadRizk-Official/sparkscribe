@@ -4,6 +4,7 @@ import { adoptAccountPrefs } from './prefs.js';
 import { getBillingStatus, usageText, deleteAccountOnServer } from './billing.js';
 import { mountThemeToggle } from './theme-toggle.js';
 import { clearAllAudio, deleteAudio, PENDING_AUDIO_KEY } from './audio-store.js';
+import { guardRecovery, currentSession } from './recovery.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -59,6 +60,8 @@ export async function requireUser() {
     location.replace(`/auth?next=${encodeURIComponent(currentPath())}`);
     return new Promise(() => {}); // stop the page while navigating
   }
+  // a password-reset session isn't a way into the app (lib/recovery.js)
+  if (await guardRecovery(await currentSession())) return new Promise(() => {});
   if (!hasConsent(user) && !CONSENT_FREE.test(location.pathname)) {
     location.replace(consentUrl());
     return new Promise(() => {});
@@ -170,6 +173,7 @@ export function mountAccountMenu(slot, { onChange } = {}) {
       return;
     }
     pricingLink(false);
+    if (await guardRecovery(session)) return; // a password-reset session: back to the password form, or signed out
     // a signed-in account that hasn't confirmed 13+ and the Terms (first Google sign-in) does that before anything else
     if (!hasConsent(session.user) && !CONSENT_FREE.test(location.pathname)) { location.replace(consentUrl()); return; }
     adoptAccountPrefs(session.user);

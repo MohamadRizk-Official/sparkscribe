@@ -2,6 +2,7 @@
 import { supabase, isConfigured, authSettings } from '../lib/supabase.js';
 import { mountAccountMenu, safeNext, getUser, hasConsent, recordConsent, signOut } from '../lib/account.js';
 import { createCaptcha, CaptchaError, isCaptchaRejection, CAPTCHA_REJECTED } from '../lib/captcha.js';
+import { recoveryAge, isFreshRecovery, currentSession, endSession } from '../lib/recovery.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -32,28 +33,40 @@ if (!isConfigured) {
   init();
 }
 
-// The current session was started by a password-reset link in the last 15 minutes (the token records how it
-// was obtained: method "recovery").
-async function cameFromResetLink() {
-  try {
-    const { data } = await supabase.auth.getSession();
-    const claims = JSON.parse(atob(data.session.access_token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
-    return (claims.amr || []).some((a) => a?.method === 'recovery' && Date.now() / 1000 - Number(a.timestamp) < 900);
-  } catch { return false; }
-}
+// Shown once on the sign-in page after a new password was saved (set just before the reset session is signed out;
+// a link can't produce this message by itself).
+const RESET_DONE = 'sparkscribe.resetDone';
 
 async function init() {
   const requested = params.get('mode');
-  const session = await getUser(); // server-verified; clears a stale local session
-  mountAccountMenu($('accountSlot'));
-  if (session && !hasConsent(session) && requested !== 'update') {
+  let session = await getUser(); // server-verified; clears a stale local session
+  // A password-reset session (lib/recovery.js) is only for the "choose a new password" form, and only while the link is
+  // fresh. Anywhere else on this page (or once it's old) it is signed out here, so the page works as signed out.
+  const local = session ? await currentSession() : null;
+  if (session && recoveryAge(local) != null && !(requested === 'update' && isFreshRecovery(local))) {
+    await endSession();
+    session = null;
+  }
+  // no account menu beside the new-password form: the reset session isn't a sign-in
+  if (!session || recoveryAge(local) == null) mountAccountMenu($('accountSlot'));
+  // back (or forward) to a page kept in memory after signing out: show it as it is now
+  window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
+  let done = null;
+  try { done = JSON.parse(sessionStorage.getItem(RESET_DONE) || 'null'); sessionStorage.removeItem(RESET_DONE); } catch {}
+  if (params.get('reset') === 'done') history.replaceState(null, '', `/auth${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`);
+  if (!session && done && Date.now() - done.at < 600_000) {
+    setMode('signin');
+    if (done.email) $('email').value = done.email;
+    showMsg('Password updated successfully. Please sign in with your new password.', 'success');
+    $('password').focus();
+  } else if (session && !hasConsent(session) && requested !== 'update') {
     setMode('consent');
   } else if (requested === 'consent' && !session) {
     setMode('signin');
   } else if (requested === 'update') {
     // Setting a new password needs the reset link from the email: a session that merely exists (a shared
     // computer, a stolen token) can't change the password and lock the owner out.
-    if (!session || !(await cameFromResetLink())) {
+    if (!session || !isFreshRecovery(local)) {
       setMode('forgot');
       showMsg(session ? 'To set a new password, request a reset link below and open it from your email.' : 'That reset link has expired or was already used. Request a new one below.', 'error');
     } else setMode('update');
@@ -73,6 +86,8 @@ async function init() {
   $('googleBtn').addEventListener('click', google);
   $('authForm').addEventListener('submit', submit);
   $('consentSignOut')?.addEventListener('click', async (e) => { e.preventDefault(); await signOut(); location.replace('/'); });
+  // leaving the password form without saving: the reset session ends here
+  $('cancelReset')?.addEventListener('click', async (e) => { e.preventDefault(); await endSession(); location.replace('/auth'); });
 }
 
 function setMode(m) {
@@ -94,6 +109,7 @@ function setMode(m) {
   $('authLegal')?.classList.toggle('hidden', m !== 'signup');
   $('ageField').classList.toggle('hidden', m !== 'signup' && m !== 'consent');
   $('consentSignOut')?.classList.toggle('hidden', m !== 'consent');
+  $('cancelReset')?.classList.toggle('hidden', m !== 'update');
   $('password').autocomplete = m === 'signin' ? 'current-password' : 'new-password';
   $('backToSignin').classList.toggle('hidden', m !== 'forgot');
   if (needsCaptcha(m) && !captcha) captcha = createCaptcha($('captchaSlot'), { action: 'auth' });
@@ -149,6 +165,9 @@ function busy(on) {
 function explain(error) {
   const msg = error?.message || String(error);
   if (isCaptchaRejection(error)) return captchaProblem || CAPTCHA_REJECTED;
+  if (error?.code === 'same_password' || /different from the old password/i.test(msg)) return 'Choose a password that’s different from your current one.';
+  if (error?.code === 'weak_password' || /weak|pwned|leaked/i.test(msg)) return 'Choose a stronger password: this one is too easy to guess or has appeared in a data breach.';
+  if (error?.name === 'AuthSessionMissingError' || /session missing|session_not_found|refresh token/i.test(msg)) return 'Your reset link has expired. Request a new one below.';
   if (/invalid login credentials/i.test(msg)) return 'Wrong email or password.';
   if (/email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox (and spam) for the link we sent.';
   // the email service refused or failed: not the user's fault, and retrying right away rarely helps
@@ -200,11 +219,26 @@ async function submit(e) {
       if (error) throw error;
       showMsg(`If an account exists for ${email}, a reset link is on its way. Open it in this browser.`, 'success');
     } else if (mode === 'update') {
+      // only a fresh reset session may set a password (another tab may have used it or signed out meanwhile)
+      const live = await currentSession();
+      if (!live || !isFreshRecovery(live)) {
+        await endSession();
+        setMode('forgot');
+        return showMsg('Your reset link has expired. Request a new one below.', 'error');
+      }
+      const email = live.user?.email || '';
       const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
-      await supabase.auth.signOut({ scope: 'others' }).catch(() => {}); // anyone else signed in to this account is signed out
-      showMsg('Password updated. Taking you to your library…', 'success');
-      setTimeout(() => location.replace('/library'), 900);
+      if (error) {
+        if (/session missing|session_not_found/i.test(error.message || '') || error.name === 'AuthSessionMissingError') { await endSession(); setMode('forgot'); }
+        throw error;
+      }
+      // Saved. The reset session ends now (Supabase is asked to end the account's other sessions too) and the person
+      // signs in again with the new password; history is replaced, so Back can't return to a signed-in page.
+      try { sessionStorage.setItem(RESET_DONE, JSON.stringify({ at: Date.now(), email })); } catch {}
+      await endSession({ everywhere: true });
+      $('authForm').reset();
+      location.replace('/auth?reset=done');
+      return;
     }
   } catch (err) {
     showMsg(explain(err), 'error', mode === 'signin' && /email not confirmed/i.test(err?.message || '') ? email : null);

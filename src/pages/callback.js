@@ -40,6 +40,9 @@ function fail(title, text) {
   // A Google sign-in that created a new account: record the confirmation ticked on the sign-up tab of this browser
   // (within the last hour), or ask for it before anything else.
   const user = data.session.user;
+  // a password-reset link goes straight to the new-password form (the age/Terms step, if needed, comes after the next
+  // normal sign-in)
+  if (next.startsWith('/auth?mode=update')) return location.replace(next);
   if (!hasConsent(user)) {
     let ticked = 0;
     try { ticked = Number(sessionStorage.getItem('sparkscribe.consentAt') || 0); sessionStorage.removeItem('sparkscribe.consentAt'); } catch {}

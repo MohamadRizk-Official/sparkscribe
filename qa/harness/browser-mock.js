@@ -53,7 +53,16 @@
   }
   const log = (e) => { window.__qaLog.push({ t: Math.round(performance.now()), ...e }); };
   const now = Math.floor(Date.now() / 1000);
-  const sessionToken = () => ({ access_token: 'fake.jwt.token', refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: USER });
+  // knob recovery: the session was started by a password-reset link (newest sign-in method "recovery", opened
+  // recoveryAgeS seconds ago), as Supabase's token says after the link is opened
+  const b64u = (o) => btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const accessToken = () => {
+    const K0 = knobs();
+    if (!K0.recovery) return 'fake.jwt.token';
+    const t = Math.floor(Date.now() / 1000) - Number(K0.recoveryAgeS || 0);
+    return `${b64u({ alg: 'none' })}.${b64u({ sub: USER.id, role: 'authenticated', amr: [{ method: 'password', timestamp: t - 86400 }, { method: 'recovery', timestamp: t }] })}.qa`;
+  };
+  const sessionToken = () => ({ access_token: accessToken(), refresh_token: 'fake-refresh', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: USER });
   if (!knobs().signedOut && !sessionStorage.getItem('__signedOut')) localStorage.setItem('sb-' + REF + '-auth-token', JSON.stringify(sessionToken()));
   const seed = window.__HARNESS_SEED || [];
   const db = JSON.parse(sessionStorage.getItem('__db') || 'null') || { rows: seed, folders: [], items: [] };
@@ -149,14 +158,29 @@
       }
     }
     if (p === '/auth/v1/user') {
-      if (method === 'PUT') { Object.assign(USER.user_metadata, body?.data || {}); if (body?.data?.terms_accepted_at) window.__qaKnobs({ noConsent: false }); return json(USER); }
+      if (method === 'PUT') {
+        // a new password (knob samePassword: Supabase refuses one equal to the current); kept so sign-in then needs it
+        if (body?.password) {
+          if (K.samePassword) return json({ code: 422, error_code: 'same_password', msg: 'New password should be different from the old password.' }, 422);
+          if (sessionStorage.getItem('__signedOut')) return json({ code: 403, error_code: 'session_not_found', msg: 'Session from session_id claim in JWT does not exist' }, 403);
+          sessionStorage.setItem('__qaPassword', body.password);
+        }
+        Object.assign(USER.user_metadata, body?.data || {}); if (body?.data?.terms_accepted_at) window.__qaKnobs({ noConsent: false }); return json(USER);
+      }
       return K.signedOut ? json({ message: 'no session' }, 401) : json(USER);
     }
     if (p === '/auth/v1/settings') return json({ external: { google: !!K.googleOn, email: true } });
-    if (p === '/auth/v1/logout') { sessionStorage.setItem('__signedOut', '1'); return new Response(null, { status: 204 }); }
+    if (p === '/auth/v1/logout') {
+      const log = JSON.parse(sessionStorage.getItem('__qaLogouts') || '[]'); log.push(url.searchParams.get('scope') || 'global'); sessionStorage.setItem('__qaLogouts', JSON.stringify(log));
+      sessionStorage.setItem('__signedOut', '1'); window.__qaKnobs({ recovery: false });
+      return new Response(null, { status: 204 });
+    }
     if (p === '/auth/v1/token') {
       if (body?.password === 'unconfirmed-password') return json({ error: 'invalid_grant', error_code: 'email_not_confirmed', error_description: 'Email not confirmed', msg: 'Email not confirmed' }, 400);
       if (body?.password === 'wrong-password') return json({ error: 'invalid_grant', error_description: 'Invalid login credentials', msg: 'Invalid login credentials' }, 400);
+      // after a password change, only the new password signs in
+      const pw = sessionStorage.getItem('__qaPassword');
+      if (pw && body?.password && body.password !== pw) return json({ error: 'invalid_grant', error_description: 'Invalid login credentials', msg: 'Invalid login credentials' }, 400);
       sessionStorage.removeItem('__signedOut'); window.__qaKnobs({ signedOut: false });
       if (body?.password) sessionStorage.setItem('__reauthAt', String(Date.now())); // like the JWT's amr timestamp
       return json(sessionToken());
