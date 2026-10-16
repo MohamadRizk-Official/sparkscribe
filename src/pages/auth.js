@@ -101,11 +101,16 @@ function setMode(m) {
   hideMsg();
 }
 
-// A fresh single-use token for one Supabase request (undefined when Turnstile is off). Shows why if there's none.
+// A fresh single-use token for one Supabase request (undefined when Turnstile is off). If the check can't produce one
+// (Cloudflare unreachable, a blocker, a host not allowed for the widget), the request is still sent, without a token:
+// Supabase is the only gate. While its CAPTCHA protection is off, people sign in as usual (nobody is locked out by a
+// widget problem); once it's on, Supabase refuses the request and the page explains what went wrong with the check.
+let captchaProblem = null;
 async function captchaToken() {
+  captchaProblem = null;
   try { return await captcha?.token(); } catch (err) {
-    showMsg(err instanceof CaptchaError ? err.message : 'We couldn’t complete the security check. Please try again.', 'error');
-    return null;
+    captchaProblem = err instanceof CaptchaError ? err.message : 'We couldn’t complete the security check. Please try again.';
+    return undefined;
   }
 }
 
@@ -126,7 +131,6 @@ function showMsg(text, kind = 'info', resendTo = null) {
 async function resend(email, btn) {
   btn.disabled = true;
   const token = await captchaToken();
-  if (token === null) { btn.disabled = false; return; }
   const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: callbackUrl(next), captchaToken: token } });
   captcha?.reset();
   if (error) { btn.disabled = false; return showMsg(explain(error), 'error'); }
@@ -142,7 +146,7 @@ function busy(on) {
 // Supabase error messages, made friendlier where it matters.
 function explain(error) {
   const msg = error?.message || String(error);
-  if (isCaptchaRejection(error)) return CAPTCHA_REJECTED;
+  if (isCaptchaRejection(error)) return captchaProblem || CAPTCHA_REJECTED;
   if (/invalid login credentials/i.test(msg)) return 'Wrong email or password.';
   if (/email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox (and spam) for the link we sent.';
   // the email service refused or failed: not the user's fault, and retrying right away rarely helps
@@ -174,10 +178,7 @@ async function submit(e) {
   busy(true);
   // sign-in, sign-up and the reset email carry a Turnstile token (once Supabase's CAPTCHA protection is on, it insists)
   let token;
-  if (needsCaptcha(mode)) {
-    token = await captchaToken();
-    if (token === null) return busy(false);
-  }
+  if (needsCaptcha(mode)) token = await captchaToken();
   try {
     if (mode === 'signin') {
       const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: token } });

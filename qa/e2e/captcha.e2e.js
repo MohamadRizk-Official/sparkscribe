@@ -94,12 +94,20 @@ export async function run() {
       fill('qa@example.com', 'correct-horse-9');
       await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in on retry', timeout: 8000 });
     }],
-    ['Cloudflare can\'t complete the check: explained, and no request reaches Supabase', async () => {
+    ['the widget can\'t produce a token while Supabase\'s CAPTCHA is off: people still sign in (nobody locked out)', async () => {
+      reset({ turnstile: 'fail', captchaRequired: false }); signOutLocally();
+      await open('/auth');
+      signInLocally();
+      fill('qa@example.com', 'correct-horse-9');
+      await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in without a token', timeout: 10000 });
+      eq(sent()[0]?.token ?? null, null, 'sent without a token');
+    }],
+    ['…and once Supabase requires it, the request is refused and the page says why', async () => {
       reset({ turnstile: 'fail' }); signOutLocally();
       await open('/auth');
       fill('qa@example.com', 'correct-horse-9');
       await waitFor(() => /couldn.t complete the security check/i.test(msg()), { what: 'failure message', timeout: 10000 });
-      eq(sent().length, 0, 'no sign-in request without a token');
+      eq(w().location.pathname, '/auth', 'not signed in');
       assert(!$('submitBtn').disabled, 'the button works again');
     }],
     ['an expired token is never sent: the refreshed one is', async () => {

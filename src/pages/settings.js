@@ -72,9 +72,12 @@ function openDeleteDialog(user) {
     if (!ready() || go.dataset.busy) return;
     go.dataset.busy = '1'; go.disabled = true; go.textContent = 'Deleting…'; err.hidden = true;
     try {
-      let token;
-      try { token = await captcha?.token(); } catch (ce) { throw new Error(ce.message); }
-      try { await deleteMyAccount(pw ? pw.value : null, token); } finally { captcha?.reset(); }
+      // no token (the check couldn't run)? still ask: Supabase decides, and says so if it requires one
+      let token, problem = null;
+      try { token = await captcha?.token(); } catch (ce) { problem = ce.message; }
+      try { await deleteMyAccount(pw ? pw.value : null, token); } catch (de) {
+        throw (problem && /security check/i.test(de.message) ? new Error(problem) : de);
+      } finally { captcha?.reset(); }
       location.replace('/settings?deleted=1');
     } catch (ex) {
       err.textContent = ex.message; err.hidden = false;

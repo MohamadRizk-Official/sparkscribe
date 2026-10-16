@@ -19,7 +19,10 @@ SparkScribe sends a Cloudflare Turnstile token with every Supabase Auth request 
 - **Single-use tokens.** Each request gets a fresh token, and the next one starts right after (tokens are single use, valid 5 minutes).
 - **Expired tokens** are refreshed automatically and are never sent.
 - **Submitting early.** If the person submits before the check finishes, the button shows it's working and the request waits for the token, up to 30 s.
-- **Failures.** If Cloudflare can't complete the check or its script can't load (offline, content blocker), the page says so and **no request reaches Supabase**. The next submit retries.
+- **Failures never lock anyone out by themselves.** If the widget can't produce a token (Cloudflare unreachable, a content blocker, a host missing from the widget's hostname list), the request is still sent, without a token. **Supabase is the only gate:**
+  - While its CAPTCHA protection is off, people sign in as usual.
+  - Once it's on, Supabase refuses the request, and the page explains that the security check couldn't run. The next submit tries the check again.
+  - Found on the Preview: an unlisted host gives Cloudflare error 110200, and before this change it would have blocked sign-in even with Supabase's CAPTCHA off.
 - **Rejected tokens.** If Supabase rejects a token (`captcha_failed`), the page says the security check didn't go through and nothing was sent. The next attempt uses a new token.
 
 ## Configuration
