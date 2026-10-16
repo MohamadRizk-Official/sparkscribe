@@ -129,12 +129,16 @@ export async function run() {
       await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in after the check', timeout: 10000 });
       assert(/^qa-token-/.test(sent()[0]?.token), 'with its token');
     }],
-    ['when Cloudflare asks for a click, the widget shows (and hides again afterwards)', async () => {
+    ['when Cloudflare asks for a click, the checkbox shows, the page points to it, and sign-in continues once it is ticked', async () => {
       reset({ turnstile: 'interactive' }); signOutLocally();
       await open('/auth');
       await waitFor(() => $('captchaSlot').classList.contains('is-interactive'), { what: 'interactive shown' });
-      await waitFor(() => !$('captchaSlot').classList.contains('is-interactive'), { what: 'interactive done', timeout: 3000 });
-      assert(!$('captchaSlot').classList.contains('hidden'), 'slot visible in sign-in');
+      signInLocally();
+      fill('qa@example.com', 'correct-horse-9');
+      assert(/Verify you are human/.test(msg()), `the page points to the checkbox: ${msg()}`);
+      // the request waits for the click, then goes out with its token
+      await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in after the check', timeout: 8000 });
+      assert(/^qa-token-/.test(sent()[0]?.token || ''), 'with the token from the check');
     }],
     ['no widget for setting a new password or the age/Terms step (no CAPTCHA there)', async () => {
       reset(); signOutLocally();

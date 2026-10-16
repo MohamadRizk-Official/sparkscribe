@@ -108,6 +108,8 @@ function setMode(m) {
 let captchaProblem = null;
 async function captchaToken() {
   captchaProblem = null;
+  // Cloudflare is showing its checkbox: say so, rather than leave the person waiting on a busy button
+  if ($('captchaSlot')?.classList.contains('is-interactive')) showMsg('Please tick “Verify you are human” above to continue.', 'info');
   try { return await captcha?.token(); } catch (err) {
     captchaProblem = err instanceof CaptchaError ? err.message : 'We couldn’t complete the security check. Please try again.';
     return undefined;

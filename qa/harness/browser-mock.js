@@ -33,7 +33,7 @@
         if (tsMode === 'fail') return setTimeout(() => o['error-callback']?.('300030'), 80);
         if (tsMode === 'interactive') {
           o['before-interactive-callback']?.();
-          return setTimeout(() => { if (!widgets[id]) return; o['after-interactive-callback']?.(); o.callback?.(`qa-token-${run}-${++issued}`); stats.issued = issued; }, 600);
+          return setTimeout(() => { if (!widgets[id]) return; o['after-interactive-callback']?.(); o.callback?.(`qa-token-${run}-${++issued}`); stats.issued = issued; }, 1500);
         }
         setTimeout(() => {
           if (!widgets[id]) return;

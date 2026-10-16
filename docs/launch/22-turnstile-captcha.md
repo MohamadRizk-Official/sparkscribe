@@ -40,6 +40,9 @@ SparkScribe sends a Cloudflare Turnstile token with every Supabase Auth request 
   - The Preview (`release/four-tier`) now uses the same real key; the test key is removed.
   - The deployed Preview bundle (`919f044`) contains the real key and not the test key.
 - **Hostnames:** on the Preview the real widget returns Cloudflare **error 110200 (domain not allowed)**. `sparkscribe-git-release-four-tier-moerizz.vercel.app` is not yet on the widget's hostname list. Production hostnames can't be checked until the release, since today's live site has no widget.
+- **Hostnames added by the owner (2026-10-16):** error 110200 is gone on the Preview. With the real key, Cloudflare loads the widget and, for an automated test browser, asks for its "Verify you are human" checkbox, shown centred above the button.
+  - I'm not allowed to complete CAPTCHA challenges, so issuing a real token and signing in through it needs a person's check on the Preview.
+- **Unanswered checkbox:** if someone submits without ticking it, the page now says "Please tick 'Verify you are human' above". It waits up to 30 s, then sends without a token; while Supabase CAPTCHA is off, that went through (Preview, forgot-password, 30.6 s).
 - **Lockout:** none. The Preview's forgot-password form still completed in 1.5 s with the widget blocked (no token sent; Supabase CAPTCHA is off).
 
 ## Activation order
