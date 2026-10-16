@@ -185,6 +185,17 @@
       if (body?.password) sessionStorage.setItem('__reauthAt', String(Date.now())); // like the JWT's amr timestamp
       return json(sessionToken());
     }
+    // a link from our own emails (token_hash): each hash works once; hashes starting "bad" never do; an email_change hash
+    // containing "half" is the first of the two confirmations (no session yet). Logged in sessionStorage __qaVerify.
+    if (p === '/auth/v1/verify' && method === 'POST') {
+      const log = JSON.parse(sessionStorage.getItem('__qaVerify') || '[]'); log.push({ type: body?.type, hash: body?.token_hash }); sessionStorage.setItem('__qaVerify', JSON.stringify(log));
+      const used = JSON.parse(sessionStorage.getItem('__qaUsedHashes') || '[]');
+      if (!body?.token_hash || /^bad/.test(body.token_hash) || used.includes(body.token_hash)) return json({ code: 403, error_code: 'otp_expired', msg: 'Email link is invalid or has expired' }, 403);
+      sessionStorage.setItem('__qaUsedHashes', JSON.stringify([...used, body.token_hash]));
+      if (body.type === 'email_change' && /half/.test(body.token_hash)) return json({ code: 200, msg: 'Confirmation link accepted. Please proceed to confirm link sent to the other email' });
+      sessionStorage.removeItem('__signedOut'); window.__qaKnobs({ signedOut: false, recovery: body.type === 'recovery', recoveryAgeS: 0 });
+      return json(sessionToken());
+    }
     if (p === '/auth/v1/signup') return json({ id: crypto.randomUUID(), email: body?.email, confirmation_sent_at: new Date().toISOString() });
     if (p === '/auth/v1/recover') return json({});
     if (p === '/auth/v1/resend') { window.__qaResends = (window.__qaResends || 0) + 1; return K.failResend ? json({ code: 500, error_code: 'unexpected_failure', msg: 'Error sending confirmation email' }, 500) : json({}); }

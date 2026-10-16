@@ -35,10 +35,16 @@ function resetLinkOpened(ageS = 0) {
 }
 const b64u = (o) => btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 const recoveryJwt = (ageS) => { const t = Math.floor(Date.now() / 1000) - ageS; return `${b64u({ alg: 'none' })}.${b64u({ sub: '11111111-1111-4111-8111-111111111111', amr: [{ method: 'password', timestamp: t - 86400 }, { method: 'recovery', timestamp: t }] })}.qa`; };
+const verifies = () => JSON.parse(sessionStorage.getItem('__qaVerify') || '[]');
+function signedOutBrowser() {
+  localStorage.removeItem(TOKEN);
+  sessionStorage.setItem('__signedOut', '1');
+  knobs({ signedOut: true, recovery: false });
+}
 function fill(pw, confirm = pw) { $('password').value = pw; $('confirm').value = confirm; $('authForm').requestSubmit(); }
 
 export async function run() {
-  sessionStorage.removeItem('__qaPassword');
+  for (const k of ['__qaPassword', '__qaVerify', '__qaUsedHashes']) sessionStorage.removeItem(k);
   const res = await runTests([
     ['the reset link opens the new-password form (no CAPTCHA there), with a way to cancel', async () => {
       resetLinkOpened();
@@ -152,6 +158,54 @@ export async function run() {
       await open('/auth/callback?next=%2Fauth%3Fmode%3Dupdate');
       await waitFor(() => at() === '/auth?mode=update', { what: 'form, not the consent step' });
       knobs({ noConsent: false });
+    }],
+    // ---- links in our own emails: /auth/callback?token_hash=…&type=… (docs/launch/email-templates) ----
+    ['an email reset link does nothing until the button is pressed (a mail scanner opening it can’t use it up)', async () => {
+      signedOutBrowser();
+      await open('/auth/callback?token_hash=qa-rec-1&type=recovery&next=%2Flibrary');
+      await waitFor(() => $('cbTitle')?.textContent === 'Reset your password', { what: 'reset page' });
+      eq($('cbGo').textContent, 'Continue', 'button');
+      await sleep(500);
+      eq(verifies().length, 0, 'nothing verified on opening');
+      assert(!hasSession(), 'not signed in by opening');
+      $('cbGo').click();
+      await waitFor(() => at() === '/auth?mode=update' && title() === 'Choose a new password', { what: 'the new-password form', timeout: 8000 });
+      eq(JSON.stringify(verifies()), JSON.stringify([{ type: 'recovery', hash: 'qa-rec-1' }]), 'verified once');
+      assert(!w().location.href.includes('qa-rec-1') && !w().history.state?.token, 'token not in the address');
+    }],
+    ['…the same link a second time (or a bad one) says it expired or was used, in our words', async () => {
+      signedOutBrowser();
+      await open('/auth/callback?token_hash=qa-rec-1&type=recovery');
+      await waitFor(() => !$('cbGo').classList.contains('hidden'), { what: 'button' });
+      $('cbGo').click();
+      await waitFor(() => /expired or been used already/i.test($('cbText')?.textContent || ''), { what: 'used-up message' });
+      assert(!hasSession() && !$('cbBtn').classList.contains('hidden'), 'signed out, with a way back');
+      await open('/auth/callback?token_hash=x&type=not-a-type');
+      await waitFor(() => /didn.t work/i.test($('cbTitle')?.textContent || ''), { what: 'unknown type refused' });
+      eq(verifies().length, 2, 'an unknown type is never sent (only the two clicks so far)');
+    }],
+    ['an email verification link confirms the account and goes through the age/Terms step if it’s missing', async () => {
+      signedOutBrowser();
+      knobs({ noConsent: true });
+      await open('/auth/callback?token_hash=qa-sig-1&type=signup&next=%2Flibrary');
+      await waitFor(() => $('cbGo')?.textContent === 'Verify email address', { what: 'verify page' });
+      eq($('cbTitle').textContent, 'Verify your email address', 'title');
+      $('cbGo').click();
+      await waitFor(() => at().startsWith('/auth?mode=consent'), { what: 'consent step, not the app', timeout: 8000 });
+      knobs({ noConsent: false });
+      signedOutBrowser();
+      await open('/auth/callback?token_hash=qa-sig-2&type=email&next=%2F%2Fevil.example%2Fx');
+      await waitFor(() => !$('cbGo').classList.contains('hidden'), { what: 'button' });
+      $('cbGo').click();
+      await waitFor(() => at() === '/', { what: 'home (a foreign next is ignored)', timeout: 8000 });
+      eq(w().location.host, location.host, 'stayed on this site');
+    }],
+    ['the first half of an email change says to open the other link', async () => {
+      signedOutBrowser();
+      await open('/auth/callback?token_hash=qa-half-1&type=email_change');
+      await waitFor(() => !$('cbGo').classList.contains('hidden'), { what: 'button' });
+      $('cbGo').click();
+      await waitFor(() => $('cbTitle')?.textContent === 'Almost done', { what: 'almost done' });
     }],
   ]);
   frame?.remove();
