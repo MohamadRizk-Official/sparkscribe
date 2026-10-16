@@ -832,7 +832,7 @@ function drawTimeline() {
   ids.forEach((id, row) => {
     const y = row * (lane + gap);
     const s = spk(id);
-    ctx.fillStyle = 'rgba(140,160,255,0.06)';
+    ctx.fillStyle = document.documentElement.dataset.theme === 'light' ? 'rgba(60,70,140,0.07)' : 'rgba(140,160,255,0.06)';
     roundRect(ctx, labelW, y, span, lane, 4);
     ctx.fill();
     if (labelW) {
@@ -843,9 +843,8 @@ function drawTimeline() {
       while (name.length > 3 && ctx.measureText(name).width > labelW - 16) name = name.slice(0, -2) + '…';
       ctx.fillText(name, 0, y + lane / 2 + 1);
     }
+    // clean colored segments, no glow: positions must read precisely
     ctx.fillStyle = s.color;
-    ctx.shadowColor = s.color;
-    ctx.shadowBlur = 6;
     for (const l of state.lines) {
       if (l.speaker !== id) continue;
       const x0 = labelW + (l.start / d) * span;
@@ -853,7 +852,6 @@ function drawTimeline() {
       roundRect(ctx, x0, y + 2, w, lane - 4, 2);
       ctx.fill();
     }
-    ctx.shadowBlur = 0;
   });
 }
 
@@ -1103,7 +1101,7 @@ const insights = mountInsights({
   ctx: {
     getId: () => save.id,
     isSignedIn: () => Boolean(isConfigured && session),
-    signIn: () => signInToSave(),
+    signIn: (mode) => signInToSave(mode),
     saving: () => ['saving', 'pending', 'syncing'].includes(save.status),
     getSegments: () => (state?.lines || []).map((l, i) => ({ id: i, start: l.start, end: l.end, speaker: spk(l.speaker).name, text: l.text })),
     seek: (t) => seek(t, true),
@@ -1414,3 +1412,7 @@ const onLanding = () => !els.dropPanel.classList.contains('hidden') && !document
 
 // the mascot: a small audio companion (src/mascot/mascot.js)
 mountMascot({ page: 'home' });
+
+// the speaker timeline is drawn on a canvas: redraw it when the theme changes
+window.addEventListener('sparkscribe:theme', () => { if (state?.lines) drawTimeline(); });
+

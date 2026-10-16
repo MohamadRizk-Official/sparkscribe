@@ -36,6 +36,8 @@ function takeNote(key) {
     return v && Date.now() - v.at < 600_000 ? v : null;
   } catch { return null; }
 }
+let googleOn = false, socialMode = true;
+const showGoogle = () => $('googleWrap').classList.toggle('hidden', !(googleOn && socialMode));
 
 if (!isConfigured) {
   document.querySelector('.auth-card').classList.add('hidden');
@@ -84,12 +86,8 @@ async function init() {
     setMode(requested === 'signup' ? 'signup' : requested === 'forgot' ? 'forgot' : 'signin');
   }
 
-  authSettings().then((s) => {
-    if (s && !s.external?.google) {
-      $('googleBtn').disabled = true;
-      $('googleOff').classList.remove('hidden');
-    }
-  });
+  // Google appears only when the provider is really on; a disabled button looked like a broken sign-in path
+  authSettings().then((s) => { googleOn = !!s?.external?.google; showGoogle(); });
 
   document.querySelectorAll('#authTabs button').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode)));
   $('forgotLink').addEventListener('click', (e) => { e.preventDefault(); setMode('forgot'); });
@@ -109,10 +107,9 @@ function setMode(m) {
   document.querySelectorAll('#authTabs button').forEach((b) => b.classList.toggle('on', b.dataset.mode === m));
   $('authTabs').classList.toggle('hidden', m === 'forgot' || m === 'update');
   const social = m === 'signin' || m === 'signup';
-  $('googleBtn').classList.toggle('hidden', !social);
+  socialMode = social;
+  showGoogle();
   document.querySelector('.auth-or').classList.toggle('hidden', !social);
-  if (!social) $('googleOff').classList.add('hidden');
-  else authSettings().then((s) => $('googleOff').classList.toggle('hidden', !(s && !s.external?.google)));
   $('emailField').classList.toggle('hidden', m === 'update');
   $('passwordField').classList.toggle('hidden', m === 'forgot');
   $('forgotLink').classList.toggle('hidden', m !== 'signin');
