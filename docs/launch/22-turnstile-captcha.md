@@ -55,4 +55,5 @@ The Preview and Production share **one Supabase project**. Turning CAPTCHA on th
 | Same build | existing auth suite, age/Terms confirmation suite, delete-account suite (password check carries a token) | 11/11, 3/3, 5/5 |
 | Same build, **real Cloudflare script** (test key, no stand-in) | widget invisible; sign-in sent Cloudflare's test token and succeeded with the token required | pass |
 | Harness, build **without** a Site Key | `off()`: nothing loaded, no token, sign-in works; with the token required, sign-in is refused (why the activation order matters); existing auth and confirmation suites | 2/2, 11/11, 3/3 |
-| Deployed Preview | see the delivery notes | |
+| Deployed Preview `4c275bd` (sparkscribe-git-release-four-tier…) | Real Cloudflare script loads; the widget stays invisible (0 px) and produces a token (Cloudflare test key); the report-only CSP allows challenges.cloudflare.com; the Google button is unchanged | pass |
+| Shared Supabase project (CAPTCHA **off**) | `/auth/v1/recover` with a token, for a non-existent example.com address: accepted (HTTP 200), so shipping the widget first is safe | pass |
