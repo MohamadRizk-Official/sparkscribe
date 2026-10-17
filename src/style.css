@@ -1809,6 +1809,15 @@ dialog.sheet p.dlg-dim, .dlg-dim { color: var(--dim); font-size: 13px; margin: 0
 .ins-msg.legacy-note span { flex: 1 1 260px; }
 .deck-nav { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .deck-tools { display: flex; gap: 8px; }
+.deck-mode { width: min(560px, 100%); display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 10px 8px 14px; border: 1px solid var(--line); border-radius: 12px; font-size: 14px; color: var(--ink-2); }
+.deck-sched { color: var(--muted); }
+.fc-rate { width: min(560px, 100%); display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.fc-rate-q { grid-column: 1 / -1; font-size: 13px; color: var(--muted); text-align: center; }
+.fc-rate .btn { display: grid; gap: 2px; justify-items: center; padding: 9px 8px; line-height: 1.25; }
+.fc-rate small { font-size: 12px; color: var(--muted); font-weight: 400; }
+.deck-done { width: min(560px, 100%); text-align: center; padding: 26px 20px; border: 1px solid var(--line); border-radius: 18px; display: grid; gap: 6px; }
+.deck-done:focus { outline: none; }
+.deck-done p { margin: 0; color: var(--ink-2); font-size: 14.5px; }
 
 /* drafts */
 .draft { border: 1px solid var(--line-2); border-radius: 14px; background: var(--k-060812-55); padding: 14px 16px; display: grid; gap: 10px; }
@@ -4219,6 +4228,7 @@ body.home-signed-in .dash-add-title { display: block; margin: 8px auto -8px; max
 .dn-ic svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .tone-pink .dn-ic { color: var(--c-pink); background: color-mix(in srgb, var(--c-pink) 13%, transparent); }
 .tone-violet .dn-ic { color: var(--c-violet); background: color-mix(in srgb, var(--c-violet) 13%, transparent); }
+.tone-cyan .dn-ic { color: var(--c-cyan); background: color-mix(in srgb, var(--c-cyan) 13%, transparent); }
 .dn-body { display: grid; gap: 2px; min-width: 0; }
 .dn-body b { font-size: 15px; color: var(--ink); }
 .dn-body span { font-size: 14px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

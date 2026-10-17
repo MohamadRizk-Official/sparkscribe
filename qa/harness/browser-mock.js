@@ -324,6 +324,20 @@
       const r = await realFetch('/__harness/artifact-write', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, method, patch: body }) });
       return json(r.ok ? [] : { message: 'not found' }, r.ok ? 200 : 404);
     }
+    // the study home reads them directly (RLS: own rows): the same store, with the filters the app uses
+    if (p === '/rest/v1/transcription_artifacts' && method === 'GET') {
+      let rows = await (await realFetch('/__harness/artifacts')).json();
+      for (const [k, v] of url.searchParams) {
+        if (['select', 'order', 'limit'].includes(k)) continue;
+        if (v.startsWith('eq.')) rows = rows.filter((r) => String(r[k]) === v.slice(3));
+        else if (v.startsWith('in.(')) { const set = new Set(v.slice(4, -1).split(',').map((x) => x.replace(/^"|"$/g, ''))); rows = rows.filter((r) => set.has(String(r[k]))); }
+        else if (v === 'not.is.null') rows = rows.filter((r) => r[k] != null);
+      }
+      const [col, dir] = (url.searchParams.get('order') || '').split('.');
+      if (col) rows.sort((x, y) => String(x[col] ?? '').localeCompare(String(y[col] ?? '')) * (dir === 'desc' ? -1 : 1));
+      if (url.searchParams.get('limit')) rows = rows.slice(0, Number(url.searchParams.get('limit')));
+      return json(rows);
+    }
     if (p === '/rest/v1/rpc/library_stats') {
       const by = {}; for (const t of db.rows) { const k = real.has(t.recording_type) ? t.recording_type : 'general'; by[k] = (by[k] || 0) + 1; }
       return json([{ recordings: db.rows.length, seconds: db.rows.reduce((s, t) => s + (t.duration_seconds || 0), 0), this_month: db.rows.length, favorites: db.rows.filter((t) => t.is_favorite).length, by_type: by }]);

@@ -874,6 +874,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     // the transcript text or speakers changed and were saved: fetch the new version → stale banners
     async transcriptChanged() { if (st.loaded) { st.loaded = false; await ensureLoaded(true); } },
     refresh: render,
+    openTool(kind) { tools.open(kind); showTab('create'); },
     reset() { st.loaded = false; st.autoDone = false; st.insights.clear(); st.artifacts.clear(); st.questions = []; st.ask = null; st.errors.clear(); tools.reset(); showTab('transcript'); },
     // the page's own Export button: works signed out too (transcript only); adds saved results once loaded
     openExport: (pre) => { ensureLoaded(); return openExport(pre); },

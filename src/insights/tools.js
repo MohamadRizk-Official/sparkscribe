@@ -7,6 +7,7 @@ import { fmtClock, RECORDING_TYPE_LABEL } from '../lib/segments.js';
 import { mascotSignal } from '../mascot/bus.js';
 import { TOOL_SETTINGS, MAX_INSTRUCTIONS, INSTRUCTIONS_MISSING, normalizeToolSettings, describeSettings, quizQuestionCount, ENGINE2_TOOLS, isEngine2Key, legacyKeyOf } from '../lib/tool-settings.js';
 import { newRun, currentItem, answeredCount, correctCount, answer as gradeAnswer, record as recordAnswer, overrideCorrect, advance, summary } from './quiz-engine.js';
+import { readSrs, rate as rateCard, dueIndexes, nextLabel, today } from './srs.js';
 import { readState, recordRun, markReviewed, flagQuestion, reviewList, openConcepts, practiceItems, needsNewQuestions, withState, allQuestions, supportsReview, STATE } from './focus-review.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -561,19 +562,42 @@ export function createToolsUI(api) {
   }
 
   // ---------- flashcards ----------
+  // Two ways through a set: every card in order (or shuffled), or only the cards due for spaced review. After the
+  // answer is shown the student says how well they knew it; that schedules when the card comes back (srs.js).
   function deckState(a) {
     const k = `${a.id}:${a.updatedAt}`;
-    if (!ui.deck.has(k)) ui.deck.set(k, { i: 0, flipped: false, order: a.content.cards.map((_, i) => i) });
+    if (!ui.deck.has(k)) ui.deck.set(k, { i: 0, flipped: false, mode: 'all', done: false, order: a.content.cards.map((_, i) => i) });
     return ui.deck.get(k);
   }
+  const RATINGS = [['again', 'Didn’t know'], ['good', 'Knew it'], ['easy', 'Easy']];
   function deckHtml(a, byId) {
     const cards = a.content.cards || [];
     if (!cards.length) return '<p class="ins-none">There wasn’t enough distinct material for flashcards.</p>';
     const d = deckState(a);
-    const card = cards[d.order[d.i]];
+    const srs = readSrs(a.progress);
+    const due = dueIndexes(srs, cards.length);
+    const reviewing = d.mode === 'due';
+    const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+    const bar = reviewing
+      ? `<div class="deck-mode"><span>Spaced review · ${plural(d.order.length, 'card', 'cards')}</span><button class="btn btn-ghost btn-sm" type="button" data-act="all-cards">All cards</button></div>`
+      : due.length ? `<div class="deck-mode"><span>${plural(due.length, 'card is', 'cards are')} due for review</span><button class="btn btn-primary btn-sm" type="button" data-act="review-due">Review due cards</button></div>` : '';
+    if (d.done) {
+      return `<div class="deck" data-deck="${a.id}">
+        <div class="deck-done" role="status" tabindex="-1"><strong>${reviewing ? 'Review done.' : 'You’ve been through every card.'}</strong>
+          <p>${due.length ? `${plural(due.length, 'card you didn’t know is', 'cards you didn’t know are')} due again today.` : 'Rated cards come back on their own schedule: the ones you found hard sooner, the easy ones later.'}</p></div>
+        <div class="deck-nav">${due.length ? '<button class="btn btn-primary" type="button" data-act="review-due">Go again</button>' : ''}<button class="btn btn-ghost" type="button" data-act="restart">Start over with all cards</button></div>
+      </div>`;
+    }
+    const idx = d.order[d.i];
+    const card = cards[idx];
     const src = card.refs?.[0] != null ? byId.get(card.refs[0]) : null;
-    return `<div class="deck" data-deck="${a.id}">
-      <div class="deck-count mono">${d.i + 1} / ${cards.length}</div>
+    const sched = srs[idx];
+    const rateRow = d.flipped
+      ? `<div class="fc-rate" role="group" aria-label="How well did you know this?"><span class="fc-rate-q">How well did you know it?</span>
+          ${RATINGS.map(([r, label]) => `<button class="btn btn-ghost fc-rate-${r}" type="button" data-rate="${r}"><span>${label}</span><small>Back ${nextLabel(srs, idx, r)}</small></button>`).join('')}</div>`
+      : '';
+    return `<div class="deck" data-deck="${a.id}">${bar}
+      <div class="deck-count mono">${d.i + 1} / ${d.order.length}${sched ? ` · <span class="deck-sched">${sched[0] <= today() ? 'due now' : 'reviewed'}</span>` : ''}</div>
       <button type="button" class="fc ${d.flipped ? 'flipped' : ''}" data-act="flip" aria-label="${d.flipped ? 'Answer shown. Activate to show the question' : 'Question shown. Activate to show the answer'}">
         <span class="fc-side">${d.flipped ? 'Answer' : 'Question'}</span>
         <span class="fc-text">${esc(d.flipped ? card.back : card.front)}</span>
@@ -582,12 +606,13 @@ export function createToolsUI(api) {
       ${card.caution ? `<p class="item-caution" role="note">${esc(card.caution)}</p>` : ''}
       ${d.flipped && card.explanation ? `<details class="fc-more"><summary>Explain why</summary><p>${esc(card.explanation)}</p></details>` : ''}
       <div class="fc-src">${d.flipped && src ? `Explained at ${api.chips(card.refs, byId)}` : '&nbsp;'}</div>
+      ${rateRow}
       <div class="deck-nav">
         <button class="btn btn-ghost" type="button" data-act="prev" ${d.i === 0 ? 'disabled' : ''} aria-label="Previous card">← Prev</button>
         <button class="btn btn-ghost" type="button" data-act="flip">${d.flipped ? 'Question' : 'Answer'}</button>
-        <button class="btn btn-ghost" type="button" data-act="next" ${d.i === cards.length - 1 ? 'disabled' : ''} aria-label="Next card">Next →</button>
+        <button class="btn btn-ghost" type="button" data-act="next" ${d.i === d.order.length - 1 ? 'disabled' : ''} aria-label="Next card">Next →</button>
       </div>
-      <div class="deck-tools"><button class="btn btn-ghost btn-sm" type="button" data-act="shuffle">Shuffle</button><button class="btn btn-ghost btn-sm" type="button" data-act="restart">Restart</button></div>
+      ${reviewing ? '' : '<div class="deck-tools"><button class="btn btn-ghost btn-sm" type="button" data-act="shuffle">Shuffle</button><button class="btn btn-ghost btn-sm" type="button" data-act="restart">Restart</button></div>'}
     </div>`;
   }
 
@@ -955,19 +980,31 @@ export function createToolsUI(api) {
     const deck = p.querySelector('.deck');
     if (deck && a) {
       const d = deckState(a);
-      const n = a.content.cards.length;
-      const go = (fn) => { fn(); api.refresh(); requestAnimationFrame(() => api.panel().querySelector('.fc')?.focus()); };
+      const n = d.order.length;
+      const go = (fn) => { fn(); api.refresh(); requestAnimationFrame(() => api.panel().querySelector('.fc, .deck-done')?.focus()); };
       deck.addEventListener('click', (e) => {
+        const rating = e.target.closest('[data-rate]')?.dataset.rate;
+        if (rating) {
+          // only the schedule changes; shown right away, saving is best effort
+          api.saveProgress(a, { ...(a.progress || {}), srs: rateCard(readSrs(a.progress), d.order[d.i], rating) });
+          go(() => { d.flipped = false; if (d.i < n - 1) d.i++; else d.done = true; });
+          return;
+        }
         const act = e.target.closest('[data-act]')?.dataset.act;
         if (act === 'flip') { mascotSignal('flashcard-flip'); go(() => { d.flipped = !d.flipped; }); }
         else if (act === 'next' && d.i < n - 1) go(() => { d.i++; d.flipped = false; });
         else if (act === 'prev' && d.i > 0) go(() => { d.i--; d.flipped = false; });
         else if (act === 'shuffle') go(() => { d.order = d.order.map((x) => [Math.random(), x]).sort((x, y) => x[0] - y[0]).map((x) => x[1]); d.i = 0; d.flipped = false; });
-        else if (act === 'restart') go(() => { d.order = a.content.cards.map((_, i) => i); d.i = 0; d.flipped = false; });
+        else if (act === 'restart' || act === 'all-cards') go(() => { d.mode = 'all'; d.done = false; d.order = a.content.cards.map((_, i) => i); d.i = 0; d.flipped = false; });
+        else if (act === 'review-due') {
+          const due = dueIndexes(readSrs(a.progress), a.content.cards.length);
+          if (due.length) go(() => { d.mode = 'due'; d.done = false; d.order = due; d.i = 0; d.flipped = false; });
+        }
       });
       deck.addEventListener('keydown', (e) => {
         if (e.key === 'ArrowRight' && d.i < n - 1) { e.preventDefault(); go(() => { d.i++; d.flipped = false; }); }
         else if (e.key === 'ArrowLeft' && d.i > 0) { e.preventDefault(); go(() => { d.i--; d.flipped = false; }); }
+        else if (d.flipped && ['1', '2', '3'].includes(e.key)) { e.preventDefault(); deck.querySelector(`[data-rate="${RATINGS[Number(e.key) - 1][0]}"]`)?.click(); }
       });
     }
   }
@@ -1187,5 +1224,7 @@ export function createToolsUI(api) {
       bind(panel);
     },
     reset() { ui.tool = null; },
+    // deep link (?tab=create&tool=flashcards): open a tool's latest result, as a click on its card would
+    open(kind) { ui.tool = kind; delete ui.sel[kind]; },
   };
 }

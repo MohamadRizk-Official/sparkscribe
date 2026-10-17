@@ -1,10 +1,11 @@
 // The signed-in home: "Welcome back" + Continue studying + What to study next + Recent lectures + My courses.
 // Everything shown comes from the student's own saved records (RLS: only their rows). Nothing is invented: a
 // suggestion appears only when a record supports it (a finished quiz with missed questions, a recent lecture with no
-// study material yet). Courses are the Library's folders, shown under the name students use.
+// study material yet, flashcards the student rated that are due again). Courses are the Library's folders, shown under the name students use.
 import { supabase } from '../lib/supabase.js';
 import { listLibrary, listFolders, createFolder } from '../lib/library.js';
 import { fmtDuration } from '../lib/transcripts.js';
+import { readSrs, dueIndexes } from '../insights/srs.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const STUDY_KINDS = new Set(['flashcards', 'quiz', 'study_guide', 'exam_points', 'definitions']);
@@ -14,6 +15,7 @@ const ICON = {
   course: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg>',
   retry: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6"/><path d="M20 12a8 8 0 0 0-14.5-4.7L4 10"/><path d="M20 20v-6h-6"/><path d="M4 12a8 8 0 0 0 14.5 4.7L20 14"/></svg>',
   spark: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/></svg>',
+  cards: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="14" height="14" rx="2.5"/><path d="M7 3h11.5A2.5 2.5 0 0 1 21 5.5V17"/></svg>',
   plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
 };
 
@@ -32,7 +34,7 @@ const firstName = (user) => {
   const n = (m.full_name || m.name || '').trim().split(/\s+/)[0];
   return n && n.length <= 24 ? n : '';
 };
-const lectureUrl = (id, tab) => `/transcript?id=${encodeURIComponent(id)}${tab ? `&tab=${tab}` : ''}`;
+const lectureUrl = (id, tab, tool) => `/transcript?id=${encodeURIComponent(id)}${tab ? `&tab=${tab}` : ''}${tool ? `&tool=${tool}` : ''}`;
 
 async function loadData() {
   const [{ rows }, courses] = await Promise.all([
@@ -40,12 +42,14 @@ async function loadData() {
     listFolders().catch(() => []),
   ]);
   const ids = rows.map((r) => r.id);
-  const [arts, ins, items, quizzes] = await Promise.all([
+  const [arts, ins, items, quizzes, decks] = await Promise.all([
     ids.length ? supabase.from('transcription_artifacts').select('transcription_id, kind').in('transcription_id', ids).eq('status', 'ready') : { data: [] },
     ids.length ? supabase.from('transcription_insights').select('transcription_id, kind').in('transcription_id', ids).eq('status', 'ready') : { data: [] },
     ids.length ? supabase.from('folder_items').select('transcription_id, folder_id').in('transcription_id', ids) : { data: [] },
     // finished quizzes anywhere in the library (progress is written only when a quiz run ends)
     supabase.from('transcription_artifacts').select('transcription_id, progress, updated_at').eq('kind', 'quiz').eq('status', 'ready').not('progress', 'is', null).order('updated_at', { ascending: false }).limit(20),
+    // flashcard sets with a spaced-review schedule (progress.srs is written when the student rates a card)
+    supabase.from('transcription_artifacts').select('transcription_id, progress, updated_at').eq('kind', 'flashcards').eq('status', 'ready').not('progress', 'is', null).order('updated_at', { ascending: false }).limit(30),
   ]);
   const kinds = new Map(ids.map((id) => [id, new Set()]));
   for (const r of [...(arts.data || []), ...(ins.data || [])]) kinds.get(r.transcription_id)?.add(r.kind);
@@ -54,22 +58,33 @@ async function loadData() {
   for (const it of items.data || []) if (!courseOf.has(it.transcription_id)) courseOf.set(it.transcription_id, courseName.get(it.folder_id) || '');
   // titles for quizzes outside the recent list
   const quizRows = (quizzes.data || []).filter((q) => Array.isArray(q.progress?.missed) && q.progress.missed.length);
-  const missingIds = [...new Set(quizRows.map((q) => q.transcription_id))].filter((id) => !ids.includes(id));
+  // due cards per lecture (a lecture can have more than one set: add them up)
+  const dueBy = new Map();
+  for (const r of decks.data || []) {
+    const n = dueIndexes(readSrs(r.progress), Infinity).length;
+    if (n) dueBy.set(r.transcription_id, (dueBy.get(r.transcription_id) || 0) + n);
+  }
+  const dueDecks = [...dueBy].map(([id, n]) => ({ transcription_id: id, due: n }));
+  const missingIds = [...new Set([...quizRows, ...dueDecks].map((q) => q.transcription_id))].filter((id) => !ids.includes(id));
   const extraTitles = missingIds.length ? (await supabase.from('transcriptions').select('id, title').in('id', missingIds)).data || [] : [];
   const titleOf = new Map([...rows.map((r) => [r.id, r.title]), ...extraTitles.map((r) => [r.id, r.title])]);
-  return { rows, courses, kinds, courseOf, quizRows, titleOf };
+  return { rows, courses, kinds, courseOf, quizRows, dueDecks, titleOf };
 }
 
 // Suggestions backed by a record; at most three, most useful first
-function suggestions({ rows, kinds, quizRows, titleOf }) {
+function suggestions({ rows, kinds, quizRows, dueDecks, titleOf }) {
   const out = [];
   const seen = new Set();
+  const decks = dueDecks.filter((x) => titleOf.has(x.transcription_id)).sort((x, y) => y.due - x.due).slice(0, 1);
+  for (const x of decks) {
+    out.push({ icon: ICON.cards, tone: 'cyan', title: `Review ${x.due} flashcard${x.due === 1 ? '' : 's'}`, sub: titleOf.get(x.transcription_id), href: lectureUrl(x.transcription_id, 'create', 'flashcards'), why: 'Due today in your spaced review' });
+  }
   for (const q of quizRows) {
     if (seen.has(q.transcription_id) || !titleOf.has(q.transcription_id)) continue;
     seen.add(q.transcription_id);
     const n = q.progress.missed.length;
-    out.push({ icon: ICON.retry, tone: 'pink', title: `Retake ${n} missed question${n === 1 ? '' : 's'}`, sub: titleOf.get(q.transcription_id), href: lectureUrl(q.transcription_id, 'create'), why: `From your last quiz score, ${Number(q.progress.last_score) || 0}/${Number(q.progress.total) || 0}` });
-    if (out.length >= 2) break;
+    out.push({ icon: ICON.retry, tone: 'pink', title: `Retake ${n} missed question${n === 1 ? '' : 's'}`, sub: titleOf.get(q.transcription_id), href: lectureUrl(q.transcription_id, 'create', 'quiz'), why: `From your last quiz score, ${Number(q.progress.last_score) || 0}/${Number(q.progress.total) || 0}` });
+    if (out.length >= 3) break;
   }
   const fortnight = Date.now() - 14 * 86400 * 1000;
   for (const r of rows) {
@@ -129,7 +144,7 @@ export async function mountDashboard(root, session) {
       <section class="dash-card dash-next" aria-labelledby="dashNextTitle">
         <h2 id="dashNextTitle" class="dash-h">What to study next</h2>
         ${next.length ? `<ul class="dash-next-list">${next.map((n) => `<li><a class="dash-next-item tone-${n.tone}" href="${n.href}"><span class="dn-ic">${n.icon}</span><span class="dn-body"><b>${esc(n.title)}</b><span>${esc(n.sub)}</span><small>${esc(n.why)}</small></span></a></li>`).join('')}</ul>`
-          : '<p class="dash-quiet">You’re up to date. When you finish a quiz, questions you missed show up here to practise again.</p>'}
+          : '<p class="dash-quiet">You’re up to date. When you finish a quiz or rate flashcards, what’s due to practise again shows up here.</p>'}
       </section>
     </div>
     <div class="dash-grid dash-grid-2">

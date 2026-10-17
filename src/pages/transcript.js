@@ -391,9 +391,11 @@ function initials(name) {
   });
   ui.setTranscription();
   renderTranscript();
-  // deep link from the study home, e.g. ?tab=create to retake missed questions
+  // deep link from the study home, e.g. ?tab=create&tool=quiz to retake missed questions
   const askedTab = params.get('tab');
-  if (['summary', 'notes', 'ask', 'create'].includes(askedTab)) ui.showTab(askedTab);
+  const askedTool = params.get('tool');
+  if (askedTab === 'create' && ['flashcards', 'quiz'].includes(askedTool)) ui.openTool(askedTool);
+  else if (['summary', 'notes', 'ask', 'create'].includes(askedTab)) ui.showTab(askedTab);
   // the original audio, if this device kept it when the recording was transcribed
   const stored = segments.length ? await getAudio(row.id) : null;
   if (stored) openAudio(stored.blob, 'stored');
