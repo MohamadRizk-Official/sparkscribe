@@ -12,6 +12,7 @@ import { mountMascot } from './mascot/mascot.js';
 import { mascotSignal, mascotTravel } from './mascot/bus.js';
 import { confirmDialog } from './library/dialogs.js';
 import { putAudio, rekeyAudio, deleteAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
+import { mountDashboard } from './home/dashboard.js';
 import { loadPlans, getBillingStatus, authorizeTranscription, startCheckout, allowanceLabel, usageText, usageLevel, durationText, dateText } from './lib/billing.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1297,6 +1298,10 @@ if (isConfigured) {
     onChange: (s) => {
       const signedInNow = !session && s;
       session = s;
+      // signed in: the study home replaces the introduction (the upload card stays, under "Add a lecture")
+      document.body.classList.toggle('home-signed-in', !!s);
+      if (s) mountDashboard(document.getElementById('dashboard'), s);
+      else document.getElementById('dashboard').hidden = true;
       insights.refresh();
       refreshUsageLine();
       if (!state?.lines) return;
