@@ -4,17 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#04050d" />
-    <meta name="description" content="Upload a lecture, meeting or voice note. SparkScribe transcribes it on your device, then turns it into notes, answers, quizzes, flashcards, study guides, recaps and next steps." />
+    <meta name="description" content="Upload a class recording. SparkScribe transcribes it on your device and turns it into notes, flashcards, practice quizzes and a study guide built from what was actually said." />
     <meta name="application-name" content="SparkScribe" />
-    <title>SparkScribe — turn recordings into notes, quizzes and next steps</title>
+    <title>SparkScribe — turn your lectures into something you can study</title>
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://www.spark-scribe.com/" />
     <meta property="og:site_name" content="SparkScribe" />
-    <meta property="og:title" content="SparkScribe — turn recordings into notes, quizzes and next steps" />
-    <meta property="og:description" content="Upload a lecture, meeting or voice note. SparkScribe transcribes it on your device, then turns it into notes, answers, quizzes, flashcards, study guides, recaps and next steps." />
+    <meta property="og:title" content="SparkScribe — turn your lectures into something you can study" />
+    <meta property="og:description" content="Upload a class recording. SparkScribe transcribes it on your device and turns it into notes, flashcards, practice quizzes and a study guide built from what was actually said." />
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="SparkScribe — turn recordings into notes, quizzes and next steps" />
-    <meta name="twitter:description" content="Record it once. SparkScribe turns it into notes, answers, quizzes and next steps." />
+    <meta name="twitter:title" content="SparkScribe — turn your lectures into something you can study" />
+    <meta name="twitter:description" content="Upload a lecture. Get notes, flashcards, practice quizzes and a study guide." />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="canonical" href="https://www.spark-scribe.com/" />
     <link rel="manifest" href="/site.webmanifest" />
@@ -41,8 +41,6 @@
     <header class="topbar">
       <!-- sparkscribe:brand -->
       <div class="topbar-right">
-        <span class="chip chip-device" id="deviceChip" role="button" tabindex="0" title="Where the AI runs"><span class="dot"></span>detecting…</span>
-        <span class="chip chip-muted hide-sm" title="Audio is decoded and transcribed on this device and never uploaded. If you're signed in, the finished transcript text is saved to your account. Summary, Notes, Ask and Create send transcript text (never audio) to our AI provider, Anthropic, only when you use them. More in Settings → Privacy."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6l-8-3Z"/></svg>audio stays on this device</span>
         <div id="accountSlot"></div>
       </div>
     </header>
@@ -52,15 +50,14 @@
       <section class="landing" id="dropPanel">
       <div class="hero">
         <div class="hero-text">
-          <div class="mode-switch" role="radiogroup" aria-label="Show SparkScribe for">
-            <button type="button" role="radio" data-mode="study" aria-checked="true"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-5 9 5-9 5z"/><path d="M7 11.5V16c0 1.5 2.2 3 5 3s5-1.5 5-3v-4.5"/></svg>Study</button>
-            <button type="button" role="radio" data-mode="work" aria-checked="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/></svg>Work</button>
+          <p class="hero-eyebrow">For students</p>
+          <h1 class="hero-h1">Turn your lectures into something you can <span class="grad">actually study.</span></h1>
+          <p class="hero-lead">Upload a class recording. Get clear notes, flashcards, practice questions and a study guide, built from what was actually said in class.</p>
+          <div class="hero-ctas">
+            <button type="button" class="btn btn-primary hero-cta" data-act="pick-file">Upload a lecture</button>
+            <a class="btn btn-ghost hero-cta-2" href="#how">See how it works</a>
           </div>
-          <h1>Who said <span class="echo" id="heroEcho"><span class="echo-ghost g1" aria-hidden="true">what.</span><span class="echo-ghost g2" aria-hidden="true">what.</span><span class="echo-ghost g3" aria-hidden="true">what.</span><span class="echo-main"><span class="grad">what</span>.</span></span></h1>
-          <p class="hero-lead"><span data-for-mode="study">Record the lecture.<br><b>Get the notes, flashcards, quiz and study guide.</b></span><span data-for-mode="work" hidden>Record the conversation.<br><b>Get the recap, decisions, actions and follow-up.</b></span></p>
-          <ul class="out-chips" data-for-mode="study" aria-label="What a lecture becomes"><li class="out-chip c-cyan" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l3 3v13H6z"/><path d="M9 10h6M9 14h6M9 18h3"/></svg><span>Notes</span><span class="peek peek-lines"><i style="--w:80%"></i><i style="--w:62%"></i><i class="hl" style="--w:72%"></i></span></li><li class="out-chip c-violet" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3.5" width="13" height="15" rx="2.5"/><path d="M4 7v11.5A2.5 2.5 0 0 0 6.5 21H15"/></svg><span>Flashcards</span><span class="peek peek-card"><span class="pc-in"><span class="pc-f">Osmosis</span><span class="pc-b">Water across a membrane</span></span></span></li><li class="out-chip c-pink" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 9.3a2.9 2.9 0 1 1 3.9 2.7c-.7.3-1.1.9-1.1 1.6v.6"/><circle cx="12" cy="17.6" r=".9" fill="currentColor" stroke="none"/><rect x="3.5" y="3.5" width="17" height="17" rx="5"/></svg><span>Quiz</span><span class="peek peek-quiz"><i></i><i class="ok"></i><i></i></span></li><li class="out-chip c-blue" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg><span>Study guide</span><span class="peek peek-outline"><b>1</b><i style="--w:70%"></i><b>2</b><i style="--w:55%"></i><b>3</b><i style="--w:64%"></i></span></li><li class="out-chip c-cyan" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg><span>Ask</span><span class="peek peek-ask"><span class="pa-q">On the exam?</span><span class="pa-a">Yes · <span class="mono">41:06</span></span></span></li></ul>
-          <ul class="out-chips" data-for-mode="work" aria-label="What a conversation becomes" hidden><li class="out-chip c-cyan" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5"/></svg><span>Recap</span><span class="peek peek-lines"><i style="--w:78%"></i><i style="--w:66%"></i><i class="hl" style="--w:58%"></i></span></li><li class="out-chip c-blue" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17.5 19.5 7"/></svg><span>Decisions</span><span class="peek peek-checks"><i></i><i></i><i></i></span></li><li class="out-chip c-violet" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 7 2 2 3.5-3.5M4 15l2 2 3.5-3.5M13 8h7M13 16h7"/></svg><span>Actions</span><span class="peek peek-owners"><i style="--w:70%"></i><i style="--w:56%"></i></span></li><li class="out-chip c-pink" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg><span>Follow-up</span><span class="peek peek-mail"><i style="--w:60%"></i><i style="--w:84%"></i><i style="--w:48%"></i></span></li><li class="out-chip c-cyan" tabindex="0"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg><span>Ask</span><span class="peek peek-ask"><span class="pa-q">Deadline?</span><span class="pa-a">Friday · <span class="mono">18:22</span></span></span></li></ul>
-          <p class="hero-sub"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg>Ask anything and jump back to the exact moment.</p>
+          <p class="hero-fine"><span>Free to start</span><span aria-hidden="true">·</span><span>No card needed</span><span aria-hidden="true">·</span><span>Audio stays on your device</span></p>
         </div>
 
         <div class="panel drop-card">
@@ -98,6 +95,7 @@
             </label>
           </fieldset>
           <p class="mode-note" id="modeNote"></p>
+          <p class="device-line"><span class="chip chip-device" id="deviceChip" role="button" tabindex="0" title="Where transcription runs"><span class="dot"></span>checking this device…</span></p>
           <p class="tip cpu-note hidden" id="cpuNote">Your browser is running this on the <b>CPU</b>, which is several times slower. <a href="#" id="cpuWhy">Why, and how to fix it</a></p>
 
           <details class="advanced" id="advanced">
@@ -150,57 +148,48 @@
         </div>
       </div>
 
-        <section class="becomes" aria-labelledby="becomesTitle">
-          <h2 id="becomesTitle" class="home-h2"><span data-for-mode="study">Record once. <span class="grad">Study it every way.</span></span><span data-for-mode="work" hidden>One meeting. <span class="grad">Every next step.</span></span></h2>
-          <p class="pack-note">An example of what one recording becomes. Your own results depend on what was said.</p>
-          <div class="pack" data-for-mode="study">
+        <section class="becomes" id="features" aria-labelledby="becomesTitle">
+          <h2 id="becomesTitle" class="home-h2">One lecture. <span class="grad">Ready to study.</span></h2>
+          <p class="pack-note"><span class="demo-tag">Example</span> What a 52-minute biology lecture becomes. Your own results depend on what was said in your class.</p>
+          <div class="pack">
             <div class="pack-src"><span class="pack-wave" aria-hidden="true"><i style="--h:30"></i><i style="--h:55"></i><i style="--h:80"></i><i style="--h:45"></i><i style="--h:95"></i><i style="--h:60"></i><i style="--h:35"></i><i style="--h:70"></i><i style="--h:50"></i><i style="--h:85"></i><i style="--h:40"></i><i style="--h:65"></i><i style="--h:30"></i><i style="--h:75"></i><i style="--h:55"></i></span><span class="pack-src-text"><b>Biology · Lecture 08</b><span>52 min</span></span><span class="pack-done"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17.5 19.5 7"/></svg>Transcript · speakers · timestamps</span></div>
             <span class="pack-flow" aria-hidden="true"><i></i></span>
             <ul class="pack-grid"><li class="pack-tile c-cyan"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h9l3 3v13H6z"/><path d="M9 10h6M9 14h6M9 18h3"/></svg></span><b>Notes</b><span class="pack-status">Organized automatically</span><span class="pack-vis" aria-hidden="true"><span class="v-lines"><i style="--w:86%"></i><i style="--w:70%"></i><i class="hl" style="--w:78%"></i><i style="--w:54%"></i></span></span></li><li class="pack-tile c-violet"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="3.5" width="13" height="15" rx="2.5"/><path d="M4 7v11.5A2.5 2.5 0 0 0 6.5 21H15"/></svg></span><b>Flashcards</b><span class="pack-status">18 ready to review</span><span class="pack-vis" aria-hidden="true"><span class="v-card"><span class="vc-in"><span class="vc-f">Osmosis</span><span class="vc-b">Water moving across a membrane</span></span></span></span></li><li class="pack-tile c-pink"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 9.3a2.9 2.9 0 1 1 3.9 2.7c-.7.3-1.1.9-1.1 1.6v.6"/><circle cx="12" cy="17.6" r=".9" fill="currentColor" stroke="none"/><rect x="3.5" y="3.5" width="17" height="17" rx="5"/></svg></span><b>Quiz</b><span class="pack-status">10 questions</span><span class="pack-vis" aria-hidden="true"><span class="v-quiz"><span class="vq-o"><i></i></span><span class="vq-o vq-ok"><i></i><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19.5 7"/></svg></span><span class="vq-o"><i></i></span></span></span></li><li class="pack-tile c-blue"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg></span><b>Study guide</b><span class="pack-status">Ready</span><span class="pack-vis" aria-hidden="true"><span class="v-outline"><span><b>1</b><i style="--w:72%"></i></span><span><b>2</b><i style="--w:58%"></i></span><span><b>3</b><i style="--w:66%"></i></span></span></span></li><li class="pack-tile c-cyan"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg></span><b>Ask</b><span class="pack-status">Ask this lecture</span><span class="pack-vis" aria-hidden="true"><span class="v-ask"><span class="va-q">On the exam?</span><span class="va-a"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span class="mono">41:06</span></span></span></span></li></ul>
           </div>
-          <div class="pack" data-for-mode="work" hidden>
-            <div class="pack-src"><span class="pack-wave" aria-hidden="true"><i style="--h:30"></i><i style="--h:55"></i><i style="--h:80"></i><i style="--h:45"></i><i style="--h:95"></i><i style="--h:60"></i><i style="--h:35"></i><i style="--h:70"></i><i style="--h:50"></i><i style="--h:85"></i><i style="--h:40"></i><i style="--h:65"></i><i style="--h:30"></i><i style="--h:75"></i><i style="--h:55"></i></span><span class="pack-src-text"><b>Weekly product sync</b><span>38 min · 4 speakers</span></span><span class="pack-done"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17.5 19.5 7"/></svg>Transcript · speakers · timestamps</span></div>
-            <span class="pack-flow" aria-hidden="true"><i></i></span>
-            <ul class="pack-grid"><li class="pack-tile c-cyan"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="3"/><path d="M7.5 9h9M7.5 12.5h9M7.5 16h5"/></svg></span><b>Recap</b><span class="pack-status">Ready to share</span><span class="pack-vis" aria-hidden="true"><span class="v-lines"><i style="--w:84%"></i><i style="--w:66%"></i><i class="hl" style="--w:74%"></i><i style="--w:50%"></i></span></span></li><li class="pack-tile c-blue"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17.5 19.5 7"/></svg></span><b>Decisions</b><span class="pack-status">3 made</span><span class="pack-vis" aria-hidden="true"><span class="v-checks"><i style="--w:76%"></i><i style="--w:62%"></i><i style="--w:70%"></i></span></span></li><li class="pack-tile c-violet"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 7 2 2 3.5-3.5M4 15l2 2 3.5-3.5M13 8h7M13 16h7"/></svg></span><b>Action items</b><span class="pack-status">5, with owners</span><span class="pack-vis" aria-hidden="true"><span class="v-owners"><span><i></i><b style="--w:64%"></b></span><span><i></i><b style="--w:52%"></b></span><span><i></i><b style="--w:70%"></b></span></span></span></li><li class="pack-tile c-pink"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/></svg></span><b>Follow-up</b><span class="pack-status">Email drafted</span><span class="pack-vis" aria-hidden="true"><span class="v-mail"><span class="vm-to"></span><i style="--w:80%"></i><i style="--w:92%"></i><i style="--w:58%"></i></span></span></li><li class="pack-tile c-cyan"><span class="pack-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/><path d="M9 10h6"/></svg></span><b>Ask</b><span class="pack-status">Ask this meeting</span><span class="pack-vis" aria-hidden="true"><span class="v-ask"><span class="va-q">What did we promise?</span><span class="va-a"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span class="mono">18:22</span></span></span></span></li></ul>
-          </div>
         </section>
 
-        <section class="docs-soon" aria-labelledby="docsTitle">
-          <div class="docs-text">
-            <span class="soon-tag">Coming soon</span>
-            <h2 id="docsTitle" class="home-h2"><span data-for-mode="study">Bring the slides too.</span><span data-for-mode="work" hidden>Bring the deck too.</span></h2>
-            <p>SparkScribe will connect what was said with what was shown.</p>
-          </div>
-          <div class="docs-visual" aria-hidden="true">
-            <div class="docs-audio"><span class="pack-wave" aria-hidden="true"><i style="--h:40"></i><i style="--h:70"></i><i style="--h:55"></i><i style="--h:90"></i><i style="--h:45"></i><i style="--h:75"></i><i style="--h:35"></i><i style="--h:60"></i><i style="--h:85"></i><i style="--h:50"></i></span><span data-for-mode="study">Lecture</span><span data-for-mode="work" hidden>Meeting</span></div>
-            <span class="docs-plus">+</span>
-            <div class="docs-slides"><span class="slide"><i></i><i></i><span class="mono">12</span></span><span class="slide"><i></i><i></i><span class="mono">13</span></span><span class="slide on"><i></i><i></i><span class="mono">14</span></span><span class="slide"><i></i><i></i><span class="mono">15</span></span></div>
-            <div class="docs-out">
-              <span class="docs-hit">Slide 14 · said at <span class="mono">24:18</span></span>
-              <span class="docs-tools"><span>Notes</span><span>Ask</span><span data-for-mode="study">Quiz</span><span data-for-mode="work" hidden>Recap</span></span>
-            </div>
-          </div>
+        <section class="how" id="how" aria-labelledby="howTitle">
+          <h2 id="howTitle" class="home-h2">How it works</h2>
+          <ol class="how-steps">
+            <li><span class="how-n">1</span><b>Upload a lecture</b><span>Audio or video, even hours long. It's transcribed on your device, with speakers and timestamps.</span></li>
+            <li><span class="how-n">2</span><b>Get it organized</b><span>Save it to your library, or a course, and get a summary and organized notes.</span></li>
+            <li><span class="how-n">3</span><b>Study it</b><span>Flashcards, practice quizzes and a study guide. Ask questions and jump to the moment it was said.</span></li>
+            <li><span class="how-n">4</span><b>Come back to review</b><span>Pick up where you left off. Questions you missed are kept, so you can practise them again.</span></li>
+          </ol>
         </section>
 
-        <section class="uses" aria-label="Who it's for">
-          <button type="button" class="use-card c-study" data-use="study" aria-pressed="true"><span class="use-h"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-5 9 5-9 5z"/><path d="M7 11.5V16c0 1.5 2.2 3 5 3s5-1.5 5-3v-4.5"/></svg>Study</span><span class="use-chips"><span>Lectures</span><span>Seminars</span><span>Study sessions</span></span></button>
-          <button type="button" class="use-card c-work" data-use="work" aria-pressed="false"><span class="use-h"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12" rx="2.5"/><path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7"/></svg>Work</span><span class="use-chips"><span>Meetings</span><span>Interviews</span><span>Client calls</span></span></button>
+        <section class="home-pricing" id="pricing-preview" aria-labelledby="homePricingTitle">
+          <div class="hp-head">
+            <h2 id="homePricingTitle" class="home-h2">Simple plans for every semester</h2>
+            <a class="hp-all" href="/pricing">Compare plans <span aria-hidden="true">→</span></a>
+          </div>
+          <div class="hp-plans" id="homePlans" aria-live="polite"></div>
         </section>
 
         <section class="trust" aria-labelledby="trustTitle">
-          <h2 id="trustTitle" class="home-h2">Private by design.</h2>
+          <h2 id="trustTitle" class="home-h2">Private by design</h2>
           <ul class="trust-list">
-            <li class="c-cyan"><span class="trust-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6l-8-3Z"/></svg></span><b>Audio stays local</b><span>Never uploaded.</span></li>
-            <li class="c-violet"><span class="trust-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><b>Private library</b><span>Only you can open it.</span></li>
-            <li class="c-pink"><span class="trust-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/></svg></span><b>AI when you ask</b><span>Only the transcript text it needs.</span></li>
+            <li class="c-cyan"><span class="trust-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6l-8-3Z"/></svg></span><b>Audio stays on your device</b><span>Recordings are transcribed in your browser and never uploaded.</span></li>
+            <li class="c-violet"><span class="trust-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></span><b>Your library is yours</b><span>Saved transcripts are tied to your account. You can delete them, or your account, any time.</span></li>
+            <li class="c-pink"><span class="trust-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9Z"/></svg></span><b>AI only when you ask</b><span>Study tools send transcript text, never audio, to our AI provider, Anthropic.</span></li>
           </ul>
-          <p class="trust-fine">AI features send transcript text, never audio, to our AI provider, Anthropic. Only record or upload what you have permission to use.</p>
+          <p class="trust-fine">Only record classes you're allowed to record, and keep your notes for your own study.</p>
         </section>
 
         <section class="final-cta">
-          <h2 class="home-h2"><span data-for-mode="study">Ready to turn your next lecture into something useful?</span><span data-for-mode="work" hidden>Ready to turn your next conversation into action?</span></h2>
-          <a class="btn btn-primary final-cta-btn" href="#dropzone" data-act="to-upload">Start free <span aria-hidden="true">↑</span></a>
-          <p class="cta-fine">No card needed. <a href="/pricing">See plans and pricing</a></p>
+          <h2 class="home-h2">Ready for your next lecture?</h2>
+          <button type="button" class="btn btn-primary final-cta-btn" data-act="pick-file">Upload a lecture</button>
+          <p class="cta-fine">Free to start, no card needed. <a href="/pricing">See plans and pricing</a></p>
         </section>
       </section>
 

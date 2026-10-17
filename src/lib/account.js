@@ -150,29 +150,56 @@ export function mountAccountMenu(slot, { onChange } = {}) {
   const outside = (e) => { if (menu && !menu.contains(e.target) && !slot.contains(e.target)) close(); };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
-  // signed-out visitors get a "Pricing" link at the start of the header's right side (signed-in users have Plan & usage)
-  function pricingLink(show) {
-    const bar = slot.parentElement;
-    let link = bar?.querySelector(':scope > .acct-link');
-    if (!show) { link?.remove(); return; }
-    if (!bar || link) return;
-    link = document.createElement('a');
-    link.className = 'acct-link hide-sm';
-    link.href = '/pricing';
-    link.textContent = 'Pricing';
-    bar.insertBefore(link, bar.querySelector(':scope > .theme-btn') || slot);
+  // The site navigation, one source for every page: placed right after the logo. Signed out: Features, How it works,
+  // Pricing. Signed in: Home, Library, Pricing. On narrow screens the links fold into a Menu button.
+  function siteNav(signedIn) {
+    const bar = slot.closest('.topbar');
+    if (!bar) return;
+    let nav = bar.querySelector(':scope > .site-nav');
+    if (!nav) {
+      nav = document.createElement('nav');
+      nav.className = 'site-nav';
+      nav.setAttribute('aria-label', 'Main');
+      const brand = bar.querySelector(':scope > .brand');
+      brand ? brand.after(nav) : bar.prepend(nav);
+    }
+    const here = location.pathname.replace(/\/$/, '') || '/';
+    const links = signedIn
+      ? [['/', 'Home'], ['/library', 'Library'], ['/pricing', 'Pricing']]
+      : [['/#features', 'Features'], ['/#how', 'How it works'], ['/pricing', 'Pricing']];
+    const item = ([href, label]) => {
+      const path = href.split('#')[0] || '/';
+      const current = path === here && !href.includes('#') ? ' aria-current="page"' : '';
+      return `<a class="nav-link" href="${href}"${current}>${label}</a>`;
+    };
+    nav.innerHTML = `<button type="button" class="nav-toggle" aria-expanded="false" aria-controls="siteNavLinks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
+      <div class="nav-links" id="siteNavLinks">${links.map(item).join('')}${signedIn ? '' : `<a class="nav-link nav-only-sm" href="/auth?next=${encodeURIComponent(currentPath())}">Sign in</a><a class="nav-link nav-only-sm" href="/settings">Settings</a>`}</div>`;
+    const toggle = nav.querySelector('.nav-toggle');
+    const closeNav = () => { nav.classList.remove('open'); nav.querySelector('.nav-toggle')?.setAttribute('aria-expanded', 'false'); };
+    if (!nav.dataset.bound) { // once per page, however often the menu re-renders
+      nav.dataset.bound = '1';
+      document.addEventListener('pointerdown', (e) => { if (!nav.contains(e.target)) closeNav(); });
+      nav.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeNav(); nav.querySelector('.nav-toggle')?.focus(); } });
+    }
+    toggle.addEventListener('click', () => {
+      const open = !nav.classList.contains('open');
+      nav.classList.toggle('open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+      if (open) nav.querySelector('.nav-link')?.focus();
+    });
+    nav.querySelectorAll('.nav-link').forEach((l) => l.addEventListener('click', closeNav));
   }
 
   async function render(session) {
     close();
     if (!session) {
       const onAuthPage = location.pathname.startsWith('/auth');
-      const gear = location.pathname.startsWith('/settings') ? '' : `<a class="acct-gear" href="/settings" aria-label="Settings" title="Settings">${GEAR}</a>`;
-      slot.innerHTML = onAuthPage ? '' : `${gear}<a class="acct-signin" href="/auth?next=${encodeURIComponent(currentPath())}">Sign in</a>`;
-      pricingLink(!onAuthPage && !location.pathname.startsWith('/pricing'));
+      const back = encodeURIComponent(currentPath());
+      slot.innerHTML = onAuthPage ? '' : `<a class="acct-signin" href="/auth?next=${back}">Sign in</a><a class="btn btn-primary acct-start" href="/auth?mode=signup&amp;next=${back}">Get started</a>`;
+      siteNav(false);
       return;
     }
-    pricingLink(false);
+    siteNav(true);
     if (await guardRecovery(session)) return; // a password-reset session: back to the password form, or signed out
     // a signed-in account that hasn't confirmed 13+ and the Terms (first Google sign-in) does that before anything else
     if (!hasConsent(session.user) && !CONSENT_FREE.test(location.pathname)) { location.replace(consentUrl()); return; }
@@ -192,9 +219,10 @@ export function mountAccountMenu(slot, { onChange } = {}) {
       menu.innerHTML = `
         <div class="acct-head"><span class="acct-avatar" aria-hidden="true">${p.avatar ? `<img src="${esc(p.avatar)}" alt="" referrerpolicy="no-referrer" />` : esc(initialsOf(label))}</span><span class="acct-who">${p.name ? `<b>${esc(p.name)}</b>` : ''}<span>${esc(p.email)}</span></span></div>
         <a role="menuitem" href="/settings#account"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/></svg>Account</a>
+        <a role="menuitem" href="/account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9m5 9V5m5 13v-6m5 6V8"/></svg><span class="acct-plan-item">Plan &amp; billing<small data-usage></small></span></a>
         <a role="menuitem" href="/settings#preferences">${GEAR}Settings</a>
         <a role="menuitem" href="/library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg>My Library</a>
-        <a role="menuitem" href="/account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9m5 9V5m5 13v-6m5 6V8"/></svg><span class="acct-plan-item">Plan &amp; usage<small data-usage></small></span></a>
+        <a role="menuitem" href="/help"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3M12 17h.01"/></svg>Help</a>
         <hr />
         <button role="menuitem" type="button" data-signout><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12H4m0 0 4-4m-4 4 4 4M13 5h6v14h-6"/></svg>Sign out</button>`;
       menu.querySelector('[data-signout]').addEventListener('click', async () => {

@@ -1272,9 +1272,8 @@ function renderNextSteps() {
   try { done = localStorage.getItem(NEXT_KEY) === '1'; } catch {}
   const box = els.nextSteps;
   if (done || !state?.lines?.length) return box.classList.add('hidden');
-  let work = false;
-  try { work = localStorage.getItem('sparkscribe.audience') === 'work'; } catch {}
-  const make = work ? 'Recap · Action plan · Follow-up email' : 'Quiz · Flashcards · Study guide';
+  const work = false; // the home page speaks to students; Work tools stay available in Create
+  const make = 'Quiz · Flashcards · Study guide';
   const step = (tab, cls, icon, title, sub) => `<button type="button" class="ns-step ${cls}" data-tab="${tab}"><span class="ns-ic" aria-hidden="true"><svg viewBox="0 0 24 24">${icon}</svg></span><span><b>${title}</b><span>${sub}</span></span><span class="ns-go" aria-hidden="true">→</span></button>`;
   box.innerHTML = `<div class="ns-head"><h3 id="nextStepsTitle">Your recording is ready</h3><p>The transcript is step one. Here is what SparkScribe can do with it.</p></div>
     <div class="ns-steps">
@@ -1499,44 +1498,40 @@ setTimeout(() => sparkPulse(), 700); // one pulse when the page opens
   rest();
 }
 
-// ---------- home: Study / Work ----------
-// The same product, framed for a student or for work. It only swaps copy and examples on the home page;
-// it changes nothing about how a recording is processed. Remembered on this device.
+// ---------- home: student-first landing ----------
+// "Upload a lecture" opens the file picker (the drop card stays the one place a recording starts); the example pack
+// fills in when it scrolls into view; the pricing preview reads the real plans (billing_plans), never hard-coded prices.
 {
-  const KEY = 'sparkscribe.audience';
-  const sw = document.querySelector('.mode-switch');
-  const btns = sw ? [...sw.querySelectorAll('[data-mode]')] : [];
-  const apply = (mode, focus) => {
-    sw.dataset.active = mode;
-    btns.forEach((b) => { const on = b.dataset.mode === mode; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; if (on && focus) b.focus(); });
-    document.querySelectorAll('[data-for-mode]').forEach((el) => { el.hidden = el.dataset.forMode !== mode; });
-    document.querySelectorAll('[data-use]').forEach((el) => el.setAttribute('aria-pressed', String(el.dataset.use === mode)));
-    try { localStorage.setItem(KEY, mode); } catch { /* private mode: fine */ }
-  };
-  if (sw) {
-    let saved = 'study';
-    try { saved = localStorage.getItem(KEY) === 'work' ? 'work' : 'study'; } catch { /* default */ }
-    apply(saved, false);
-    btns.forEach((b) => b.addEventListener('click', () => apply(b.dataset.mode, false)));
-    document.querySelectorAll('[data-use]').forEach((el) => el.addEventListener('click', () => { apply(el.dataset.use, false); sw.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }));
-    sw.addEventListener('keydown', (e) => {
-      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
-      e.preventDefault();
-      apply(sw.dataset.active === 'study' ? 'work' : 'study', true);
-    });
-  }
+  const smooth = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+  document.querySelectorAll('[data-act="pick-file"]').forEach((b) => b.addEventListener('click', () => {
+    els.dropPanel.scrollIntoView({ behavior: smooth(), block: 'start' });
+    els.fileInput.click();
+  }));
   // the outputs fill in one by one the first time they scroll into view (static with reduce motion)
   const packs = document.querySelectorAll('.pack');
   if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const io = new IntersectionObserver((list) => list.forEach((en) => {
-      if (en.isIntersecting) { document.querySelectorAll('.pack').forEach((p) => p.classList.add('in')); io.disconnect(); }
+      if (en.isIntersecting) { packs.forEach((pk) => pk.classList.add('in')); io.disconnect(); }
     }), { threshold: 0.25 });
-    packs.forEach((p) => { p.classList.add('will-reveal'); io.observe(p); });
+    packs.forEach((pk) => { pk.classList.add('will-reveal'); io.observe(pk); });
   }
-  document.querySelector('[data-act="to-upload"]')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    els.dropPanel.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
-  });
+  renderHomePlans();
+}
+
+async function renderHomePlans() {
+  const box = document.getElementById('homePlans');
+  if (!box) return;
+  let plans = [];
+  try { plans = await loadPlans(); } catch { plans = []; }
+  if (!plans.length) { box.closest('section')?.classList.add('hidden'); return; }
+  const money = (c) => (c % 100 ? `$${(c / 100).toFixed(2)}` : `$${c / 100}`);
+  const hours = (s) => (s < 3600 ? `${Math.round(s / 60)} minutes` : `${Math.round((s / 3600) * 10) / 10} hours`);
+  box.innerHTML = plans.map((pl) => `<a class="hp-plan${pl.tier === 2 ? ' is-popular' : ''}" href="/pricing#${escHtml(pl.key)}">
+      <span class="hp-name">${escHtml(pl.name)}${pl.tier === 2 ? '<span class="hp-pop">Popular</span>' : ''}</span>
+      <span class="hp-price">${pl.price_cents ? `${money(pl.price_cents)}<small>/month</small>` : 'Free'}</span>
+      <span class="hp-allow">${hours(pl.monthly_seconds)} of lectures a month</span>
+      ${pl.intro ? `<span class="hp-intro">${money(pl.intro.price_cents)} for your first month</span>` : ''}
+    </a>`).join('');
 }
 
 // ---------- home polish: upload spark, transcript demo ----------
