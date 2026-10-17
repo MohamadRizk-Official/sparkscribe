@@ -1,7 +1,11 @@
 // Applies the SparkScribe auth email templates (docs/auth/email-templates, from scripts/build-email-templates.mjs) to the
 // Supabase project through the Management API. Run it yourself with your own access token; it never leaves your machine.
 //
-//   $env:SUPABASE_ACCESS_TOKEN = "<token from supabase.com/dashboard/account/tokens>"   (PowerShell; bash: export …)
+// Token: supabase.com/dashboard/account/tokens -> a SCOPED token for this one project with exactly two permissions,
+// Auth Config: Read-write and Project Settings: Read-write (Supabase's "Update auth service config" needs both; the
+// second is the "project_admin_write" a 403 names). Shortest expiry; delete it when done. On Windows the easiest way is
+// scripts/apply-email-templates.ps1 (hidden prompt). Otherwise:
+//   $env:SUPABASE_ACCESS_TOKEN = "<token>"   (PowerShell; bash: export …)
 //   node scripts/apply-email-templates.mjs            # dry run: shows the current state and what would change
 //   node scripts/apply-email-templates.mjs --apply    # backs up the current templates, then applies
 //   node scripts/apply-email-templates.mjs --restore <backup.json>   # puts a backup back
