@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#04050d" />
+    <title>Help — SparkScribe</title>
+    <meta name="description" content="Answers about SparkScribe: how lectures are transcribed on your device, what the study tools do, plans and billing, privacy and your account." />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href="https://www.spark-scribe.com/help" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+    <header class="topbar">
+      <!-- sparkscribe:brand -->
+      <div class="topbar-right"><div id="accountSlot"></div></div>
+    </header>
+    <main class="app help-page">
+      <h1 class="help-title">Help</h1>
+      <p class="help-lead">Quick answers about studying with SparkScribe. Can't find yours? Email <a href="mailto:contact.hrstudios@gmail.com">contact.hrstudios@gmail.com</a>.</p>
+
+      <section class="help-group" aria-labelledby="hStart">
+        <h2 id="hStart">Getting started</h2>
+        <details><summary>What does SparkScribe do?</summary>
+          <p>You upload a class recording. SparkScribe transcribes it on your device, with speakers and timestamps, then helps you study it: a summary, organized notes, flashcards, practice quizzes and a study guide, and answers to your questions that point to the moment something was said.</p></details>
+        <details><summary>Which recordings work?</summary>
+          <p>Audio or video files, for example M4A, MP3, MP4, WAV, WebM or MOV, including recordings that are hours long. Transcription is English-only for now: other languages may be transcribed poorly or not at all.</p></details>
+        <details><summary>How long does transcription take?</summary>
+          <p>It depends on your device. On a computer whose browser can use the graphics card, it's usually faster than the recording's length. On the processor alone it's slower, but it still works. The first time, your browser downloads the speech model once; after that, recordings start right away.</p></details>
+        <details><summary>Do I need an account?</summary>
+          <p>You can transcribe without one. To save lectures to your library, organize them into courses and use the AI study tools, create a free account.</p></details>
+      </section>
+
+      <section class="help-group" aria-labelledby="hStudy">
+        <h2 id="hStudy">Studying</h2>
+        <details><summary>Where do I find my lectures?</summary>
+          <p>When you're signed in, the home page shows the lecture you opened last and your recent lectures. <a href="/library">My Library</a> has everything, with search, favorites and courses.</p></details>
+        <details><summary>What are courses?</summary>
+          <p>Courses group your lectures by class, like “Biology 201”. They're optional: add one from your home page or the Library, then add lectures to it from a lecture's menu.</p></details>
+        <details><summary>Is the AI always right?</summary>
+          <p>No. Summaries, notes, flashcards and quiz answers are generated from your transcript, and transcripts can contain mistakes, especially with noisy audio or unusual names. Answers link to the moment in the recording they come from, so you can check. If the lecture doesn't say something, SparkScribe tells you instead of guessing.</p></details>
+        <details><summary>What happens to questions I get wrong?</summary>
+          <p>When you finish a quiz, the questions you missed are kept, so you can retake just those. Your home page reminds you. Bolt and Thunder plans also turn missed questions into Focused Review: practice on the concepts behind them.</p></details>
+        <details><summary>Can I fix the transcript?</summary>
+          <p>Yes. You can edit the text and rename or correct speakers. Study material made from an older version shows a note that it may be out of date.</p></details>
+      </section>
+
+      <section class="help-group" aria-labelledby="hPlans">
+        <h2 id="hPlans">Plans and billing</h2>
+        <details><summary>What does my plan's monthly time count?</summary>
+          <p>It counts the length of the recordings you transcribe while signed in. A recording is checked against your remaining time before it starts. Free time resets each month; paid plans renew each billing period. See <a href="/pricing">plans and pricing</a>.</p></details>
+        <details><summary>How do I upgrade, change or cancel my plan?</summary>
+          <p>Open <a href="/account">Plan &amp; billing</a> from your account menu. Cancelling stops the next renewal: you keep your plan until the end of the period you've paid for, then move to Free. Your lectures stay in your library.</p></details>
+        <details><summary>Do you give refunds?</summary>
+          <p>Payments aren't refunded, except for billing errors or service failures, or where the law requires it. If something went wrong, email us and we'll sort it out.</p></details>
+        <details><summary>Who handles payments?</summary>
+          <p>Stripe processes payments. SparkScribe never sees your full card number.</p></details>
+      </section>
+
+      <section class="help-group" aria-labelledby="hPrivacy">
+        <h2 id="hPrivacy">Privacy and your account</h2>
+        <details><summary>Is my audio uploaded?</summary>
+          <p>No. Your recording is transcribed inside your browser. By default the original audio is also kept in that browser, so you can play it back with the transcript; you can turn this off or remove it in Settings. It isn't uploaded, and it isn't available on your other devices.</p></details>
+        <details><summary>What's stored in my account?</summary>
+          <p>The transcripts you save (text, speaker names, timestamps), your courses, and the study material you create. When you use an AI study tool, the transcript text it needs (never audio) is sent to our AI provider, Anthropic, to produce the result.</p></details>
+        <details><summary>Can I record my classes?</summary>
+          <p>Only where you're allowed to. Many schools and instructors have rules about recording lectures. Use SparkScribe for your own study, and don't share material you don't have the right to share.</p></details>
+        <details><summary>How do I delete my account?</summary>
+          <p>Go to Settings → Account → Delete account. It deletes your account and everything saved in it, and stops any subscription.</p></details>
+      </section>
+    </main>
+    <!-- sparkscribe:legal -->
+    <script type="module" src="/src/pages/legal.js"></script>
+  </body>
+</html>

@@ -79,8 +79,8 @@ export async function listFolders() {
 }
 
 const folderError = (error) => {
-  if (error?.code === '23505') return new Error('You already have a folder with that name.');
-  if (error?.code === '23514') return new Error('Folder names need 1–80 characters.');
+  if (error?.code === '23505') return new Error('You already have a course with that name.');
+  if (error?.code === '23514') return new Error('Course names need 1–80 characters.');
   return error;
 };
 

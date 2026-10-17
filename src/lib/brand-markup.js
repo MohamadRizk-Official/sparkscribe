@@ -40,4 +40,4 @@ export const MARK_HTML = markSvg();
 export const BRAND_FONT_LINK = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&amp;text=Spark&amp;display=swap" />';
 
 // Site-wide legal links (<!-- sparkscribe:legal -->). The documents are drafts until reviewed; the pages say so.
-export const LEGAL_HTML = '<nav class="legal-links mono" aria-label="Legal"><a href="/privacy">Privacy</a><span aria-hidden="true">·</span><a href="/terms">Terms</a><span aria-hidden="true">·</span><span>Audio never leaves your device</span></nav>';
+export const LEGAL_HTML = '<footer class="site-foot"><nav class="foot-links" aria-label="Footer"><a href="/pricing">Pricing</a><a href="/help">Help</a><a href="mailto:contact.hrstudios@gmail.com">Contact</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></nav><p class="foot-fine">© HRstudios LLC · Your audio is transcribed on your device and never uploaded.</p></footer>';

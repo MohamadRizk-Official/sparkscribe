@@ -23,7 +23,7 @@ const SORTS = ['newest', 'oldest', 'longest', 'shortest', 'az'];
 const EMPTY = {
   library: ['Your library is empty', 'Transcribe a recording while you’re signed in and it’s saved here, searchable and private to you.', true],
   favorites: ['No favorites yet', 'Tap the star on any recording to keep it here.'],
-  folder: ['This folder is empty', 'Open a recording’s ⋯ menu and choose Folders, or use Select to add several at once.'],
+  folder: ['This course is empty', 'Open a recording’s ⋯ menu and choose Courses, or use Select to add several at once.'],
   date: ['Nothing from this period', 'Try a longer time range.'],
   lecture: ['No lectures yet', 'Upload a lecture to start building your study library.', true],
   meeting: ['No meetings yet', 'Transcribe a meeting and its decisions and action items are one click away.', true],
@@ -125,12 +125,12 @@ function renderChrome() {
 
   const fh = $('folderHead');
   if (st.folder && !searching()) {
-    const name = folderName(st.folder) || 'Folder';
+    const name = folderName(st.folder) || 'Course';
     fh.hidden = false;
-    fh.innerHTML = `<button class="btn btn-ghost btn-sm" type="button" data-act="folders">${ICON.back}<span>Folders</span></button>
+    fh.innerHTML = `<button class="btn btn-ghost btn-sm" type="button" data-act="folders">${ICON.back}<span>Courses</span></button>
       <h2 class="folder-title">${ICON.folder}<span>${esc(name)}</span></h2>
       <div class="folder-actions"><button class="btn btn-ghost btn-sm" type="button" data-act="rename-folder">Rename</button>
-      <button class="btn btn-ghost btn-sm" type="button" data-act="delete-folder">Delete folder</button></div>`;
+      <button class="btn btn-ghost btn-sm" type="button" data-act="delete-folder">Delete course</button></div>`;
   } else {
     fh.hidden = true;
     fh.innerHTML = '';
@@ -233,7 +233,7 @@ function renderFolders() {
       <span class="folder-tile-name">${esc(f.name)}</span>
       <span class="folder-tile-n mono">${f.count} recording${f.count === 1 ? '' : 's'}</span></a>`).join('');
   $('libList').innerHTML = `<div class="folder-grid">
-    <button class="panel folder-tile new" type="button" data-act="new-folder"><span class="folder-tile-ic">${ICON.plus}</span><span class="folder-tile-name">New folder</span><span class="folder-tile-n mono">e.g. Biology 101</span></button>
+    <button class="panel folder-tile new" type="button" data-act="new-folder"><span class="folder-tile-ic">${ICON.plus}</span><span class="folder-tile-name">New course</span><span class="folder-tile-n mono">e.g. Biology 101</span></button>
     ${tiles}</div>
     ${st.folders.length ? '' : '<p class="lib-empty-hint center">Folders keep related recordings together — a course, a client, a project. A recording can be in more than one folder, and deleting a folder never deletes recordings.</p>'}`;
   $('libMore').innerHTML = '';
@@ -368,7 +368,7 @@ async function bulk(action) {
     const value = !ids.every((id) => st.rows.find((r) => r.id === id)?.is_favorite);
     try { await setFavorite(ids, value); toast(value ? `Added ${ids.length} to favorites` : `Removed ${ids.length} from favorites`); } catch (e) { return toast(e.message || 'That didn’t work'); }
   } else if (action === 'folder') {
-    return folderPicker({ ids, onChange: async () => { await loadFolders(); toast('Folders updated'); setSelecting(false); refresh(); } });
+    return folderPicker({ ids, onChange: async () => { await loadFolders(); toast('Courses updated'); setSelecting(false); refresh(); } });
   } else if (action === 'delete') {
     if (!(await confirmDeleteRecordings(ids.length))) return;
     try { const n = await deleteTranscripts(ids); toast(`Deleted ${n} recording${n === 1 ? '' : 's'}`); } catch (e) { return toast(e.message || 'Delete failed'); }
@@ -385,8 +385,8 @@ function recordingMenu(row) {
       <button type="button" data-m="open">Open</button>
       <button type="button" data-m="rename">Rename</button>
       <button type="button" data-m="star">${row.is_favorite ? 'Remove from favorites' : 'Add to favorites'}</button>
-      <button type="button" data-m="folders">Folders…</button>
-      ${st.folder ? `<button type="button" data-m="unfolder">Remove from “${esc(folderName(st.folder) || 'this folder')}”</button>` : ''}
+      <button type="button" data-m="folders">Courses…</button>
+      ${st.folder ? `<button type="button" data-m="unfolder">Remove from “${esc(folderName(st.folder) || 'this course')}”</button>` : ''}
       <button type="button" data-m="delete" class="danger">Delete…</button>
     </div>
     <div class="confirm-actions"><button class="btn btn-ghost" type="button" data-m="close">Cancel</button></div>`);
@@ -397,7 +397,7 @@ function recordingMenu(row) {
     if (m === 'open') location.href = openUrl(row.id);
     else if (m === 'rename') renameRow(row);
     else if (m === 'star') toggleStar(row);
-    else if (m === 'folders') folderPicker({ ids: [row.id], currentIds: row.folder_ids || [], onChange: async (ids) => { row.folder_ids = ids; await loadFolders(); toast('Folders updated'); if (st.folder && !ids.includes(st.folder)) refresh(); else renderList(); } });
+    else if (m === 'folders') folderPicker({ ids: [row.id], currentIds: row.folder_ids || [], onChange: async (ids) => { row.folder_ids = ids; await loadFolders(); toast('Courses updated'); if (st.folder && !ids.includes(st.folder)) refresh(); else renderList(); } });
     else if (m === 'unfolder') { try { await removeFromFolder(st.folder, row.id); toast('Removed from folder'); await loadFolders(); refresh(); } catch (ex) { toast(ex.message || 'That didn’t work'); } }
     else if (m === 'delete') {
       if (!(await confirmDeleteRecordings(1, row.title))) return;
@@ -425,7 +425,7 @@ async function toggleStar(row) {
 
 // ---------- folder actions ----------
 async function newFolder() {
-  const name = await promptDialog({ title: 'New folder', label: 'Folder name', placeholder: 'e.g. Biology 101', maxLength: 80, confirmLabel: 'Create', submit: createFolder });
+  const name = await promptDialog({ title: 'New course', label: 'Course name', placeholder: 'e.g. Biology 201', maxLength: 80, confirmLabel: 'Create', submit: createFolder });
   if (!name) return;
   toast(`Created “${name}”`);
   await loadFolders();
@@ -433,7 +433,7 @@ async function newFolder() {
 }
 async function renameCurrentFolder() {
   const id = st.folder;
-  const name = await promptDialog({ title: 'Rename folder', label: 'Folder name', value: folderName(id) || '', maxLength: 80, submit: (v) => renameFolder(id, v) });
+  const name = await promptDialog({ title: 'Rename course', label: 'Course name', value: folderName(id) || '', maxLength: 80, submit: (v) => renameFolder(id, v) });
   if (!name) return;
   await loadFolders();
   renderChrome();
@@ -443,12 +443,12 @@ async function deleteCurrentFolder() {
   const id = st.folder;
   const f = st.folders.find((x) => x.id === id);
   const ok = await confirmDialog({
-    title: 'Delete this folder?',
-    bodyHtml: `<p>“${esc(f?.name || 'This folder')}” will be removed. ${f?.count ? (f.count === 1 ? 'The recording in it stays in your library' : `The ${f.count} recordings in it stay in your library`) + ' — only the folder goes.' : 'It’s empty.'}</p>`,
-    confirmLabel: 'Delete folder', danger: true,
+    title: 'Delete this course?',
+    bodyHtml: `<p>“${esc(f?.name || 'This course')}” will be removed. ${f?.count ? (f.count === 1 ? 'The recording in it stays in your library' : `The ${f.count} recordings in it stay in your library`) + ' — only the course goes.' : 'It’s empty.'}</p>`,
+    confirmLabel: 'Delete course', danger: true,
   });
   if (!ok) return;
-  try { await deleteFolder(id); } catch (e) { return toast(e.message || 'Couldn’t delete the folder'); }
+  try { await deleteFolder(id); } catch (e) { return toast(e.message || 'Couldn’t delete the course'); }
   toast('Folder deleted');
   st.folder = null;
   st.view = 'folders';

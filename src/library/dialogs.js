@@ -100,10 +100,10 @@ export function folderPicker({ ids, currentIds = [], onChange }) {
   const member = new Set(single ? currentIds : []);
   let changed = false;
   const { dlg, dismiss } = makeDialog('folder-dlg', `
-    <h3>${single ? 'Folders' : `Add ${ids.length} recordings to a folder`}</h3>
+    <h3>${single ? 'Courses' : `Add ${ids.length} recordings to a course`}</h3>
     <div class="folder-pick" aria-live="polite"><div class="lib-skel sm"></div></div>
     <form class="folder-new" autocomplete="off">
-      <input type="text" maxlength="80" placeholder="New folder name" aria-label="New folder name" />
+      <input type="text" maxlength="80" placeholder="New course name" aria-label="New course name" />
       <button class="btn btn-ghost btn-sm" type="submit">Create</button>
     </form>
     <p class="dlg-err" role="alert" hidden></p>
@@ -119,10 +119,10 @@ export function folderPicker({ ids, currentIds = [], onChange }) {
       ? folders.map((f) => `<label class="folder-opt"><input type="checkbox" data-id="${f.id}" ${member.has(f.id) ? 'checked' : ''} />
           <span class="folder-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg></span>
           <span class="folder-name">${esc(f.name)}</span></label>`).join('')
-      : '<p class="dlg-dim">No folders yet. Create one below, e.g. “Biology 101” or “Client Meetings”.</p>';
+      : '<p class="dlg-dim">No courses yet. Create one below, e.g. “Biology 201”.</p>';
   };
   const load = async () => {
-    try { folders = await listFolders(); render(); } catch (e) { list.innerHTML = ''; showErr(e.message || 'Couldn’t load folders.'); }
+    try { folders = await listFolders(); render(); } catch (e) { list.innerHTML = ''; showErr(e.message || 'Couldn’t load courses.'); }
   };
 
   list.addEventListener('change', async (e) => {
@@ -152,7 +152,7 @@ export function folderPicker({ ids, currentIds = [], onChange }) {
       input.value = '';
       folders = [...folders, f].sort((a, b) => a.name.localeCompare(b.name));
       render();
-    } catch (ex) { showErr(ex.message || 'Couldn’t create the folder.'); }
+    } catch (ex) { showErr(ex.message || 'Couldn’t create the course.'); }
   });
   dlg.querySelector('[data-act=done]').addEventListener('click', dismiss);
   load();

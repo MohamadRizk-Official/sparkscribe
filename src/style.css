@@ -4246,3 +4246,25 @@ body.home-signed-in .dash-add-title { display: block; margin: 8px auto -8px; max
 @keyframes dash-pulse { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .dash-skel span { animation: none; } }
 @media (max-width: 860px) { .dash-grid, .dash-grid-2, .dash-skel { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- site footer (brand-markup LEGAL_HTML, on every page) ---------- */
+.site-foot { display: grid; justify-items: center; gap: 10px; margin: 40px auto 28px; padding: 22px 16px 0; max-width: 1180px; border-top: 1px solid var(--hair); }
+.foot-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 20px; font-size: 14px; }
+.foot-links a { color: var(--ink-2); text-decoration: none; }
+.foot-links a:hover, .foot-links a:focus-visible { color: var(--ink); text-decoration: underline; }
+.foot-fine { margin: 0; font-size: 12.5px; color: var(--ink-3); text-align: center; }
+
+/* ---------- help page ---------- */
+.help-page { max-width: 780px; width: 100%; margin: 0 auto; display: grid; gap: 22px; }
+.help-title { margin: 8px 0 0; font-size: clamp(30px, 4vw, 42px); letter-spacing: -.02em; color: var(--ink); }
+.help-lead { margin: 0; font-size: 16px; color: var(--ink-2); }
+.help-lead a, .help-group a { color: var(--c-violet); }
+.help-group { display: grid; gap: 8px; }
+.help-group h2 { margin: 6px 0 4px; font-size: 19px; color: var(--ink); }
+.help-group details { border-radius: 14px; background: var(--card); border: 1px solid var(--hair); }
+.help-group summary { cursor: pointer; padding: 14px 16px; font-weight: 600; color: var(--ink); list-style: none; display: flex; justify-content: space-between; gap: 12px; }
+.help-group summary::-webkit-details-marker { display: none; }
+.help-group summary::after { content: "+"; font-weight: 500; color: var(--ink-3); }
+.help-group details[open] summary::after { content: "−"; }
+.help-group summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; border-radius: 14px; }
+.help-group details p { margin: 0; padding: 0 16px 16px; font-size: 15px; line-height: 1.6; color: var(--ink-2); }
