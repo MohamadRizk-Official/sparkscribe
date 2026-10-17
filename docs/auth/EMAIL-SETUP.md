@@ -69,7 +69,15 @@ Then **Authentication → Rate Limits → "Rate limit for sending emails"**. Wit
 (about 30/hour). Raise it to what your Resend plan allows per hour.
 
 ## 4. Templates (owner, same session as step 3)
-Generated files are in `docs/auth/email-templates/`; preview them all in a browser via `preview.html`. In
+**Fastest:** in the project folder, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\apply-email-templates.ps1`.
+It asks for a Supabase access token (hidden), shows the dry run, backs up the current templates to `qa/out/`, applies
+after you type `yes`, and reads everything back. The token must be a **scoped** token (supabase.com/dashboard/account/tokens)
+for this one project with exactly **Auth Config: Read-write** and **Project Settings: Read-write**. Supabase requires both
+for "Update auth service config"; with only the first, it answers `403 Missing required permission(s): project_admin_write`.
+Choose the shortest expiry and delete the token afterwards. Undo: `node scripts/apply-email-templates.mjs --restore
+qa/out/<backup>.json` (same token).
+
+**By hand** (no token): generated files are in `docs/auth/email-templates/`; preview them all in a browser via `preview.html`. In
 **Authentication → Emails → Templates**, for each template paste the **subject** from `subjects.json` and the
 **HTML** of the file:
 
