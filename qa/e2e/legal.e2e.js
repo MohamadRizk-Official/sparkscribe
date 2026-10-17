@@ -1,4 +1,4 @@
-// Draft legal pages and the links to them. Run on any harness page.
+// Legal pages (drafts until the owner approves them) and the links to them. Run on any harness page.
 import { waitFor, runTests, assert } from './lib.js';
 
 const page = async (path) => new DOMParser().parseFromString(await (await fetch(path)).text(), 'text/html');
@@ -22,24 +22,30 @@ export async function run() {
         assert(heading.test(d.querySelector('h1')?.textContent || ''), `${path} heading`);
         assert(/Draft, not yet in effect/.test(d.querySelector('.legal-banner')?.textContent || ''), `${path} draft banner`);
         assert(/\(draft\)/.test(d.title), `${path} title says draft`);
-        assert(d.querySelectorAll('.legal-flag').length > 5, `${path} review notes highlighted`);
+        assert(d.querySelectorAll('.legal-flag').length >= 1, `${path} remaining owner decisions highlighted`);
         assert(!/Draft for review, not legal advice/.test(d.body.textContent), `${path} internal reviewer note removed`);
       }
       const terms = await page('/terms');
-      assert(/not available yet/.test(terms.body.textContent) && /Cancellation/.test(terms.body.textContent) && /Refunds/.test(terms.body.textContent), 'terms cover paid plans being unavailable, cancellation and refunds');
+      const tt = terms.body.textContent;
+      assert(/Cancellation/.test(tt) && /Refunds/.test(tt) && /\$59 a year/.test(tt) && /doesn't apply to\s+yearly billing/.test(tt) && /Michigan/.test(tt), 'terms cover cancellation, refunds, yearly prices (no $1 offer on yearly) and Michigan law');
+      const pp = (await page('/privacy')).body.textContent;
+      assert(/Cloudflare \(Turnstile\)/.test(pp) && /Resend/.test(pp) && /exam date/.test(pp) && /monthly or yearly/.test(pp), 'privacy lists Turnstile and Resend, courses/exams, billing interval');
     }],
-    ['every main page links to Privacy and Terms; sign-up points to them without asking to "agree" to drafts', async () => {
-      const lib = await page('/library'); // signed out it redirects, so check its served HTML
-      assert([...lib.querySelectorAll('.legal-links a')].length === 2, '/library footer links (served HTML)');
+    ['every main page has the site footer (Pricing, Help, Contact, Privacy, Terms); sign-up asks for the age and Terms tick', async () => {
+      const want = ['/pricing', '/help', 'mailto:contact.hrstudios@gmail.com', '/privacy', '/terms'];
+      for (const path of ['/library', '/help']) { // served HTML (signed out, /library redirects)
+        const hrefs = [...(await page(path)).querySelectorAll('.foot-links a')].map((a) => a.getAttribute('href'));
+        assert(JSON.stringify(hrefs) === JSON.stringify(want), `${path} footer (served HTML): ${hrefs}`);
+      }
       for (const path of ['/', '/settings', '/pricing']) {
         const d = await open(path);
-        const hrefs = [...d.querySelectorAll('.legal-links a')].map((a) => a.getAttribute('href'));
-        assert(hrefs.includes('/privacy') && hrefs.includes('/terms'), `${path} footer links (${hrefs})`);
+        const hrefs = [...d.querySelectorAll('.foot-links a')].map((a) => a.getAttribute('href'));
+        assert(want.every((h) => hrefs.includes(h)), `${path} footer links (${hrefs})`);
       }
-      const d = await open('/auth?mode=signup');
-      const line = d.getElementById('authLegal');
-      assert(line && !line.classList.contains('hidden') && /Privacy Policy/.test(line.textContent) && !/agree/i.test(line.textContent), 'sign-up line shown, no "agree"');
       frame.remove();
+      // the sign-up tick (served HTML; when it's shown is covered by auth.e2e.js, which runs signed out)
+      const age = (await page('/auth')).getElementById('ageField');
+      assert(age && /13 or older/.test(age.textContent) && age.querySelector('#ageOk[type="checkbox"]') && age.querySelector('a[href="/terms"]') && age.querySelector('a[href="/privacy"]'), 'sign-up: age + Terms/Privacy tick');
     }],
   ]);
   return r;

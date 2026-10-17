@@ -1,0 +1,36 @@
+# student/v2 QA run (2026-10-17)
+
+Branch `student/v2` at the commits of 2026-10-17 (yearly billing, legal drafts). Harness = `qa/harness/dev-mock.mjs`
+(offline: mock Supabase in the browser, the real server code with a mock AI). Every suite was run as its header says
+(fresh harness where required).
+
+| Area | Suite | Result |
+|---|---|---|
+| Unit | `npm test` (16 files) | all pass |
+| Database (PGlite, every migration) | `npm run test:sql` (14 files, incl. course-exams 24, yearly-billing 26) | all pass |
+| Billing server (fake Stripe) | billing-server.test.mjs | 73/73 |
+| Billing, real Stripe TEST mode | stripe-real.test.mjs | 41/41 (incl. yearly 21–23) |
+| Spaced review | srs.e2e.js | 7/7 + home 1/1 |
+| Exam prep | exam.e2e.js | 7/7 |
+| Yearly UI (paid-plans harness) | yearly.e2e.js | 9/9 |
+| Billing UI, payments off | billing.e2e.js pricing/account/home | 3/3, 1/1, 4/4 |
+| Study engine / Create | study.e2e.js, create.e2e.js | 7/7, 5/5 |
+| Focused Review | focus-review.e2e.js run/run2 | 3/3, 4/4 |
+| Across recordings | across.e2e.js (7 stages) | 19/19 |
+| Library | library.e2e.js | 7/7 |
+| Transcript page | transcript, insights, export-ui | 8/8, 3/3, 4/4 |
+| Home save | home-save.e2e.js | 8/8 |
+| AI limits | ai-limits.e2e.js | 5/5 |
+| Settings | appearance, account-deletion | 5/5, 5/5 |
+| Auth | auth.e2e.js run/consent | 13/13, 3/3 |
+| Password reset | recovery.e2e.js | 22/22 |
+| CAPTCHA | captcha.e2e.js run (captcha-harness) / off | 16/16, 2/2 |
+| Shared-computer privacy | pending-privacy.e2e.js | 7/7 |
+| Security, save retry | security, save-retry | 4/4, 2/2 |
+| Legal + footer | legal.e2e.js (updated for the site footer and current drafts) | 2/2 |
+| Accessibility | a11y.e2e.js; axe scan (WCAG 2.1 A/AA, serious+critical) light and dark, incl. /help, yearly pricing, settings | 4/4; 0 violations |
+| Phone layout (375 px) | layout.e2e.js over 10 pages | no overflow |
+
+Not run here: `inputs.e2e.js` (needs a production build + static server for the FFmpeg cases) and `model-cache.e2e.js`
+(unchanged code). Notes: suites that mutate the harness store must start from a fresh harness, and the fixture helper
+must run after a reload that follows clearing sessionStorage (it writes back the page's in-memory database).
