@@ -34,3 +34,20 @@ Branch `student/v2` at the commits of 2026-10-17 (yearly billing, legal drafts).
 Not run here: `inputs.e2e.js` (needs a production build + static server for the FFmpeg cases) and `model-cache.e2e.js`
 (unchanged code). Notes: suites that mutate the harness store must start from a fresh harness, and the fixture helper
 must run after a reload that follows clearing sessionStorage (it writes back the page's in-memory database).
+
+## Release checks (2026-10-17, af3fb8f)
+- Legal: `build-legal --final` (no notes), `tests/legal-guard-test.mjs` 7/7 (a draft stops a production build; the
+  final pages build), `REQUIRE_FINAL_LEGAL=1` build passes, legal.e2e 2/2 (final pages, footer, sign-up tick).
+- Billing: billing-server 76/76 (checkout renewal text, optional Terms consent), real Stripe test mode 41/41 on the final
+  code, `scripts/billing-check.mjs` all ✓ on the test configuration.
+- Production deployment `sparkscribe-3tayxn24r` (main af3fb8f), www.spark-scribe.com:
+  every public page 200 (/, /pricing, /pricing?billing=year, /privacy, /terms, /help, /lecture-notes, /flashcards,
+  /exam-prep, /auth, /library, /settings, /account, sitemap, robots); Terms/Privacy final (effective October 17, 2026,
+  no draft markers); Pricing shows Free + Flash/Bolt/Thunder monthly and yearly ($59/$99/$149) from the database with
+  "Coming soon"; sign-up shows the age/Terms tick and Cloudflare Turnstile; theme switch works; no console errors;
+  phone-width (375 px) home, pricing and sign-up render correctly; `/api/billing` and `/api/insights` refuse unsigned
+  calls (401), `/api/stripe-webhook` refuses GET (405).
+- Not verifiable without an account sign-in (done in the harness on the same code): signed-in dashboard, Library,
+  courses/exam prep, study tools, spaced review, Settings. Owner smoke test recommended.
+- Rollback: previous production deployment `sparkscribe-a323queji` (main 50d49a5) is Ready and serving; Vercel Instant
+  Rollback restores it. Database changes are additive (no rollback needed).
