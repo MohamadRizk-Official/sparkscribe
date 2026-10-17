@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 import { TEMPLATES } from './build-email-templates.mjs';
 
 const REF = 'strkrrdndoofpcenopxk';
-const API = `https://api.supabase.com/v1/projects/${REF}/config/auth`;
+// SUPABASE_API_BASE only for testing the script against a local stand-in (qa/unit/apply-email-templates.test.mjs)
+const API = `${process.env.SUPABASE_API_BASE || 'https://api.supabase.com'}/v1/projects/${REF}/config/auth`;
 const TOKEN = process.env.SUPABASE_ACCESS_TOKEN;
 if (!TOKEN) { console.error('Set SUPABASE_ACCESS_TOKEN first (see the top of this file).'); process.exit(1); }
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -51,7 +52,7 @@ console.log('CAPTCHA:', cfg.security_captcha_enabled ? `on (${cfg.security_captc
 const arg = process.argv[2];
 if (arg === '--restore') {
   const backup = JSON.parse(readFileSync(process.argv[3], 'utf8'));
-  await api('PATCH', pick(backup));
+  await api('PATCH', Object.fromEntries(Object.entries(pick(backup)).filter(([, v]) => v != null))); // unset keys stay as Supabase has them
   console.log('Restored from', process.argv[3]);
   process.exit(0);
 }
