@@ -68,12 +68,13 @@ Legend: ✅ functional and verified (tests and/or real use) · 🟡 implemented,
 | Focused Review (weak concepts from quiz results; Bolt+) | 🟡 | Branch only; e2e + unit tested |
 | Across recordings: Ask and combined guide (Thunder) | 🟡 | Branch only; real-model tested $0.023 |
 | Four-tier billing: Stripe checkout, portal, webhooks, entitlements | 🟡 | Test mode 32/32 real scenarios; not in prod |
-| Yearly prices | ⬜ | Owner chose monthly + yearly; amounts not set. Needs: amounts, a DB change so yearly plans still get a monthly allowance (billing period = 1 year), yearly Stripe prices |
+| Yearly prices | 🟡 | $59/$99/$149 (owner 2026-10-17). DB migration yearly_billing applied (monthly allowance windows); Stripe TEST prices created; real test 41/41; live not configured |
 | AI usage ledger and limits | 🟡 | DB applied; enforcement off |
 | Account deletion | 🟡 | Migration applied; UI on branch |
-| Legal pages (/privacy, /terms) | 🟠 | Drafts; [CONFIRM] items remain; must add Turnstile + Resend |
+| Legal pages (/privacy, /terms) | 🟠 | Drafts updated 2026-10-17 (Michigan, Resend, Turnstile, yearly); 6 owner decisions remain; the release gate (docs/launch/24) |
+| Student landing pages (/lecture-notes, /flashcards, /exam-prep) | 🟡 | FAQ JSON-LD, sitemap |
 | Student dashboard (Continue Studying, recent, courses, what's next) | 🟡 | src/home/dashboard.js; harness-verified; branch only |
-| Course exam dates / study plan | 🟠 | src/home/exam.js; e2e 7/7. Needs migration 20261017200000_course_exams (NOT applied: blocked pending owner approval); hidden until applied |
+| Course exam dates / study plan | 🟡 | src/home/exam.js; e2e 7/7; migration course_exams applied to prod 2026-10-17 (owner-approved, SQL test 24) |
 | Flashcard spaced repetition | 🟡 | src/insights/srs.js, schedule in the set's progress (no schema change); e2e 7/7; home suggests due cards |
 | Theme circle transition | 🟡 | View Transitions from the button; instant with reduced motion/unsupported; 300 ms safety fallback |
 | Settings: Account, Plan & billing, Preferences, Privacy | 🟡 | Current-section nav, sidebar ≥980px, scrolling row on phones |
