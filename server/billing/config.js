@@ -2,7 +2,8 @@
 //
 // Plans (names, prices, monthly allowances) come from the database table billing_plans, the single source of
 // truth shared with the browser. Stripe price IDs differ between test and live mode, so they come from
-// server environment variables named after the plan: STRIPE_FLASH_PRICE_ID, STRIPE_BOLT_PRICE_ID, STRIPE_THUNDER_PRICE_ID.
+// server environment variables named after the plan: STRIPE_FLASH_PRICE_ID, STRIPE_BOLT_PRICE_ID, STRIPE_THUNDER_PRICE_ID,
+// and for yearly billing STRIPE_FLASH_YEARLY_PRICE_ID, STRIPE_BOLT_YEARLY_PRICE_ID, STRIPE_THUNDER_YEARLY_PRICE_ID.
 // Secrets (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, BILLING_DB_SECRET) are read here only, on the server.
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
@@ -85,19 +86,23 @@ export function billingDb() {
 }
 
 // ---------- plans ----------
-export const PLAN_COLUMNS = 'key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default';
+export const PLAN_COLUMNS = 'key, name, tagline, price_cents, yearly_price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default';
 let plansCache = null;
+export const clearPlansCache = () => { plansCache = null; }; // tests: see a catalogue change at once
 export async function loadPlans() {
   if (plansCache && plansCache.at > Date.now() - 60_000) return plansCache.plans;
   const sb = createClient(supabaseUrl(), supabaseKey(), { auth: noSession });
   // the four-tier lineup (tier 0 Free … 3 Thunder); retired plans (Plus, Pro) have no tier and are never offered
-  const { data, error } = await sb.from('billing_plans').select(PLAN_COLUMNS).not('tier', 'is', null).order('tier');
+  let { data, error } = await sb.from('billing_plans').select(PLAN_COLUMNS).not('tier', 'is', null).order('tier');
+  // a database without 20261017300000_yearly_billing.sql yet: monthly plans only (no yearly price -> never offered)
+  if (error?.code === '42703') ({ data, error } = await sb.from('billing_plans').select(PLAN_COLUMNS.replace('yearly_price_cents, ', '')).not('tier', 'is', null).order('tier'));
   if (error || !data?.length) throw new BillingError('Plans are unavailable right now. Try again.', { status: 503, code: 'plans_unavailable' });
   plansCache = { at: Date.now(), plans: data };
   return data;
 }
 
-const envName = (planKey) => `STRIPE_${planKey.toUpperCase()}_PRICE_ID`;
+export const INTERVALS = ['month', 'year'];
+const envName = (planKey, interval = 'month') => `STRIPE_${planKey.toUpperCase()}${interval === 'year' ? '_YEARLY' : ''}_PRICE_ID`;
 // The Stripe coupon that gives a plan its introductory price (Flash: $4.99 off the first month = $1). Created by
 // scripts/stripe-setup.mjs; separate in test and live mode, like the prices.
 export function introCouponFor(planKey) {
@@ -109,16 +114,24 @@ export function introCouponFor(planKey) {
 // another (otherwise one deployment would treat another's test subscriptions as orphans). Untagged objects (created
 // before this) are handled as before. BILLING_SCOPE is set only for local QA runs; deployments use "app".
 export const billingScope = () => (/^[a-z0-9:-]{1,40}$/.test(process.env.BILLING_SCOPE || '') ? process.env.BILLING_SCOPE : 'app');
-// The only way a Stripe price is chosen: from a plan key the server knows, never from the browser.
-export function priceIdFor(planKey) {
-  const id = process.env[envName(planKey)];
+// The only way a Stripe price is chosen: from a plan key and billing interval the server knows, never from the browser.
+export function priceIdFor(planKey, interval = 'month') {
+  if (!INTERVALS.includes(interval)) return null;
+  const id = process.env[envName(planKey, interval)];
   return id && /^price_[A-Za-z0-9]+$/.test(id) ? id : null;
 }
-// Reverse: which plan does a Stripe price belong to? (unknown price -> null, grants nothing)
+// Reverse: which plan does a Stripe price belong to? (unknown price -> null, grants nothing). Monthly and yearly
+// prices of a plan grant the same plan; the allowance renews monthly either way (private.entitlement).
 export async function planForPrice(priceId) {
+  return (await planAndIntervalForPrice(priceId))?.plan || null;
+}
+export async function planAndIntervalForPrice(priceId) {
   if (!priceId) return null;
-  const plans = await loadPlans();
-  return plans.find((p) => p.billing_interval && priceIdFor(p.key) === priceId)?.key || null;
+  for (const p of await loadPlans()) {
+    if (!p.billing_interval) continue;
+    for (const interval of INTERVALS) if (priceIdFor(p.key, interval) === priceId) return { plan: p.key, interval };
+  }
+  return null;
 }
 
 // Where Stripe sends people back to. Only this site's own hosts; never a value taken from the request body.

@@ -1,11 +1,12 @@
 // POST /api/billing { action, ... }   (signed-in users only)
 //   action "status"                     -> plan, usage, renewal date
 //   action "authorize", durationSeconds -> may a recording this long be transcribed now?
-//   action "checkout", plan: "flash"|"bolt"|"thunder" -> { url } Stripe Checkout (or a plan change for paid users)
+//   action "checkout", plan: "flash"|"bolt"|"thunder", interval: "month"|"year" (default month)
+//                                       -> { url } Stripe Checkout (or a plan change for paid users)
 //   action "portal"                     -> { url } Stripe Customer Portal
 //   action "delete_account"             -> cancels the account's Stripe subscriptions, then deletes the account
 // The user is always the one in the verified session token; the browser never names a user, customer,
-// price or plan status. Only a plan key is accepted, and the server maps it to its own Stripe price.
+// price or plan status. Only a plan key and an interval are accepted, and the server maps them to its own Stripe price.
 import { readJson, sendJson } from '../server/http.js';
 import { userClient, appOrigin, BillingError, billingLog, billingConfigured, isLiveMode, priceIdFor, loadPlans, paymentsEnabled } from '../server/billing/config.js';
 import { getStatus, authorize, createCheckout, createPortal, deleteAccount, scheduledChange } from '../server/billing/service.js';
@@ -30,6 +31,8 @@ export default async function handler(req, res) {
           ...(await getStatus(sb)),
           // whether upgrades can be bought here, and whether they are Stripe test payments (Preview)
           upgradesAvailable: paymentsEnabled() && (await loadPlans()).filter((p) => p.billing_interval).every((p) => priceIdFor(p.key)),
+          // yearly can be bought only when every paid plan has a yearly price on the site and in Stripe
+          yearlyAvailable: paymentsEnabled() && (await loadPlans()).filter((p) => p.billing_interval).every((p) => p.yearly_price_cents && priceIdFor(p.key, 'year')),
           testMode: billingConfigured() && !isLiveMode(),
           // the Account page asks for a scheduled plan change too (one Stripe read; never fails the status)
           ...(body.detail === true && { scheduledChange: await scheduledChange(sb, user).catch(() => null) }),
@@ -37,7 +40,7 @@ export default async function handler(req, res) {
       case 'authorize':
         return sendJson(res, 200, await authorize(sb, body.durationSeconds));
       case 'checkout':
-        return sendJson(res, 200, await createCheckout(sb, user, String(body.plan || ''), appOrigin(req)));
+        return sendJson(res, 200, await createCheckout(sb, user, String(body.plan || ''), appOrigin(req), body.interval == null ? 'month' : String(body.interval)));
       case 'portal':
         return sendJson(res, 200, await createPortal(sb, user, appOrigin(req)));
       case 'delete_account':

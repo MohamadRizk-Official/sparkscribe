@@ -36,7 +36,7 @@ const rest = http.createServer(async (req, res) => {
       return send(200, r.rows[0].r);
     }
     if (url.pathname === '/rest/v1/billing_plans' && req.method === 'GET') {
-      const r = await P.asAnon((d) => d.query(`select key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default from public.billing_plans where tier is not null order by tier`));
+      const r = await P.asAnon((d) => d.query(`select key, name, tagline, price_cents, yearly_price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default from public.billing_plans where tier is not null order by tier`));
       return send(200, r.rows);
     }
     send(404, { code: 'PGRST125', message: 'not in the stand-in' });
@@ -93,6 +93,7 @@ Object.assign(process.env, {
   NEXT_PUBLIC_SUPABASE_URL: `http://127.0.0.1:${restPort}`, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_qa',
   BILLING_DB_SECRET: SECRET, STRIPE_WEBHOOK_SECRET: 'whsec_qa_test', STRIPE_API_HOST: `127.0.0.1:${stripePort}`,
   STRIPE_FLASH_PRICE_ID: 'price_flash', STRIPE_BOLT_PRICE_ID: 'price_bolt', STRIPE_THUNDER_PRICE_ID: 'price_thunder',
+  STRIPE_FLASH_YEARLY_PRICE_ID: 'price_flashyear', STRIPE_BOLT_YEARLY_PRICE_ID: 'price_boltyear', STRIPE_THUNDER_YEARLY_PRICE_ID: 'price_thunderyear',
   STRIPE_FLASH_INTRO_COUPON: 'sparkscribe_flash_intro_499',
 });
 delete process.env.VERCEL;
@@ -115,7 +116,7 @@ const fakeSb = (uid) => ({
   from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: (await db.query('select stripe_customer_id, livemode from public.subscriptions where user_id = $1', [uid])).rows[0] || null }) }) }) }),
   rpc: async (fn) => (fn === 'billing_status' ? { data: await statusOf(uid), error: null } : { data: null, error: { code: 'PGRST202' } }),
 });
-const tryCheckoutFor = async (uid, plan) => { try { return await service.createCheckout(fakeSb(uid), { id: uid, email: `${uid.slice(0, 6)}@example.com` }, plan, 'http://localhost:5173'); } catch (e) { return e; } };
+const tryCheckoutFor = async (uid, plan, interval) => { try { return await service.createCheckout(fakeSb(uid), { id: uid, email: `${uid.slice(0, 6)}@example.com` }, plan, 'http://localhost:5173', interval); } catch (e) { return e; } };
 const tryCheckout = async (plan = 'flash') => tryCheckoutFor(user, plan);
 for (const [label, vars] of [['no key', {}], ['test key without the switch', { STRIPE_SECRET_KEY: 'sk_test_qa' }], ['live key without approval', { STRIPE_SECRET_KEY: 'sk_live_qa', BILLING_PAYMENTS_ENABLED: '1' }]]) {
   Object.assign(process.env, env(vars));
@@ -228,6 +229,49 @@ const returning = await P.createUser('returning@example.com');
 await db.query(`insert into private.billing_paid_history (user_id, livemode, first_plan) values ($1, false, 'flash')`, [returning]);
 const ret = await tryCheckoutFor(returning, 'flash');
 ok(ret.url && !lastCheckout.has('discounts[0][coupon]') && (await statusOf(returning)).introEligible === false, 'a returning customer (had Flash before) gets the regular $5.99, and the page is told so (introEligible: false)');
+// ---------- 3c. yearly billing ----------
+{
+  const yu = await P.createUser('yearly@example.com');
+  ok((await statusOf(yu)).introEligible === true, 'yearly: a new account (eligible for the monthly $1 offer)');
+  const before = stripeCalls.length;
+  const badI = await tryCheckoutFor(yu, 'flash', 'week');
+  ok(badI.code === 'bad_interval' && badI.status === 400 && stripeCalls.length === before, 'an unknown billing interval is refused before any Stripe call');
+  const yc = await tryCheckoutFor(yu, 'flash', 'year');
+  ok(yc.url && lastCheckout.get('line_items[0][price]') === 'price_flashyear' && lastCheckout.get('metadata[interval]') === 'year' && lastCheckout.get('subscription_data[metadata][interval]') === 'year',
+    'yearly Flash: Checkout uses the server’s yearly Flash price');
+  ok(!lastCheckout.has('discounts[0][coupon]') && lastCheckout.get('allow_promotion_codes') === 'false' && lastCheckout.get('metadata[intro]') === '0',
+    'yearly Flash never gets the $1 first-month coupon, even for an eligible account');
+  const mc = await tryCheckoutFor(yu, 'flash', 'month');
+  ok(mc.url && lastCheckout.get('line_items[0][price]') === 'price_flash' && lastCheckout.get('discounts[0][coupon]') === 'sparkscribe_flash_intro_499', '…while monthly Flash for the same account still gets it');
+  const dc = await tryCheckoutFor(yu, 'bolt');
+  ok(dc.url && lastCheckout.get('line_items[0][price]') === 'price_bolt', 'no interval given: monthly (older pages keep working)');
+  const savedY = process.env.STRIPE_THUNDER_YEARLY_PRICE_ID;
+  delete process.env.STRIPE_THUNDER_YEARLY_PRICE_ID;
+  const ny = await tryCheckoutFor(yu, 'thunder', 'year');
+  ok(ny.code === 'billing_not_configured' && /Yearly billing isn’t available/.test(ny.message) && /Nothing was charged/.test(ny.message), 'yearly price not configured → refused, nothing charged');
+  process.env.STRIPE_THUNDER_YEARLY_PRICE_ID = savedY;
+  await db.query(`update public.billing_plans set yearly_price_cents = null where key = 'bolt'`); config.clearPlansCache();
+  const noShown = await tryCheckoutFor(yu, 'bolt', 'year');
+  ok(noShown.code === 'billing_not_configured', 'a plan without a yearly price on the site can’t be bought yearly, even with a Stripe price');
+  await db.query(`update public.billing_plans set yearly_price_cents = 9900 where key = 'bolt'`); config.clearPlansCache();
+  // the webhook for a paid yearly subscription: Flash, 3 hours renewed monthly, yearly renewal date
+  const ycust = (await db.query('select stripe_customer_id from public.subscriptions where user_id = $1', [yu])).rows[0].stripe_customer_id;
+  subs.set('sub_year', subscription({ id: 'sub_year', customer: ycust, metadata: { supabase_user_id: yu, interval: 'year' }, items: { data: [{ id: 'si_y', price: { id: 'price_flashyear' }, current_period_start: now - 40 * 86400, current_period_end: now + 325 * 86400 }] } }));
+  const yd = await deliver(event('evt_year', 'customer.subscription.created', { id: 'sub_year' }));
+  const ys = await statusOf(yu);
+  ok(yd.statusCode === 200 && ys.plan === 'flash' && ys.billingInterval === 'year' && ys.monthlySeconds === 10800, 'webhook: a yearly Flash price grants Flash (billed yearly)');
+  ok(Date.parse(ys.renewsAt) === (now + 325 * 86400) * 1000 && Date.parse(ys.periodEnd) < Date.parse(ys.renewsAt) && Date.parse(ys.periodStart) > (now - 40 * 86400) * 1000,
+    'yearly: this month’s allowance window, inside the yearly period (renewsAt = the yearly renewal)');
+  ok(await config.planForPrice('price_boltyear') === 'bolt' && await config.planForPrice('price_bolt') === 'bolt' && await config.planForPrice('price_nope') === null, 'price → plan mapping covers monthly and yearly; unknown prices grant nothing');
+  ok(JSON.stringify(await config.planAndIntervalForPrice('price_thunderyear')) === JSON.stringify({ plan: 'thunder', interval: 'year' }), 'the interval is known from the price too');
+  // already paying yearly Flash: the same plan and interval again is refused; switching goes through the portal
+  const again = await tryCheckoutFor(yu, 'flash', 'year');
+  ok(again.code === 'already_on_plan' && /Flash \(yearly\)/.test(again.message), 'already on yearly Flash → “You’re already on Flash (yearly)”');
+  subs.set('sub_year', { ...subs.get('sub_year'), status: 'canceled' });
+  await deliver(event('evt_year_end', 'customer.subscription.deleted', { id: 'sub_year' }));
+  ok((await statusOf(yu)).plan === 'free' && (await statusOf(yu)).billingInterval === null, 'yearly canceled and ended → Free');
+}
+
 // a Checkout that completes unpaid (a delayed payment method) doesn't use the offer
 const pending = await P.createUser('pending@example.com');
 await tryCheckoutFor(pending, 'flash');

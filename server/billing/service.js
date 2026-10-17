@@ -4,11 +4,12 @@
 //   getStatus()          the signed-in user's plan, usage and renewal (from public.billing_status())
 //   authorize()          may this user start transcribing a recording of N seconds? (checked before work starts;
 //                        the database re-checks when the transcription is saved)
-//   createCheckout()     Stripe Checkout for Free -> Flash/Bolt/Thunder; a plan change for paid users (Customer Portal)
+//   createCheckout()     Stripe Checkout for Free -> Flash/Bolt/Thunder, monthly or yearly; a plan change for paid users
+//                        (Customer Portal)
 //   createPortal()       Stripe Customer Portal for the signed-in user's own customer
 //   handleEvent()        a verified Stripe webhook event -> synchronized subscription state
 //   deleteAccount()      stop billing in Stripe, then delete the account (nobody keeps paying for a deleted account)
-import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured, automaticTax, introCouponFor, billingScope } from './config.js';
+import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, INTERVALS, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured, automaticTax, introCouponFor, billingScope } from './config.js';
 
 const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
 const ACTIVE = (s) => PAID_STATUSES.has(s.status);
@@ -73,20 +74,23 @@ async function liveSubscription(customer) {
 }
 
 // ---------- Checkout / plan change ----------
-export async function createCheckout(sb, user, planKey, origin) {
+export async function createCheckout(sb, user, planKey, origin, interval = 'month') {
   assertPaymentsEnabled(); // before any Stripe or database call
+  if (!INTERVALS.includes(interval)) throw new BillingError('Choose monthly or yearly billing.', { status: 400, code: 'bad_interval' });
   const stripe = getStripe();
   const plans = await loadPlans();
   const plan = plans.find((p) => p.key === planKey && p.billing_interval);
   if (!plan) throw new BillingError('Choose Flash, Bolt or Thunder.', { status: 400, code: 'bad_plan' });
-  const price = priceIdFor(plan.key);
-  if (!price) throw new BillingError('This plan is not available yet.', { status: 503, code: 'billing_not_configured' });
+  // yearly needs both the yearly price on the site and the matching Stripe price, so the page and the charge agree
+  const price = interval === 'year' && !plan.yearly_price_cents ? null : priceIdFor(plan.key, interval);
+  if (!price) throw new BillingError(interval === 'year' ? 'Yearly billing isn’t available for this plan yet. Nothing was charged.' : 'This plan is not available yet.', { status: 503, code: 'billing_not_configured' });
+  const label = `${plan.name}${interval === 'year' ? ' (yearly)' : ''}`;
 
   const customer = await ensureCustomer(sb, user);
   const current = await liveSubscription(customer);
   if (current && PAID_STATUSES.has(current.status)) {
     const item = current.items.data[0];
-    if (item?.price?.id === price) throw new BillingError(`You're already on ${plan.name}.`, { status: 409, code: 'already_on_plan' });
+    if (item?.price?.id === price) throw new BillingError(`You're already on ${label}.`, { status: 409, code: 'already_on_plan' });
     // Already paying: change the plan through the Customer Portal, where Stripe shows the prorated amount and
     // the user confirms. No second subscription is ever created. SparkScribe's own portal configuration is required:
     // the account's default one doesn't list these prices, so Stripe would refuse the change.
@@ -101,14 +105,14 @@ export async function createCheckout(sb, user, planKey, origin) {
         after_completion: { type: 'redirect', redirect: { return_url: `${origin}/account?changed=1` } },
       },
     });
-    billingLog('plan_change_session', { user: user.id, to: plan.key });
+    billingLog('plan_change_session', { user: user.id, to: plan.key, interval });
     return { url: session.url, kind: 'change' };
   }
-  // The introductory price (Flash: $1 for the first month), only for an account the database says has never had a
-  // paid subscription nor used the offer. Decided here, never by the browser. If the coupon isn't configured the
-  // checkout is refused rather than charging a price the page didn't show.
+  // The introductory price (Flash: $1 for the first month), only on MONTHLY billing and only for an account the database
+  // says has never had a paid subscription nor used the offer. Decided here, never by the browser. If the coupon isn't
+  // configured the checkout is refused rather than charging a price the page didn't show. Yearly never gets it.
   let coupon = null;
-  if (plan.intro_price_cents != null) {
+  if (plan.intro_price_cents != null && interval === 'month') {
     const st = await getStatus(sb);
     if (st.introEligible === true) {
       coupon = introCouponFor(plan.key);
@@ -128,15 +132,15 @@ export async function createCheckout(sb, user, planKey, origin) {
     customer,
     client_reference_id: user.id,
     line_items: [{ price, quantity: 1 }],
-    metadata: { supabase_user_id: user.id, plan: plan.key, intro: coupon ? '1' : '0', sparkscribe_scope: billingScope() },
-    subscription_data: { metadata: { supabase_user_id: user.id, plan: plan.key, intro: coupon ? '1' : '0', sparkscribe_scope: billingScope() } },
+    metadata: { supabase_user_id: user.id, plan: plan.key, interval, intro: coupon ? '1' : '0', sparkscribe_scope: billingScope() },
+    subscription_data: { metadata: { supabase_user_id: user.id, plan: plan.key, interval, intro: coupon ? '1' : '0', sparkscribe_scope: billingScope() } },
     success_url: `${origin}/account?checkout=success`,
     cancel_url: `${origin}/pricing?checkout=canceled`,
     // the only discount is the server's introductory coupon; customers can't enter codes
     ...(coupon ? { discounts: [{ coupon }] } : { allow_promotion_codes: false }),
     ...(automaticTax() && { automatic_tax: { enabled: true }, billing_address_collection: 'required', customer_update: { address: 'auto', name: 'auto' } }),
   });
-  billingLog('checkout_session', { user: user.id, plan: plan.key, intro: Boolean(coupon) });
+  billingLog('checkout_session', { user: user.id, plan: plan.key, interval, intro: Boolean(coupon) });
   return { url: session.url, kind: 'checkout' };
 }
 
