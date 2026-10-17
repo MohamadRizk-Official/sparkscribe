@@ -54,3 +54,25 @@ export async function guardRecovery(session, pathname = location.pathname) {
   location.reload();
   return true;
 }
+
+// ---- Reset links from our own emails (#token_hash=…&type=recovery) ----
+// Supabase gives a session from such a link the sign-in method "otp", not "recovery", so it can't be told apart from a
+// normal sign-in. So the link never becomes a session in this browser: callback.js keeps its token in this tab only
+// (sessionStorage), the "choose a new password" form opens without any session, and the token is used once, when the
+// new password is submitted, in a separate in-memory client (auth.js). Nothing here signs anyone in.
+const RESET_LINK = 'sparkscribe.resetLink';
+const RESET_LINK_MAX_MS = 60 * 60 * 1000; // the link's own lifetime in Supabase is 1 hour (mailer_otp_exp 3600)
+export function keepResetLink(hash) {
+  try { sessionStorage.setItem(RESET_LINK, JSON.stringify({ hash: String(hash), at: Date.now() })); return true; } catch { return false; }
+}
+export function peekResetLink() {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(RESET_LINK) || 'null');
+    if (v && typeof v.hash === 'string' && v.hash.length >= 10 && Date.now() - v.at < RESET_LINK_MAX_MS) return v;
+  } catch { /* storage blocked */ }
+  dropResetLink();
+  return null;
+}
+// -> the link, removed from storage (single use)
+export function takeResetLink() { const v = peekResetLink(); dropResetLink(); return v; }
+export function dropResetLink() { try { sessionStorage.removeItem(RESET_LINK); } catch { /* storage blocked */ } }

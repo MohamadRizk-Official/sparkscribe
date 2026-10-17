@@ -74,7 +74,15 @@ function openDeleteDialog(user) {
     try {
       // no token (the check couldn't run)? still ask: Supabase decides, and says so if it requires one
       let token, problem = null;
-      try { token = await captcha?.token(); } catch (ce) { problem = ce.message; }
+      if (captcha?.enabled) {
+        let st = captcha.state();
+        if (st === 'loading' || st === 'verifying' || st === 'expired') st = await captcha.settle(10000);
+        if (st === 'interactive') throw new Error('Please complete the security check to continue.');
+        if (st === 'ready') token = captcha.take(); // never handed out twice
+        else problem = st === 'unavailable'
+          ? 'The security check couldn’t load. Check your connection (and any content blocker for challenges.cloudflare.com), then try again.'
+          : 'We couldn’t complete the security check. Please try again.';
+      }
       try { await deleteMyAccount(pw ? pw.value : null, token); } catch (de) {
         throw (problem && /security check/i.test(de.message) ? new Error(problem) : de);
       } finally { captcha?.reset(); }

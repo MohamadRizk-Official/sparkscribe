@@ -1,5 +1,5 @@
 // Account flows against the mocked auth server, using same-origin iframes so multi-page flows can be followed.
-// Run on any harness page: (await import('/qa/e2e/auth.e2e.js')).run()
+// Run from the blank host page: open /qa/e2e/host.html on the harness, then (await import('/qa/e2e/auth.e2e.js')).run()
 import { sleep, waitFor, knobs, runTests, assert, eq } from './lib.js';
 
 const TOKEN = 'sb-strkrrdndoofpcenopxk-auth-token';
@@ -58,7 +58,8 @@ export async function run() {
       signOutLocally();
       await open('/auth?mode=signup');
       await fill('new.person@example.com', 'a-good-password', 'a-good-password');
-      await waitFor(() => /confirmation link/i.test(msg()), { what: 'confirm message' });
+      await waitFor(() => /link to verify your email address, then sign in/i.test(msg()), { what: 'verify message' });
+      assert(!localStorage.getItem(TOKEN), 'not signed in by signing up');
     }],
     ['the confirmation email can be requested again (sign-up message offers it)', async () => {
       const btn = await waitFor(() => d().querySelector('#authMsg .auth-resend'), { what: 'resend button' });
@@ -96,6 +97,26 @@ export async function run() {
       await sleep(200);
       $('email').value = 'someone@example.com'; $('authForm').requestSubmit();
       await waitFor(() => /If an account exists/i.test(msg()), { what: 'reset message' });
+    }],
+    ['an unexpected server error is never shown as is: a general message instead', async () => {
+      signOutLocally();
+      await open('/auth');
+      knobs({ rawError: 'Database error: relation "auth.secret_table" at 10.0.0.3' });
+      await fill('qa@example.com', 'correct-horse-9');
+      await waitFor(() => /Something went wrong\. Please try again\./.test(msg()), { what: 'general message' });
+      assert(!/secret_table|10\.0\.0\.3/.test(d().body.textContent), 'server text not shown');
+      knobs({ rawError: null });
+    }],
+    ['a double click on Sign in sends one request', async () => {
+      signOutLocally();
+      await open('/auth?next=%2Flibrary');
+      signInLocally();
+      const $ = (id) => d().getElementById(id);
+      $('email').value = 'qa@example.com'; $('password').value = 'correct-horse-9';
+      sessionStorage.removeItem('__qaSignins');
+      $('authForm').requestSubmit(); $('authForm').requestSubmit();
+      await waitFor(() => w().location.pathname === '/library', { timeout: 6000, what: 'signed in' });
+      eq(Number(sessionStorage.getItem('__qaSignins') || 0), 1, 'password sign-in requests');
     }],
     ['crafted next= after sign-in stays on this site (D4)', async () => {
       signInLocally();

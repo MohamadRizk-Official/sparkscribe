@@ -16,24 +16,43 @@
   window.__qaKnobs = (k) => { sessionStorage.setItem('__qa', JSON.stringify({ ...knobs(), ...k })); if ('plan' in k) mirrorPlan(k.plan); return knobs(); };
   mirrorPlan(knobs().plan);
   window.__qaLog = [];
-  // ---- Cloudflare Turnstile stand-in (knob turnstile: 'pass' | 'fail' | 'slow' | 'expire' | 'interactive'). Defined before
+  // ---- Cloudflare Turnstile stand-in (knob turnstile: 'pass' | 'fail' | 'slow' | 'expire' | 'interactive' | 'unavailable';
+  // 'interactive' shows the checkbox and waits for window.__qaTurnstile.solve(); after one solve the next challenges pass
+  // silently, like Cloudflare, unless knob turnstileAgain is 'interactive'). Defined before
   // the app loads, so lib/captcha.js uses it instead of Cloudflare's script. Without the knob, a build with a Site Key
   // loads the real widget (Cloudflare's test keys work on localhost).
   {
     const tsMode = knobs().turnstile;
-    if (tsMode) {
+    if (tsMode === 'unavailable') {
+      // the script never loads (blocked or offline)
+      const append = Element.prototype.appendChild;
+      Element.prototype.appendChild = function (el) {
+        if (el?.tagName === 'SCRIPT' && /challenges\.cloudflare\.com/.test(el.src || '')) { setTimeout(() => el.onerror?.(new Event('error')), 30); return el; }
+        return append.call(this, el);
+      };
+      window.__qaTurnstile = { mode: tsMode, renders: 0 };
+    } else if (tsMode) {
       const widgets = {};
       let n = 0, issued = 0;
       const run = Date.now().toString(36) + Math.random().toString(36).slice(2, 6); // tokens are unique, as Cloudflare's are
-      const stats = (window.__qaTurnstile = { renders: 0, resets: 0, issued: 0, removed: 0, mode: tsMode });
+      const stats = (window.__qaTurnstile = { renders: 0, resets: 0, issued: 0, removed: 0, mode: tsMode, solved: 0 });
+      // the person ticks "Verify you are human"
+      stats.solve = () => {
+        const id = stats.waiting, w = widgets[id];
+        if (!w) return false;
+        stats.waiting = null; stats.solved++;
+        w.opts['after-interactive-callback']?.();
+        setTimeout(() => { if (!widgets[id]) return; w.opts.callback?.(`qa-token-${run}-${++issued}`); stats.issued = issued; }, 80);
+        return true;
+      };
       const issue = (id) => {
         const w = widgets[id];
         if (!w) return;
         const o = w.opts;
         if (tsMode === 'fail') return setTimeout(() => o['error-callback']?.('300030'), 80);
-        if (tsMode === 'interactive') {
-          o['before-interactive-callback']?.();
-          return setTimeout(() => { if (!widgets[id]) return; o['after-interactive-callback']?.(); o.callback?.(`qa-token-${run}-${++issued}`); stats.issued = issued; }, 1500);
+        if (tsMode === 'interactive' && (!stats.solved || knobs().turnstileAgain === 'interactive')) {
+          stats.waiting = id;
+          return setTimeout(() => o['before-interactive-callback']?.(), 60);
         }
         setTimeout(() => {
           if (!widgets[id]) return;
@@ -160,10 +179,13 @@
     if (p === '/auth/v1/user') {
       if (method === 'PUT') {
         // a new password (knob samePassword: Supabase refuses one equal to the current); kept so sign-in then needs it
+        const viaLink = (() => { try { return /qa_verify/.test(atob(((headers.get('authorization') || '').split('.')[1] || '').replace(/-/g, '+').replace(/_/g, '/'))); } catch { return false; } })();
         if (body?.password) {
           if (K.samePassword) return json({ code: 422, error_code: 'same_password', msg: 'New password should be different from the old password.' }, 422);
-          if (sessionStorage.getItem('__signedOut')) return json({ code: 403, error_code: 'session_not_found', msg: 'Session from session_id claim in JWT does not exist' }, 403);
+          if (K.weakPassword && !sessionStorage.getItem('__qaWeakSeen')) { sessionStorage.setItem('__qaWeakSeen', '1'); return json({ code: 422, error_code: 'weak_password', msg: 'Password is known to be weak and easy to guess' }, 422); }
+          if (!viaLink && sessionStorage.getItem('__signedOut')) return json({ code: 403, error_code: 'session_not_found', msg: 'Session from session_id claim in JWT does not exist' }, 403);
           sessionStorage.setItem('__qaPassword', body.password);
+          if (viaLink) sessionStorage.setItem('__qaPasswordViaLink', '1');
         }
         Object.assign(USER.user_metadata, body?.data || {}); if (body?.data?.terms_accepted_at) window.__qaKnobs({ noConsent: false }); return json(USER);
       }
@@ -176,6 +198,9 @@
       return new Response(null, { status: 204 });
     }
     if (p === '/auth/v1/token') {
+      // knob rawError: the server fails with internal text the page must never show
+      if (K.rawError) return json({ code: 500, error_code: 'unexpected_failure', msg: K.rawError }, 500);
+      if (body?.password) sessionStorage.setItem('__qaSignins', String(Number(sessionStorage.getItem('__qaSignins') || 0) + 1));
       if (body?.password === 'unconfirmed-password') return json({ error: 'invalid_grant', error_code: 'email_not_confirmed', error_description: 'Email not confirmed', msg: 'Email not confirmed' }, 400);
       if (body?.password === 'wrong-password') return json({ error: 'invalid_grant', error_description: 'Invalid login credentials', msg: 'Invalid login credentials' }, 400);
       // after a password change, only the new password signs in
@@ -193,8 +218,13 @@
       if (!body?.token_hash || /^bad/.test(body.token_hash) || used.includes(body.token_hash)) return json({ code: 403, error_code: 'otp_expired', msg: 'Email link is invalid or has expired' }, 403);
       sessionStorage.setItem('__qaUsedHashes', JSON.stringify([...used, body.token_hash]));
       if (body.type === 'email_change' && /half/.test(body.token_hash)) return json({ code: 200, msg: 'Confirmation link accepted. Please proceed to confirm link sent to the other email' });
-      sessionStorage.removeItem('__signedOut'); window.__qaKnobs({ signedOut: false, recovery: body.type === 'recovery', recoveryAgeS: 0 });
-      return json(sessionToken());
+      // a sign-in link (magiclink) is kept by the app's own client: this browser counts as signed in
+      if (body.type === 'magiclink') { sessionStorage.removeItem('__signedOut'); window.__qaKnobs({ signedOut: false, recovery: false }); }
+      // knobs verifyUserId / verifyEmail: the link belongs to another account than the default test user
+      const owner = { ...USER, id: K.verifyUserId || USER.id, email: K.verifyEmail || USER.email };
+      const t = Math.floor(Date.now() / 1000);
+      const otpToken = `${b64u({ alg: 'none' })}.${b64u({ sub: owner.id, role: 'authenticated', amr: [{ method: 'otp', timestamp: t }], qa_verify: body.type })}.qa`;
+      return json({ access_token: otpToken, refresh_token: `qa-verify-${body.type}`, token_type: 'bearer', expires_in: 3600, expires_at: t + 3600, user: owner });
     }
     if (p === '/auth/v1/signup') return json({ id: crypto.randomUUID(), email: body?.email, confirmation_sent_at: new Date().toISOString() });
     if (p === '/auth/v1/recover') return json({});

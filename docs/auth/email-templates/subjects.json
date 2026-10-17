@@ -1,0 +1,38 @@
+{
+  "confirm-signup": {
+    "subject": "Verify your email address — SparkScribe",
+    "supabase": "Confirm sign up (mailer_templates_confirmation_content)"
+  },
+  "reset-password": {
+    "subject": "Reset your SparkScribe password",
+    "supabase": "Reset password (mailer_templates_recovery_content)"
+  },
+  "magic-link": {
+    "subject": "Your SparkScribe sign-in link",
+    "supabase": "Magic link (mailer_templates_magic_link_content)"
+  },
+  "change-email": {
+    "subject": "Confirm your new email address — SparkScribe",
+    "supabase": "Change email address (mailer_templates_email_change_content)"
+  },
+  "invite": {
+    "subject": "You’re invited to SparkScribe",
+    "supabase": "Invite user (mailer_templates_invite_content)"
+  },
+  "reauthentication": {
+    "subject": "Your SparkScribe verification code",
+    "supabase": "Reauthentication (mailer_templates_reauthentication_content)"
+  },
+  "password-changed": {
+    "subject": "Your SparkScribe password was changed",
+    "supabase": "Security notification: Password changed (mailer_templates_password_changed_notification_content)"
+  },
+  "email-changed": {
+    "subject": "Your SparkScribe email address was changed",
+    "supabase": "Security notification: Email address changed (mailer_templates_email_changed_notification_content)"
+  },
+  "identity-linked": {
+    "subject": "A sign-in method was added to your SparkScribe account",
+    "supabase": "Security notification: Sign-in method linked (mailer_templates_identity_linked_notification_content)"
+  }
+}

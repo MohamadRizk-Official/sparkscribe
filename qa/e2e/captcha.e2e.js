@@ -1,7 +1,7 @@
 // Cloudflare Turnstile on the auth flows (lib/captcha.js), in the QA harness.
 //   run(): on the captcha-harness (a build WITH a Site Key; the harness's Turnstile stand-in via the `turnstile` knob):
-//          (await import('/qa/e2e/captcha.e2e.js')).run()
-//   off(): on an ordinary harness (a build WITHOUT a Site Key): (await import('/qa/e2e/captcha.e2e.js')).off()
+//          from /qa/e2e/host.html: (await import('/qa/e2e/captcha.e2e.js')).run()
+//   off(): on an ordinary harness (a build WITHOUT a Site Key), from /qa/e2e/host.html: (await import('/qa/e2e/captcha.e2e.js')).off()
 // Supabase's CAPTCHA check is imitated by the browser mock (knob captchaRequired: a valid, unused token is required).
 import { sleep, waitFor, knobs, runTests, assert, eq } from './lib.js';
 
@@ -25,21 +25,21 @@ const sent = () => JSON.parse(sessionStorage.getItem('__qaCaptcha') || '[]');
 const clearSent = () => sessionStorage.removeItem('__qaCaptcha');
 const signOutLocally = () => { knobs({ signedOut: true }); localStorage.removeItem(TOKEN); sessionStorage.setItem('__signedOut', '1'); };
 const signInLocally = () => { knobs({ signedOut: false }); sessionStorage.removeItem('__signedOut'); };
-function fill(email, password, confirm, { age = true } = {}) {
+function fill(email, password, confirm) {
   $('email').value = email; $('password').value = password; if (confirm != null) $('confirm').value = confirm;
-  if ($('ageOk')) $('ageOk').checked = age;
+  if ($('ageOk')) $('ageOk').checked = true;
   $('authForm').requestSubmit();
 }
 const reset = (k = {}) => { knobs({ turnstile: 'pass', captchaRequired: true, captchaRejectNext: false, failResend: false, ...k }); clearSent(); };
 
 export async function run() {
   const res = await runTests([
-    ['sign in: the request carries a Turnstile token; the widget is Managed, invisible unless needed', async () => {
+    ['sign in: the request carries a Turnstile token; the widget is Managed and always shown (no layout jumps)', async () => {
       reset(); signOutLocally();
       await open('/auth?next=%2Flibrary');
       const st = w().__qaTurnstile;
       assert(st?.renders === 1, 'one widget rendered');
-      eq(st.lastOptions.appearance, 'interaction-only', 'appearance');
+      eq(st.lastOptions.appearance, 'always', 'appearance');
       eq(st.lastOptions.size, 'flexible', 'size (fits narrow screens)');
       eq(st.lastOptions.action, 'auth', 'action');
       assert(/^[0-9A-Za-z_-]{10,}$/.test(st.lastOptions.sitekey), 'the public Site Key from VITE_TURNSTILE_SITE_KEY');
@@ -53,21 +53,18 @@ export async function run() {
       reset(); signOutLocally();
       await open('/auth');
       fill('qa@example.com', 'wrong-password');
-      await waitFor(() => /wrong email or password/i.test(msg()), { what: 'wrong password' });
+      await waitFor(() => /incorrect email or password/i.test(msg()), { what: 'wrong password' });
       signInLocally();
       fill('qa@example.com', 'correct-horse-9');
       await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in', timeout: 8000 });
       const s = sent();
       assert(s.length === 2 && s[0].token && s[1].token && s[0].token !== s[1].token, `two different tokens: ${s.map((x) => x.token)}`);
     }],
-    ['sign up and "send the link again": each carries its own token; the age/Terms tick is still required', async () => {
+    ['sign up and "send the link again": each carries its own token', async () => {
       reset(); signOutLocally();
       await open('/auth?mode=signup');
-      fill('new.person@example.com', 'a-good-password', 'a-good-password', { age: false });
-      await waitFor(() => /13 or older/i.test(msg()), { what: 'tick still required' });
-      eq(sent().length, 0, 'nothing sent without the tick');
       fill('new.person@example.com', 'a-good-password', 'a-good-password');
-      await waitFor(() => /confirmation link/i.test(msg()), { what: 'check your email' });
+      await waitFor(() => /verify your email address/i.test(msg()), { what: 'check your email' });
       const btn = await waitFor(() => d().querySelector('#authMsg .auth-resend'), { what: 'resend button' });
       btn.click();
       await waitFor(() => /Sent again/i.test(msg()), { what: 'resent' });
@@ -119,49 +116,119 @@ export async function run() {
       await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in', timeout: 8000 });
       assert(/-2$/.test(sent()[0]?.token || ''), `the fresh token (the second one issued): ${sent()[0]?.token}`);
     }],
-    ['submitting before the check has finished waits for it (button busy), then signs in', async () => {
+    ['submitting before an invisible check has finished: the button says "Checking…" (no spinner), then signs in', async () => {
       reset({ turnstile: 'slow' }); signOutLocally();
       await open('/auth');
       signInLocally();
       fill('qa@example.com', 'correct-horse-9');
       await sleep(400);
       assert($('submitBtn').disabled && sent().length === 0, 'waiting for the token, nothing sent yet');
+      eq($('submitBtn').textContent, 'Checking…', 'says what it waits for');
+      assert(!$('submitBtn').classList.contains('loading'), 'no spinner while only checking');
       await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in after the check', timeout: 10000 });
       assert(/^qa-token-/.test(sent()[0]?.token), 'with its token');
     }],
-    ['when Cloudflare asks for a click, the checkbox shows, the page points to it, and sign-in continues once it is ticked', async () => {
+    ['checkbox not ticked yet: Sign in answers at once, sends nothing, no spinner, keeps what was typed', async () => {
       reset({ turnstile: 'interactive' }); signOutLocally();
       await open('/auth');
-      await waitFor(() => $('captchaSlot').classList.contains('is-interactive'), { what: 'interactive shown' });
+      await waitFor(() => $('captchaSlot').classList.contains('is-interactive'), { what: 'checkbox shown' });
+      signInLocally();
+      const t0 = performance.now();
+      fill('qa@example.com', 'correct-horse-9');
+      await waitFor(() => /Please complete the security check to continue\./.test(msg()), { what: 'asked to complete the check', timeout: 1500 });
+      assert(performance.now() - t0 < 1000, 'answered at once');
+      eq(sent().length, 0, 'nothing sent');
+      assert(!$('submitBtn').disabled && !$('submitBtn').classList.contains('loading'), 'button idle, no spinner');
+      eq($('submitBtn').textContent, 'Sign in', 'button text unchanged');
+      eq($('email').value, 'qa@example.com', 'email kept'); eq($('password').value, 'correct-horse-9', 'password kept');
+      assert($('captchaSlot').classList.contains('attention'), 'the check is pointed out');
+      // ticking it clears the note; Sign in then goes out with its token
+      w().__qaTurnstile.solve();
+      await waitFor(() => $('authMsg').classList.contains('hidden'), { what: 'note cleared' });
+      $('authForm').requestSubmit();
+      await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in', timeout: 8000 });
+      assert(sent().length === 1 && /^qa-token-/.test(sent()[0].token), JSON.stringify(sent()));
+    }],
+    ['wrong password after ticking: the error shows, the widget stays, and the retry carries a NEW token', async () => {
+      reset({ turnstile: 'interactive' }); signOutLocally();
+      await open('/auth');
+      await waitFor(() => $('captchaSlot').classList.contains('is-interactive'), { what: 'checkbox shown' });
+      w().__qaTurnstile.solve();
+      await waitFor(() => $('captchaSlot').dataset.captcha === 'ready', { what: 'ticked' });
+      fill('qa@example.com', 'wrong-password');
+      await waitFor(() => /incorrect email or password/i.test(msg()), { what: 'wrong password' });
+      assert(!$('submitBtn').disabled && !$('submitBtn').classList.contains('loading'), 'button back to normal');
+      assert(!$('captchaSlot').classList.contains('hidden') && $('captchaSlot').getBoundingClientRect().height >= 60, 'widget still there');
+      eq($('password').value, 'wrong-password', 'password kept for correcting');
+      // one compact group: widget, message and button sit one form gap apart (no reserved holes, no inherited margins)
+      const r = (id) => $(id).getBoundingClientRect();
+      const gapAbove = r('authMsg').top - r('captchaSlot').bottom, gapBelow = r('submitBtn').top - r('authMsg').bottom;
+      assert(gapAbove >= 8 && gapAbove <= 16 && gapBelow >= 8 && gapBelow <= 16, `gaps: widget→message ${gapAbove}px, message→button ${gapBelow}px`);
+      eq($('authMsg').getAttribute('role'), 'alert', 'the error is announced');
+      // Cloudflare re-checks; after one pass it usually issues the next token without a click (as here)
+      await waitFor(() => $('captchaSlot').dataset.captcha === 'ready', { what: 'next token issued' });
+      signInLocally();
+      $('password').value = 'correct-horse-9'; $('authForm').requestSubmit();
+      await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in', timeout: 8000 });
+      const s2 = sent();
+      assert(s2.length === 2 && s2[0].token && s2[1].token && s2[0].token !== s2[1].token, `two different tokens: ${s2.map((x) => x.token)}`);
+    }],
+    ['…and if Cloudflare asks again after a failure, the person is asked again (never a stale token)', async () => {
+      reset({ turnstile: 'interactive', turnstileAgain: 'interactive' }); signOutLocally();
+      await open('/auth');
+      await waitFor(() => $('captchaSlot').classList.contains('is-interactive'), { what: 'checkbox shown' });
+      w().__qaTurnstile.solve();
+      await waitFor(() => $('captchaSlot').dataset.captcha === 'ready', { what: 'ticked' });
+      fill('qa@example.com', 'wrong-password');
+      await waitFor(() => /incorrect email or password/i.test(msg()), { what: 'wrong password' });
+      await waitFor(() => $('captchaSlot').dataset.captcha === 'interactive', { what: 'checkbox again' });
+      $('authForm').requestSubmit();
+      await waitFor(() => /Please complete the security check/.test(msg()), { what: 'asked again' });
+      eq(sent().length, 1, 'the used token was not sent again');
+      knobs({ turnstileAgain: null });
+    }],
+    ['signing out and back in starts a fresh check on the new page', async () => {
+      reset(); signInLocally();
+      await open('/library');
+      await sleep(300);
+      signOutLocally();
+      await open('/auth');
+      await waitFor(() => $('captchaSlot').dataset.captcha === 'ready', { what: 'fresh token on the new page' });
       signInLocally();
       fill('qa@example.com', 'correct-horse-9');
-      assert(/Verify you are human/.test(msg()), `the page points to the checkbox: ${msg()}`);
-      // the request waits for the click, then goes out with its token
-      await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in after the check', timeout: 8000 });
-      assert(/^qa-token-/.test(sent()[0]?.token || ''), 'with the token from the check');
+      await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in', timeout: 8000 });
+      assert(sent().length === 1 && /^qa-token-/.test(sent()[0].token), 'with a token from this page');
     }],
-    ['no widget for setting a new password or the age/Terms step (no CAPTCHA there)', async () => {
+    ['the script can\'t load: sign-in still works while Supabase\'s CAPTCHA is off; with it on, the page says why', async () => {
+      reset({ turnstile: 'unavailable', captchaRequired: false }); signOutLocally();
+      await open('/auth');
+      await waitFor(() => $('captchaSlot').dataset.captcha === 'unavailable', { what: 'unavailable', timeout: 20000 });
+      signInLocally();
+      fill('qa@example.com', 'correct-horse-9');
+      await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in without a token', timeout: 8000 });
+      reset({ turnstile: 'unavailable', captchaRequired: true }); signOutLocally();
+      await open('/auth');
+      await waitFor(() => $('captchaSlot').dataset.captcha === 'unavailable', { what: 'unavailable', timeout: 20000 });
+      fill('qa@example.com', 'correct-horse-9');
+      await waitFor(() => /security check couldn.t load/i.test(msg()), { what: 'explained' });
+      assert(!$('submitBtn').disabled, 'button usable');
+    }],
+    ['the reset email form has the check; the new-password form has none', async () => {
       reset(); signOutLocally();
       await open('/auth');
       $('forgotLink').click(); await sleep(100);
       assert(!$('captchaSlot').classList.contains('hidden'), 'forgot: shown');
-      signInLocally();
-      knobs({ noConsent: true });
-      await open('/auth?mode=consent&next=%2Flibrary');
-      await waitFor(() => /One more step/.test($('authTitle').textContent), { what: 'consent step' });
-      assert($('captchaSlot').classList.contains('hidden'), 'consent: no widget');
-      $('ageOk').checked = true; $('authForm').requestSubmit();
-      await waitFor(() => w().location.pathname === '/library', { what: 'consent recorded' });
-      knobs({ noConsent: false });
-      eq(sent().length, 0, 'no CAPTCHA request for the confirmation');
+      sessionStorage.removeItem('__signedOut');
+      knobs({ signedOut: false, recovery: true, recoveryAgeS: 0 });
+      await open('/auth?mode=update');
+      await waitFor(() => $('authTitle').textContent === 'Choose a new password', { what: 'new-password form' });
+      assert($('captchaSlot').classList.contains('hidden'), 'update: no widget');
+      knobs({ recovery: false });
     }],
     ['Google sign-in is not held up by the check (it isn\'t CAPTCHA-protected)', async () => {
       reset({ googleOn: true }); signOutLocally();
       await open('/auth?mode=signup');
-      const g = await waitFor(() => !$('googleWrap').classList.contains('hidden') && $('googleBtn'), { what: 'Google button' });
-      g.click();
-      await waitFor(() => /13 or older/i.test(msg()), { what: 'tick required for a new Google account' });
-      $('ageOk').checked = true;
+      const g = await waitFor(() => !$('googleBtn').classList.contains('hidden') && !$('googleBtn').disabled && $('googleBtn'), { what: 'Google button' });
       g.click();
       // the browser leaves for Google straight away (the frame becomes another origin)
       await waitFor(() => { try { return !/\/auth/.test(w().location.pathname); } catch { return true; } }, { what: 'redirected to Google', timeout: 5000 });

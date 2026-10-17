@@ -1,7 +1,6 @@
 import { decodeToMono16k, peaks, abortDecode } from './audio.js';
 import { nameMapFromSegments } from './lib/speaker-names.js';
 import { toggleDetails } from './lib/details-pop.js';
-import { relatedMaterialHtml, bindRelatedMaterial } from './lib/related-material.js';
 import { isConfigured } from './lib/supabase.js';
 import { mountAccountMenu, getSession } from './lib/account.js';
 import { saveTranscript, updateTranscriptText, updateRecordingType, stashPending, peekPending, clearPending } from './lib/transcripts.js';
@@ -1599,8 +1598,3 @@ mountMascot({ page: 'home' });
 // the speaker timeline is drawn on a canvas: redraw it when the theme changes
 window.addEventListener('sparkscribe:theme', () => { if (state?.lines) drawTimeline(); });
 
-// Recording + Documents entry points (coming soon): while transcribing, and on the finished recording
-for (const [id, mode] of [['relatedProcessing', 'processing'], ['relatedResult', 'result']]) {
-  const slot = document.getElementById(id);
-  if (slot) { slot.innerHTML = relatedMaterialHtml(mode); bindRelatedMaterial(slot); }
-}

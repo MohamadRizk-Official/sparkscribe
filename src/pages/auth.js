@@ -1,13 +1,16 @@
 // /auth — sign in, create account, forgot password, and set a new password (after a reset link).
-import { supabase, isConfigured, authSettings } from '../lib/supabase.js';
+// How the pieces fit (reset sessions, email links, Turnstile): docs/auth/README.md
+import { supabase, isConfigured, authSettings, isolatedClient, revokeSessionNow } from '../lib/supabase.js';
 import { mountAccountMenu, safeNext, getUser, hasConsent, recordConsent, signOut } from '../lib/account.js';
-import { createCaptcha, CaptchaError, isCaptchaRejection, CAPTCHA_REJECTED } from '../lib/captcha.js';
-import { recoveryAge, isFreshRecovery, currentSession, endSession } from '../lib/recovery.js';
+import { createCaptcha, isCaptchaRejection, CAPTCHA_REJECTED } from '../lib/captcha.js';
+import { recoveryAge, isFreshRecovery, currentSession, endSession, takeResetLink, peekResetLink, dropResetLink } from '../lib/recovery.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 const next = safeNext(params.get('next'), '/');
-const callbackUrl = (to) => `${location.origin}/auth/callback?next=${encodeURIComponent(to)}`;
+// `flow=signup` marks the link in a sign-up confirmation email: the callback confirms the address, signs this browser
+// out again and sends the person here to sign in (docs/auth/README.md)
+const callbackUrl = (to, flow) => `${location.origin}/auth/callback?next=${encodeURIComponent(to)}${flow ? `&flow=${flow}` : ''}`;
 
 const MODES = {
   signin: { title: 'Welcome back', sub: 'Sign in to save transcripts to your library and open them on any device.', submit: 'Sign in' },
@@ -19,11 +22,30 @@ const MODES = {
 };
 const PENDING_CONSENT = 'sparkscribe.consentAt'; // ticked on the sign-up tab before going to Google (this browser only)
 let mode = 'signin';
-let googleOn = false, socialMode = true;
+// The form's state: idle -> checking (taken at once, synchronously: a second click finds the form busy) -> verifying
+// (waiting a moment for Cloudflare; the button says "Checking…") -> submitting (the request is out; the only state
+// with a spinner) -> idle. Every path back ends in setPhase('idle'), so nothing can leave the button busy.
+let phase = 'idle';
+// A reset link from our email (lib/recovery.js): its token, and once used, the in-memory session it gave
+let resetLink = null, resetClient = null, resetToken = null;
 // Cloudflare Turnstile (lib/captcha.js): for the modes that call Supabase with an email and password or send an email.
 // Created the first time one of them is shown; off (no widget, no token) when the build has no Site Key.
 let captcha = null;
 const needsCaptcha = (m) => m === 'signin' || m === 'signup' || m === 'forgot';
+const CAPTCHA_PENDING = 'Please complete the security check to continue.';
+
+// One-time notes for the sign-in page, set by this site just before it signs a browser out (a link can't produce them):
+// after a new password was saved (RESET_DONE), and after an email address was confirmed (VERIFIED, set by callback.js).
+const RESET_DONE = 'sparkscribe.resetDone';
+const VERIFIED = 'sparkscribe.verified';
+function takeNote(key) {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(key) || 'null');
+    sessionStorage.removeItem(key);
+    return v && Date.now() - v.at < 600_000 ? v : null;
+  } catch { return null; }
+}
+let googleOn = false, socialMode = true;
 const showGoogle = () => $('googleWrap').classList.toggle('hidden', !(googleOn && socialMode));
 
 if (!isConfigured) {
@@ -33,36 +55,41 @@ if (!isConfigured) {
   init();
 }
 
-// Shown once on the sign-in page after a new password was saved (set just before the reset session is signed out;
-// a link can't produce this message by itself).
-const RESET_DONE = 'sparkscribe.resetDone';
-
 async function init() {
   const requested = params.get('mode');
   let session = await getUser(); // server-verified; clears a stale local session
   // A password-reset session (lib/recovery.js) is only for the "choose a new password" form, and only while the link is
   // fresh. Anywhere else on this page (or once it's old) it is signed out here, so the page works as signed out.
   const local = session ? await currentSession() : null;
-  if (session && recoveryAge(local) != null && !(requested === 'update' && isFreshRecovery(local))) {
+  const recovering = session && recoveryAge(local) != null;
+  // a reset link opened in this tab (callback.js kept its token here): the form works without any session
+  resetLink = requested === 'update' ? peekResetLink() : null;
+  if (recovering && !(requested === 'update' && isFreshRecovery(local))) {
     await endSession();
     session = null;
   }
-  // no account menu beside the new-password form: the reset session isn't a sign-in
-  if (!session || recoveryAge(local) == null) mountAccountMenu($('accountSlot'));
+  // no account menu beside the new-password form: the reset isn't a sign-in
+  if (!recovering && !resetLink) mountAccountMenu($('accountSlot'));
   // back (or forward) to a page kept in memory after signing out: show it as it is now
   window.addEventListener('pageshow', (e) => { if (e.persisted) location.reload(); });
-  let done = null;
-  try { done = JSON.parse(sessionStorage.getItem(RESET_DONE) || 'null'); sessionStorage.removeItem(RESET_DONE); } catch {}
-  if (params.get('reset') === 'done') history.replaceState(null, '', `/auth${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`);
-  if (!session && done && Date.now() - done.at < 600_000) {
+
+  const done = takeNote(RESET_DONE);
+  const verified = takeNote(VERIFIED);
+  if (params.has('reset') || params.has('verified')) history.replaceState(null, '', `/auth${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`);
+
+  if (!session && (done || verified)) {
     setMode('signin');
-    if (done.email) $('email').value = done.email;
-    showMsg('Password updated successfully. Please sign in with your new password.', 'success');
-    $('password').focus();
+    const note = done || verified;
+    if (note.email) $('email').value = note.email;
+    showMsg(done ? 'Password updated. Sign in with your new password.' : 'Email verified. Sign in to get started.', 'success');
+    (note.email ? $('password') : $('email')).focus();
   } else if (session && !hasConsent(session) && requested !== 'update') {
     setMode('consent');
   } else if (requested === 'consent' && !session) {
     setMode('signin');
+  } else if (requested === 'update' && resetLink) {
+    setMode('update');
+    $('password').focus();
   } else if (requested === 'update') {
     // Setting a new password needs the reset link from the email: a session that merely exists (a shared
     // computer, a stolen token) can't change the password and lock the owner out.
@@ -74,7 +101,7 @@ async function init() {
     location.replace(next); // already signed in
     return;
   } else {
-    setMode(requested === 'signup' ? 'signup' : 'signin');
+    setMode(requested === 'signup' ? 'signup' : requested === 'forgot' ? 'forgot' : 'signin');
   }
 
   // Google appears only when the provider is really on; a disabled button looked like a broken sign-in path
@@ -85,9 +112,9 @@ async function init() {
   $('backToSignin').addEventListener('click', (e) => { e.preventDefault(); setMode('signin'); });
   $('googleBtn').addEventListener('click', google);
   $('authForm').addEventListener('submit', submit);
-  $('consentSignOut')?.addEventListener('click', async (e) => { e.preventDefault(); await signOut(); location.replace('/'); });
   // leaving the password form without saving: the reset session ends here
-  $('cancelReset')?.addEventListener('click', async (e) => { e.preventDefault(); await endSession(); location.replace('/auth'); });
+  $('consentSignOut')?.addEventListener('click', async (e) => { e.preventDefault(); await signOut(); location.replace('/'); });
+  $('cancelReset').addEventListener('click', async (e) => { e.preventDefault(); dropResetLink(); if (recovering) await endSession(); location.replace('/auth'); });
 }
 
 function setMode(m) {
@@ -106,154 +133,252 @@ function setMode(m) {
   $('passwordField').classList.toggle('hidden', m === 'forgot' || m === 'consent');
   $('forgotLink').classList.toggle('hidden', m !== 'signin');
   $('confirmField').classList.toggle('hidden', !(m === 'signup' || m === 'update'));
+  $('password').autocomplete = m === 'signin' ? 'current-password' : 'new-password';
+  $('backToSignin').classList.toggle('hidden', m !== 'forgot');
+  $('cancelReset').classList.toggle('hidden', m !== 'update');
   $('authLegal')?.classList.toggle('hidden', m !== 'signup');
   $('ageField').classList.toggle('hidden', m !== 'signup' && m !== 'consent');
   $('consentSignOut')?.classList.toggle('hidden', m !== 'consent');
-  $('cancelReset')?.classList.toggle('hidden', m !== 'update');
-  $('password').autocomplete = m === 'signin' ? 'current-password' : 'new-password';
-  $('backToSignin').classList.toggle('hidden', m !== 'forgot');
-  if (needsCaptcha(m) && !captcha) captcha = createCaptcha($('captchaSlot'), { action: 'auth' });
+  if (needsCaptcha(m) && !captcha) {
+    captcha = createCaptcha($('captchaSlot'), { action: 'auth' });
+    // the check finished after the person was asked to complete it: that note has done its job
+    captcha.onChange((st) => { if (st === 'ready' && $('authMsg').dataset.captcha === '1') hideMsg(); });
+  }
   $('captchaSlot').classList.toggle('hidden', !needsCaptcha(m));
   hideMsg();
 }
 
-// A fresh single-use token for one Supabase request (undefined when Turnstile is off). If the check can't produce one
-// (Cloudflare unreachable, a blocker, a host not allowed for the widget), the request is still sent, without a token:
-// Supabase is the only gate. While its CAPTCHA protection is off, people sign in as usual (nobody is locked out by a
-// widget problem); once it's on, Supabase refuses the request and the page explains what went wrong with the check.
+// The Turnstile token for ONE request, following the widget's state (lib/captcha.js):
+//   ready        -> the token (never handed out twice)
+//   interactive  -> no request: the person is asked to complete the check (no spinner, nothing sent)
+//   loading / verifying / expired -> wait a moment (the button says "Checking…"), then decide again
+//   error / unavailable -> send without a token: Supabase is the only gate. While its CAPTCHA protection is off people
+//                  sign in as usual (nobody is locked out by a widget problem); once it's on, Supabase refuses and the
+//                  page says the check didn't go through.
+// -> { go: true, token } or { go: false } (the reason is already on screen)
 let captchaProblem = null;
-async function captchaToken() {
+async function captchaGate() {
   captchaProblem = null;
-  // Cloudflare is showing its checkbox: say so, rather than leave the person waiting on a busy button
-  if ($('captchaSlot')?.classList.contains('is-interactive')) showMsg('Please tick “Verify you are human” above to continue.', 'note');
-  try { return await captcha?.token(); } catch (err) {
-    captchaProblem = err instanceof CaptchaError ? err.message : 'We couldn’t complete the security check. Please try again.';
-    return undefined;
+  if (!captcha?.enabled) return { go: true, token: undefined };
+  let st = captcha.state();
+  if (st === 'loading' || st === 'verifying' || st === 'expired') {
+    setPhase('verifying');
+    st = await captcha.settle(10000);
   }
+  if (st === 'ready') return { go: true, token: captcha.take() };
+  if (st === 'interactive') { askForCheck(); return { go: false }; }
+  if (st === 'error' || st === 'unavailable') {
+    captchaProblem = st === 'unavailable'
+      ? 'The security check couldn’t load. Check your connection (and any content blocker for challenges.cloudflare.com), then try again.'
+      : 'We couldn’t complete the security check. Please try again.';
+    captcha.retry(); // a fresh challenge for the next attempt
+    return { go: true, token: undefined };
+  }
+  showMsg('The security check is taking longer than usual. Please try again in a moment.', 'error');
+  return { go: false };
+}
+function askForCheck() {
+  showMsg(CAPTCHA_PENDING, 'error');
+  $('authMsg').dataset.captcha = '1';
+  const slot = $('captchaSlot');
+  slot.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  slot.classList.remove('attention'); void slot.offsetWidth; slot.classList.add('attention');
 }
 
-function showMsg(text, kind = 'note', resendTo = null) { // kinds: note, error, success ('info' is a global tooltip class)
+// One line of feedback under the form. kinds: note, error, success, styled by is-<kind> (namespaced: a bare "error"
+// class picked up the site's error-panel margin). Errors are announced at once (role=alert), the rest politely.
+function showMsg(text, kind = 'note', resendTo = null) {
   const el = $('authMsg');
-  el.textContent = text;
-  el.className = `auth-msg ${kind}`;
+  const line = document.createElement('span');
+  line.className = 'auth-msg-text';
+  line.textContent = text;
+  el.replaceChildren(line);
+  el.className = `auth-msg is-${kind}`;
+  el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
+  delete el.dataset.captcha;
   if (resendTo) {
-    // the confirmation email didn't arrive (spam, typo-free but slow, or expired): ask for a fresh one
+    // the confirmation email didn't arrive (spam, slow, or the link expired): ask for a fresh one
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'auth-resend';
     b.textContent = 'Send the link again';
     b.addEventListener('click', () => resend(resendTo, b));
-    el.append(' ', b);
+    line.append(' ', b);
   }
 }
 async function resend(email, btn) {
+  if (phase !== 'idle') return;
+  phase = 'checking';
   btn.disabled = true;
-  const token = await captchaToken();
-  const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: callbackUrl(next), captchaToken: token } });
+  const gate = await captchaGate();
+  if (!gate.go) { setPhase('idle'); btn.disabled = false; return; }
+  setPhase('submitting');
+  const { error } = await supabase.auth.resend({ type: 'signup', email, options: { emailRedirectTo: callbackUrl(next, 'signup'), captchaToken: gate.token } });
+  setPhase('idle');
   captcha?.reset();
   if (error) { btn.disabled = false; return showMsg(explain(error), 'error'); }
-  showMsg(`Sent again to ${email}. It can take a few minutes; check spam too. The link works in this browser.`, 'success');
+  showMsg(`Sent again to ${email}. It can take a few minutes; check spam too.`, 'success');
 }
 function hideMsg() { $('authMsg').className = 'auth-msg hidden'; }
 
-function busy(on) {
-  $('submitBtn').disabled = on;
-  $('submitBtn').classList.toggle('loading', on);
+function setPhase(p) {
+  phase = p;
+  const btn = $('submitBtn');
+  btn.disabled = p !== 'idle';
+  btn.classList.toggle('loading', p === 'submitting');
+  btn.setAttribute('aria-busy', String(p !== 'idle'));
+  btn.textContent = p === 'verifying' ? 'Checking…' : MODES[mode].submit;
 }
 
-// Supabase error messages, made friendlier where it matters.
+// Supabase errors in our own words. Anything unrecognised gets a general message: server text never reaches the page.
 function explain(error) {
   const msg = error?.message || String(error);
+  const code = error?.code || '';
   if (isCaptchaRejection(error)) return captchaProblem || CAPTCHA_REJECTED;
-  if (error?.code === 'same_password' || /different from the old password/i.test(msg)) return 'Choose a password that’s different from your current one.';
-  if (error?.code === 'weak_password' || /weak|pwned|leaked/i.test(msg)) return 'Choose a stronger password: this one is too easy to guess or has appeared in a data breach.';
+  if (code === 'same_password' || /different from the old password/i.test(msg)) return 'Choose a password that’s different from your current one.';
+  if (code === 'weak_password' || /weak|pwned|leaked/i.test(msg)) return 'Choose a stronger password: this one is too easy to guess or has appeared in a data breach.';
   if (error?.name === 'AuthSessionMissingError' || /session missing|session_not_found|refresh token/i.test(msg)) return 'Your reset link has expired. Request a new one below.';
-  if (/invalid login credentials/i.test(msg)) return 'Wrong email or password.';
-  if (/email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox (and spam) for the link we sent.';
-  // the email service refused or failed: not the user's fault, and retrying right away rarely helps
+  if (code === 'invalid_credentials' || /invalid login credentials/i.test(msg)) return 'Incorrect email or password.';
+  if (code === 'email_not_confirmed' || /email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox (and spam) for the link we sent.';
+  // the email service refused or failed: not the person's fault, and retrying right away rarely helps
   if (/not authori[sz]ed|error sending|sending (confirmation|recovery|magic link)|smtp/i.test(msg)) return "We couldn't send the email just now. Please try again in a few minutes; if it keeps happening, contact support.";
-  if (/already registered|already exists/i.test(msg)) return 'An account with this email already exists. Try signing in.';
-  if (/rate limit|too many/i.test(msg)) return 'Too many attempts. Please wait a minute and try again.';
-  if (/redirect/i.test(msg)) return `${msg} (The site address may not be allowed in the Supabase auth settings yet.)`;
-  return msg;
+  if (code === 'user_already_exists' || /already registered|already exists/i.test(msg)) return 'An account with this email already exists. Try signing in.';
+  if (code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit' || /rate limit|too many|security purposes/i.test(msg)) return 'Too many attempts. Please wait a minute and try again.';
+  if (code === 'signup_disabled') return 'New accounts can’t be created right now.';
+  return 'Something went wrong. Please try again.';
 }
 
 async function submit(e) {
   e.preventDefault();
+  if (phase !== 'idle') return; // one request at a time (a double click sends nothing twice)
+  phase = 'checking';
   hideMsg();
   const email = $('email').value.trim();
   const password = $('password').value;
   const confirm = $('confirm').value;
 
+  const invalid = (text) => { setPhase('idle'); showMsg(text, 'error'); };
   if (mode === 'consent') {
-    if (!$('ageOk').checked) return showMsg('Please confirm you’re 13 or older and agree to the Terms to continue.', 'error');
-    busy(true);
-    try { await recordConsent(); location.replace(next); } catch (err) { showMsg(explain(err), 'error'); busy(false); }
+    if (!$('ageOk').checked) return invalid('Please confirm you’re 13 or older and agree to the Terms to continue.');
+    setPhase('submitting');
+    try { await recordConsent(); phase = 'leaving'; location.replace(next); } catch (err) { setPhase('idle'); showMsg(explain(err), 'error'); }
     return;
   }
-  if (mode !== 'update' && !/^\S+@\S+\.\S+$/.test(email)) return showMsg('Enter a valid email address.', 'error');
-  if ((mode === 'signin' || mode === 'signup' || mode === 'update') && password.length < 8) return showMsg('Passwords need at least 8 characters.', 'error');
-  if ((mode === 'signup' || mode === 'update') && password !== confirm) return showMsg("The two passwords don't match.", 'error');
-  if (mode === 'signup' && !$('ageOk').checked) return showMsg('Please confirm you’re 13 or older and agree to the Terms to create an account.', 'error');
+  if (mode !== 'update' && !/^\S+@\S+\.\S+$/.test(email)) return invalid('Enter a valid email address.');
+  if ((mode === 'signin' || mode === 'signup' || mode === 'update') && password.length < 8) return invalid('Passwords need at least 8 characters.');
+  if ((mode === 'signup' || mode === 'update') && password !== confirm) return invalid("The two passwords don't match.");
+  if (mode === 'signup' && !$('ageOk').checked) return invalid('Please confirm you’re 13 or older and agree to the Terms to create an account.');
 
-  busy(true);
-  // sign-in, sign-up and the reset email carry a Turnstile token (once Supabase's CAPTCHA protection is on, it insists)
+  // sign-in, sign-up and the reset email carry a fresh Turnstile token (once Supabase's CAPTCHA protection is on, it insists)
   let token;
-  if (needsCaptcha(mode)) token = await captchaToken();
+  if (needsCaptcha(mode)) {
+    const gate = await captchaGate();
+    if (!gate.go) return setPhase('idle');
+    token = gate.token;
+  }
+  const sentWith = mode;
+  setPhase('submitting');
   try {
     if (mode === 'signin') {
       const { error } = await supabase.auth.signInWithPassword({ email, password, options: { captchaToken: token } });
       if (error) throw error;
       location.replace(next);
+      return;
     } else if (mode === 'signup') {
       // what the person confirmed, and when (kept with the account)
       const agreed = new Date().toISOString();
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: callbackUrl(next), captchaToken: token, data: { age_13_plus_confirmed_at: agreed, terms_accepted_at: agreed } } });
+      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: callbackUrl(next, 'signup'), captchaToken: token, data: { age_13_plus_confirmed_at: agreed, terms_accepted_at: agreed } } });
       if (error) throw error;
       if (data.session) return location.replace(next); // email confirmation is off
       // With confirmation on, Supabase deliberately gives the same answer for new and existing emails.
-      showMsg(`Check ${email} for a confirmation link. Open it in this browser to finish creating your account.`, 'success', email);
+      showMsg(`Check ${email} for a link to verify your email address, then sign in.`, 'success', email);
       $('authForm').reset();
     } else if (mode === 'forgot') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: callbackUrl('/auth?mode=update'), captchaToken: token });
       if (error) throw error;
-      showMsg(`If an account exists for ${email}, a reset link is on its way. Open it in this browser.`, 'success');
+      showMsg(`If an account exists for ${email}, a reset link is on its way. Check your inbox and spam.`, 'success');
+    } else if (mode === 'update' && resetLink) {
+      await saveWithResetLink(password);
     } else if (mode === 'update') {
-      // only a fresh reset session may set a password (another tab may have used it or signed out meanwhile)
+      // a reset session from an older email link (Supabase's own ?code= link): only while it is fresh
       const live = await currentSession();
       if (!live || !isFreshRecovery(live)) {
         await endSession();
         setMode('forgot');
         return showMsg('Your reset link has expired. Request a new one below.', 'error');
       }
-      const email = live.user?.email || '';
+      const owner = live.user?.email || '';
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
         if (/session missing|session_not_found/i.test(error.message || '') || error.name === 'AuthSessionMissingError') { await endSession(); setMode('forgot'); }
         throw error;
       }
-      // Saved. The reset session ends now (Supabase is asked to end the account's other sessions too) and the person
-      // signs in again with the new password; history is replaced, so Back can't return to a signed-in page.
-      try { sessionStorage.setItem(RESET_DONE, JSON.stringify({ at: Date.now(), email })); } catch {}
-      await endSession({ everywhere: true });
-      $('authForm').reset();
-      location.replace('/auth?reset=done');
-      return;
+      await passwordSaved(owner, () => endSession({ everywhere: true }));
     }
   } catch (err) {
-    showMsg(explain(err), 'error', mode === 'signin' && /email not confirmed/i.test(err?.message || '') ? email : null);
+    const unconfirmed = mode === 'signin' && (err?.code === 'email_not_confirmed' || /email not confirmed/i.test(err?.message || ''));
+    showMsg(explain(err), 'error', unconfirmed ? email : null);
   } finally {
-    busy(false);
-    if (needsCaptcha(mode)) captcha?.reset(); // a token works once: get the next one ready for another attempt
+    if (phase === 'submitting') setPhase('idle');
+    if (needsCaptcha(sentWith)) captcha?.reset(); // that token is used: the next attempt gets a new one
   }
+}
+
+// A reset link from our email: its token is used only now, together with the new password, in a separate in-memory
+// session. Nothing is stored in this browser and nobody is signed in here, so the link can never open the app; the
+// account is then signed out everywhere and the person signs in with the new password.
+async function saveWithResetLink(password) {
+  if (!resetClient) {
+    const link = takeResetLink(); // used once: a refresh after this can't try it again
+    const iso = link && isolatedClient();
+    const { data: verified, error } = link ? await iso.auth.verifyOtp({ token_hash: link.hash, type: 'recovery' }) : { error: true };
+    if (error) {
+      resetLink = null;
+      setMode('forgot');
+      showMsg('That reset link has expired or was already used. Request a new one below.', 'error');
+      return;
+    }
+    resetClient = iso; // a refused password (too weak, same as before) can be fixed without a new link
+    resetToken = verified?.session?.access_token || null;
+    // leaving the page before the password is saved ends that session on the server too (nothing is left behind)
+    window.addEventListener('pagehide', endResetClient, { once: true });
+  }
+  const { data, error } = await resetClient.auth.updateUser({ password });
+  if (error) throw error;
+  const owner = data?.user?.email || '';
+  await passwordSaved(owner, async () => {
+    window.removeEventListener('pagehide', endResetClient);
+    const c = resetClient, t = resetToken;
+    resetClient = null; resetToken = null;
+    const { error: out } = await c.auth.signOut({ scope: 'global' }).catch((e) => ({ error: e }));
+    if (out) revokeSessionNow(t); // the global sign-out failed: at least this session ends
+    resetLink = null;
+    if (await currentSession()) await endSession(); // whoever else was signed in here: the sign-in page comes next
+  });
+}
+
+function endResetClient() {
+  if (!resetClient) return;
+  resetClient = null;
+  revokeSessionNow(resetToken); // synchronous keepalive request: it goes out even as the page closes
+  resetToken = null;
+}
+
+// Saved: end the session(s), then the sign-in page says so (history replaced: Back can't return to a signed-in page)
+async function passwordSaved(email, endSessions) {
+  try { sessionStorage.setItem(RESET_DONE, JSON.stringify({ at: Date.now(), email })); } catch {}
+  await endSessions();
+  $('authForm').reset();
+  phase = 'leaving';
+  location.replace('/auth?reset=done');
 }
 
 async function google() {
   hideMsg();
   // creating an account with Google needs the same confirmation (signing in to an existing one doesn't)
   if (mode === 'signup' && !$('ageOk').checked) return showMsg('Please confirm you’re 13 or older and agree to the Terms first.', 'error');
-  // the tick travels with this browser to the callback, which records it on the new account (signing in to an
-  // existing account that already confirmed changes nothing; one that hasn't is asked after signing in)
+  // the tick travels with this browser to the callback, which records it on the new account (signing in to an existing
+  // account that already confirmed changes nothing; one that hasn't is asked after signing in)
   try { if (mode === 'signup') sessionStorage.setItem(PENDING_CONSENT, String(Date.now())); else sessionStorage.removeItem(PENDING_CONSENT); } catch {}
   const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: callbackUrl(next) } });
   if (error) showMsg(explain(error), 'error');

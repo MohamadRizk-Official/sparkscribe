@@ -22,6 +22,15 @@ export const supabase = isConfigured
 
 export const supabaseUrl = url || '';
 
+// End one session on the server right away, as a plain keepalive request sent synchronously (it still goes out when
+// called while the page is closing, unlike the client's own async signOut). scope 'local' = just this session.
+export function revokeSessionNow(accessToken) {
+  if (!isConfigured || !accessToken) return;
+  try {
+    fetch(`${url}/auth/v1/logout?scope=local`, { method: 'POST', keepalive: true, headers: { apikey: key, Authorization: `Bearer ${accessToken}` } }).catch(() => {});
+  } catch { /* nothing more can be done while the page closes */ }
+}
+
 // Which sign-in methods are switched on in the Supabase dashboard (public endpoint).
 let settingsPromise;
 export function authSettings() {
@@ -30,4 +39,11 @@ export function authSettings() {
     .then((r) => (r.ok ? r.json() : null))
     .catch(() => null);
   return settingsPromise;
+}
+
+// A second client that keeps its session in memory only (never in this browser's storage), never refreshes it and
+// never reads the URL: for using an email link without touching whoever is signed in here (callback.js, auth.js).
+export function isolatedClient() {
+  if (!isConfigured) return null;
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'sb-sparkscribe-isolated' } });
 }
