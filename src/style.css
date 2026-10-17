@@ -4344,3 +4344,22 @@ body.home-signed-in .dash-add-title { display: block; margin: 8px auto -8px; max
 .help-group details[open] summary::after { content: "−"; }
 .help-group summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; border-radius: 14px; }
 .help-group details p { margin: 0; padding: 0 16px 16px; font-size: 15px; line-height: 1.6; color: var(--ink-2); }
+
+/* ===== student landing pages (/lecture-notes, /flashcards, /exam-prep) ===== */
+.seo-page { max-width: 980px; width: 100%; margin: 0 auto; display: grid; gap: 34px; padding-bottom: 40px; }
+.seo-hero { display: grid; gap: 14px; padding-top: 12px; }
+.seo-h1 { margin: 0; font-size: clamp(32px, 4.4vw, 54px); line-height: 1.08; letter-spacing: -.025em; color: var(--ink); max-width: 18ch; }
+.seo-lead { margin: 0; font-size: 18px; line-height: 1.6; color: var(--ink-2); max-width: 62ch; }
+.seo-fine { margin: 0; font-size: 13.5px; color: var(--muted); }
+.seo-sec { display: grid; gap: 14px; }
+.seo-sec > h2 { margin: 0; font-size: 24px; color: var(--ink); }
+.seo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.seo-card { padding: 16px 18px; border-radius: 16px; background: var(--card); border: 1px solid var(--hair); display: grid; gap: 6px; }
+.seo-card h3 { margin: 0; font-size: 16.5px; color: var(--ink); }
+.seo-card p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink-2); }
+.seo-more { display: flex; flex-wrap: wrap; gap: 8px; }
+.seo-more a { padding: 8px 14px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); text-decoration: none; font-size: 14px; }
+.seo-more a:hover, .seo-more a:focus-visible { color: var(--ink); border-color: var(--line-2); }
+.foot-topics { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; font-size: 13px; }
+.foot-topics a { color: var(--muted); text-decoration: none; }
+.foot-topics a:hover, .foot-topics a:focus-visible { color: var(--ink); text-decoration: underline; }
