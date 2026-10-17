@@ -97,6 +97,8 @@ If any critical check in stages 4, 7 or 9 fails: undo that stage, as in the tabl
 | 2026-10-17 | 12f461d | phone header fits at 320–400 px (no sideways scroll) | `sparkscribe-1k37eybrr` |
 | 2026-10-17 | (3b86d09) | docs and the template script only | |
 | 2026-10-17 | 66fff07 | **fix:** reset links never become a session (Supabase issues "otp" sessions for token_hash links); CAPTCHA state machine (no endless spinner, immediate "complete the check", new token per attempt, widget always shown) | `sparkscribe-kysodgt2x` |
+| 2026-10-17 | c923a25 | an abandoned reset ends its in-memory session on the server (synchronous keepalive logout) | `sparkscribe-jz6ff16nk` |
+| 2026-10-17 | 01c6f9c | sign-in feedback: compact widget/message/button group (the `.error` class had inherited a 6vh margin), calmer message style, shorter copy | `sparkscribe-79grotfbp` |
 
 Rollback: `vercel promote <deployment>` with the row you want back, e.g. `sparkscribe-812xrc4fs-moerizz.vercel.app`
 (auth release without the UI port) or `sparkscribe-qsrx6784n-moerizz.vercel.app` (before both). Then revert `main` to match.
@@ -111,3 +113,21 @@ entry points and the Details popover (they depend on the unreleased speaker-iden
 account deletion, AI limits, study engines 2/3, Focused Review / Across. The home page keeps its labelled
 "Bring the slides too — Coming soon" section (part of Home v2). Auth suites on `release/ui`: recovery 17/17,
 auth 12/12, captcha 12/12 (mocked Supabase).
+
+
+## Supabase CAPTCHA enforcement (switched on by the owner 2026-10-17 05:35:37 UTC)
+Real server-side checks after activation (Supabase Auth logs + direct requests with addresses that don't exist):
+| Request | Token | Result |
+|---|---|---|
+| reset email (`/recover`) | none | 400 `captcha_failed` "no captcha_token found" |
+| reset email | invalid / dummy | 400 `captcha_failed` "invalid-input-response" (Cloudflare's own verdict, so the Secret Key works) |
+| password sign-in (`/token`) | none / invalid | 400 `captcha_failed` |
+| resend confirmation (`/resend`) | none | 400 `captcha_failed` |
+| magic link (`/otp`) | none | 400 `captcha_failed` |
+| owner's sign-ins on www.spark-scribe.com, 05:36:02 / 05:36:11 / 05:36:17 | real widget tokens | wrong, wrong, then correct: each **passed the CAPTCHA** (wrong password refused as "Invalid login credentials", then Login). Three accepted tokens in 15 s, so each was fresh (Cloudflare rejects a reused token). |
+| Google sign-in | not used (OAuth isn't CAPTCHA-checked) | started at 05:39:18; completion not yet seen in the logs |
+
+Cloudflare's automatic "Success!" (no click) is a normal, fresh token: Supabase accepted such tokens above.
+
+**Rollback:** Supabase → Authentication → Attack Protection → turn CAPTCHA off (takes effect at once). The site keeps sending
+tokens, which Supabase then ignores.
