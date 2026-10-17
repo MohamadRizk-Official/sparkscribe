@@ -71,5 +71,12 @@ The fixes in bf2d676 and 968d96b were **never on Production**. Every auth reques
 | Does a successful reset end the recovery session? | Production: no (it continues into `/library`). Release: yes (global sign-out; local fallback if the network fails). Other devices: refresh tokens are revoked; access tokens already issued stay valid until they expire (≤ 1 h by default), so this is **not** an instant revocation. |
 | Can a user reach another account through session confusion? | No path found. Sessions are per browser storage; a link can only sign in its own account. The release never mixes the confirming account into an existing session. |
 
+## Follow-up 2026-10-17: the branded reset link opened a normal session
+After the branded templates went live (config reload 04:19 UTC), a real reset at 04:31 showed `POST /verify` 200 +
+Login, then the form said "request a reset link", and the same session made `PUT /user` calls from the home page.
+Root cause: Supabase's `verifyPost` (used for `token_hash` links) always records the sign-in method `otp`, never
+`recovery`, so `lib/recovery.js` could not recognise it, and the session counted as a normal sign-in. Fixed in 66fff07:
+a reset link is used only together with the new password, in an in-memory client, and never stored (README.md).
+
 ## Fixed in `release/auth` (branch from `main`)
 See `docs/auth/README.md` for the design and `docs/auth/RELEASE.md` for the tests and rollout.

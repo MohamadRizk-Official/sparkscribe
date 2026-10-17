@@ -18,7 +18,26 @@ Related: `INVESTIGATION-2026-10-16.md` (why this was reworked), `EMAIL-SETUP.md`
 
 ## Flows
 
-### Password reset
+### Password reset (our email link, since 66fff07)
+Supabase gives a session from a `token_hash` link the sign-in method **"otp"**, not "recovery" (its `verifyPost` always
+issues `models.OTP`), so such a session can't be told from a normal sign-in. A reset link therefore **never becomes a
+session in the browser**:
+```
+Reset email link  /auth/callback#token_hash=…&type=recovery
+   │  nothing is verified: the token is kept in this tab only (sessionStorage "sparkscribe.resetLink", ≤ 1 h) and the
+   │  address is replaced (token out of the address bar and history)
+   ▼
+/auth?mode=update  "Choose a new password"  (no session, no account menu, no Turnstile)
+   │  Save → in a separate in-memory client: verifyOtp(token_hash, recovery) → updateUser({ password }) → signOut(global)
+   │  (a refused password, e.g. too weak, is retried with the same in-memory session; no new link needed)
+   ▼
+/auth  "Password updated successfully. Please sign in with your new password."
+```
+A scanner that opens the link changes nothing; any browser works; refresh keeps the form; a used or expired link says
+so and offers a new one. If another account is signed in on that browser it is signed out at the end (the sign-in
+page comes next).
+
+### Password reset (Supabase's own ?code= link: older emails, or templates reset to default)
 ```
 Forgot password (email + Turnstile token) ──► Supabase sends the reset email
    │
@@ -82,8 +101,16 @@ wrong. Please try again."
 * Old `{{ .ConfirmationURL }}` links (sent before the template switch) keep working in the browser that asked for them.
 
 ## Cloudflare Turnstile
-`src/lib/captcha.js`. Managed widget, `interaction-only`. One fresh token per request on: password sign-in, sign-up,
-reset email, resend confirmation. Not used on: Google, setting a new password, the callback.
+`src/lib/captcha.js`. Managed widget, appearance `always` (a 65 px box that stays: "Success" when Cloudflare is
+satisfied without a click, the checkbox when it wants one). States: loading, verifying, interactive, ready, expired,
+error, unavailable. The form (`auth.js`) is a state machine: idle → checking → verifying ("Checking…", ≤ 10 s, no
+spinner) → submitting (spinner) → idle.
+* Checkbox not ticked: Sign in answers at once, "Please complete the security check to continue.", sends nothing, keeps
+  the email and password, and points to the widget.
+* Each token is taken once; after every request the widget starts the next challenge, so a retry carries a new token.
+* A double click is caught before anything is awaited.
+Used on: password sign-in, sign-up, reset email, resend confirmation. Not used on: Google, setting a new password, the
+callback.
 **Fails open**: if the widget can't produce a token, the request is sent without one and Supabase decides. While
 Supabase CAPTCHA protection is off, nobody is locked out by a widget problem.
 * Site Key (public): Vercel `VITE_TURNSTILE_SITE_KEY` (Config type) for Production, and Preview scoped to

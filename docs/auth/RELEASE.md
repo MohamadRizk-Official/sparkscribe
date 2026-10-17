@@ -95,6 +95,8 @@ If any critical check in stages 4, 7 or 9 fails: undo that stage, as in the tabl
 | 2026-10-16 23:20 | 48db417 | auth release (this document) | `sparkscribe-812xrc4fs` |
 | 2026-10-17 | 0e0b514 | newer UI ported onto the auth release (branch `release/ui`, see below) | `sparkscribe-cqyjlfs49` |
 | 2026-10-17 | 12f461d | phone header fits at 320–400 px (no sideways scroll) | `sparkscribe-1k37eybrr` |
+| 2026-10-17 | (3b86d09) | docs and the template script only | |
+| 2026-10-17 | 66fff07 | **fix:** reset links never become a session (Supabase issues "otp" sessions for token_hash links); CAPTCHA state machine (no endless spinner, immediate "complete the check", new token per attempt, widget always shown) | `sparkscribe-kysodgt2x` |
 
 Rollback: `vercel promote <deployment>` with the row you want back, e.g. `sparkscribe-812xrc4fs-moerizz.vercel.app`
 (auth release without the UI port) or `sparkscribe-qsrx6784n-moerizz.vercel.app` (before both). Then revert `main` to match.
