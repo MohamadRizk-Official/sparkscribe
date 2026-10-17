@@ -112,6 +112,30 @@ export async function removeFromFolder(folderId, ids) {
   raise(error);
 }
 
+// ---- course exams ----
+// A course can carry its exam date and the topics the student expects (migration 20261017200000_course_exams).
+// -> Map(courseId -> { date: 'YYYY-MM-DD' | null, topics }), or null while the database doesn't have the columns
+// yet: then exams simply aren't offered.
+export async function listCourseExams() {
+  const { data, error } = await supabase.from('folders').select('id, exam_date, exam_topics');
+  if (error) { if (error.code === '42703' || error.code === 'PGRST204') return null; throw error; }
+  return new Map((data || []).map((f) => [f.id, { date: f.exam_date || null, topics: f.exam_topics || '' }]));
+}
+
+export async function setCourseExam(id, { date, topics }) {
+  const { error } = await supabase.from('folders')
+    .update({ exam_date: date || null, exam_topics: String(topics || '').trim().slice(0, 1000) || null }).eq('id', id);
+  if (error?.code === '23514') throw new Error('Pick a date between 2020 and 2100, and keep the topics under 1000 characters.');
+  raise(error);
+}
+
+// the lectures in a course (ids), newest membership first
+export async function courseLectureIds(folderId) {
+  const { data, error } = await supabase.from('folder_items').select('transcription_id').eq('folder_id', folderId).order('created_at', { ascending: false }).limit(200);
+  raise(error);
+  return (data || []).map((r) => r.transcription_id);
+}
+
 // ---- display helpers ----
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 // Snippet from search_library -> safe HTML with <mark> around matched words.

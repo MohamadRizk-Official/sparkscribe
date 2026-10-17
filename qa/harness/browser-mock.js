@@ -273,12 +273,15 @@
     }
     // ---- folders ----
     if (p === '/rest/v1/folders') {
-      if (method === 'GET') return out([...db.folders].sort((a, b) => a.name.localeCompare(b.name)).map((f) => ({ ...f, folder_items: [{ count: db.items.filter((i) => i.folder_id === f.id).length }] })));
+      // knob noExamColumns: the database before migration 20261017200000_course_exams (Postgres: undefined column)
+      if (K.noExamColumns && /exam_/.test((url.searchParams.get('select') || '') + JSON.stringify(body || {}))) return json({ code: '42703', message: 'column folders.exam_date does not exist' }, 400);
+      if (method === 'GET') return out(where(url, [...db.folders], ['id']).sort((a, b) => a.name.localeCompare(b.name)).map((f) => ({ exam_date: null, exam_topics: null, ...f, folder_items: [{ count: db.items.filter((i) => i.folder_id === f.id).length }] })));
       if (method === 'POST') { const f = { id: crypto.randomUUID(), name: body.name, created_at: new Date().toISOString() }; db.folders.push(f); persist(); return out([{ id: f.id, name: f.name }]); }
       if (method === 'PATCH') { for (const f of where(url, db.folders, ['id'])) Object.assign(f, body); persist(); return out([]); }
       if (method === 'DELETE') { const gone = where(url, db.folders, ['id']); db.folders = db.folders.filter((f) => !gone.includes(f)); db.items = db.items.filter((i) => !gone.some((g) => g.id === i.folder_id)); persist(); return out([]); }
     }
     if (p === '/rest/v1/folder_items') {
+      if (method === 'GET') return out(where(url, db.items, ['folder_id', 'transcription_id']));
       if (method === 'POST') { for (const it of [].concat(body)) if (!db.items.some((i) => i.folder_id === it.folder_id && i.transcription_id === it.transcription_id)) db.items.push(it); persist(); return out([]); }
       if (method === 'DELETE') { const gone = where(url, db.items, ['folder_id', 'transcription_id']); db.items = db.items.filter((i) => !gone.includes(i)); persist(); return out([]); }
     }

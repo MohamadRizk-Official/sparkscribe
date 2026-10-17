@@ -1,9 +1,11 @@
 // The signed-in home: "Welcome back" + Continue studying + What to study next + Recent lectures + My courses.
 // Everything shown comes from the student's own saved records (RLS: only their rows). Nothing is invented: a
 // suggestion appears only when a record supports it (a finished quiz with missed questions, a recent lecture with no
-// study material yet, flashcards the student rated that are due again). Courses are the Library's folders, shown under the name students use.
+// study material yet, flashcards the student rated that are due again). Courses are the Library's folders, shown under the name students use;
+// a course can have an exam date, which adds the Exam prep card (exam.js).
 import { supabase } from '../lib/supabase.js';
-import { listLibrary, listFolders, createFolder } from '../lib/library.js';
+import { listLibrary, listFolders, createFolder, listCourseExams } from '../lib/library.js';
+import { renderExamCard, examDialog, daysUntil, inDays } from './exam.js';
 import { fmtDuration } from '../lib/transcripts.js';
 import { readSrs, dueIndexes } from '../insights/srs.js';
 
@@ -37,9 +39,10 @@ const firstName = (user) => {
 const lectureUrl = (id, tab, tool) => `/transcript?id=${encodeURIComponent(id)}${tab ? `&tab=${tab}` : ''}${tool ? `&tool=${tool}` : ''}`;
 
 async function loadData() {
-  const [{ rows }, courses] = await Promise.all([
+  const [{ rows }, courses, exams] = await Promise.all([
     listLibrary({ view: 'all', sort: 'recent', limit: 6 }),
     listFolders().catch(() => []),
+    listCourseExams().catch(() => null), // null: exams not available (yet)
   ]);
   const ids = rows.map((r) => r.id);
   const [arts, ins, items, quizzes, decks] = await Promise.all([
@@ -68,7 +71,7 @@ async function loadData() {
   const missingIds = [...new Set([...quizRows, ...dueDecks].map((q) => q.transcription_id))].filter((id) => !ids.includes(id));
   const extraTitles = missingIds.length ? (await supabase.from('transcriptions').select('id, title').in('id', missingIds)).data || [] : [];
   const titleOf = new Map([...rows.map((r) => [r.id, r.title]), ...extraTitles.map((r) => [r.id, r.title])]);
-  return { rows, courses, kinds, courseOf, quizRows, dueDecks, titleOf };
+  return { rows, courses, exams, kinds, courseOf, quizRows, dueDecks, titleOf };
 }
 
 // Suggestions backed by a record; at most three, most useful first
@@ -122,7 +125,10 @@ export async function mountDashboard(root, session) {
   }
   root.querySelector('.dash-skel').remove();
   root.removeAttribute('aria-busy');
-  const { rows, courses, kinds, courseOf } = data;
+  const { rows, courses, exams, kinds, courseOf } = data;
+  // the nearest exam still to come (today counts)
+  const examOf = (c) => { const e = exams?.get(c.id); return e?.date && daysUntil(e.date) >= 0 ? e : null; };
+  const nextExam = courses.filter(examOf).sort((x, y) => examOf(x).date.localeCompare(examOf(y).date))[0] || null;
 
   if (!rows.length) {
     root.insertAdjacentHTML('beforeend', `<div class="dash-empty panel"><h2>Start with your first lecture</h2>
@@ -147,6 +153,7 @@ export async function mountDashboard(root, session) {
           : '<p class="dash-quiet">You’re up to date. When you finish a quiz or rate flashcards, what’s due to practise again shows up here.</p>'}
       </section>
     </div>
+    ${nextExam ? '<section class="dash-card dash-exam" aria-labelledby="dashExamTitle"></section>' : ''}
     <div class="dash-grid dash-grid-2">
       <section class="dash-card dash-recent" aria-labelledby="dashRecentTitle">
         <div class="dash-row-head"><h2 id="dashRecentTitle" class="dash-h">Recent lectures</h2><a class="dash-all" href="/library">View all</a></div>
@@ -154,7 +161,10 @@ export async function mountDashboard(root, session) {
       </section>
       <section class="dash-card dash-courses" aria-labelledby="dashCoursesTitle">
         <div class="dash-row-head"><h2 id="dashCoursesTitle" class="dash-h">My courses</h2></div>
-        ${courses.length ? `<ul class="dash-course-list">${courses.map((c) => `<li><a class="dash-course-item" href="/library?folder=${encodeURIComponent(c.id)}">${ICON.course}<span>${esc(c.name)}</span><small>${c.count} lecture${c.count === 1 ? '' : 's'}</small></a></li>`).join('')}</ul>`
+        ${courses.length ? `<ul class="dash-course-list">${courses.map((c) => {
+          const e = examOf(c);
+          return `<li class="dash-course-row"><a class="dash-course-item" href="/library?folder=${encodeURIComponent(c.id)}">${ICON.course}<span>${esc(c.name)}</span><small>${c.count} lecture${c.count === 1 ? '' : 's'}${e ? ` · <b class="exam-chip">Exam ${inDays(daysUntil(e.date))}</b>` : ''}</small></a>${exams ? `<button type="button" class="dash-exam-btn" data-exam="${esc(c.id)}" aria-label="${e ? 'Edit' : 'Add'} exam for ${esc(c.name)}">${e ? 'Edit exam' : 'Add exam'}</button>` : ''}</li>`;
+        }).join('')}</ul>`
           : '<p class="dash-quiet">Group lectures by class, like “Biology 201”. Optional: you can upload without one.</p>'}
         <form class="dash-new-course" novalidate><label class="sr-only" for="dashCourseName">New course name</label>
           <input id="dashCourseName" name="name" maxlength="80" autocomplete="off" placeholder="New course, e.g. Chemistry 101" />
@@ -162,6 +172,10 @@ export async function mountDashboard(root, session) {
         <p class="dash-form-msg" role="status"></p>
       </section>
     </div>`);
+  const editExam = async (c) => { if (await examDialog(c, exams?.get(c.id))) mountDashboard(root, session); };
+  root.querySelectorAll('[data-exam]').forEach((b) => b.addEventListener('click', () => editExam(courses.find((c) => c.id === b.dataset.exam))));
+  const examEl = root.querySelector('.dash-exam');
+  if (examEl) renderExamCard(examEl, nextExam, examOf(nextExam), { onEdit: () => editExam(nextExam) });
   const form = root.querySelector('.dash-new-course');
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
