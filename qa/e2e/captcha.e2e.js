@@ -229,6 +229,7 @@ export async function run() {
       reset({ googleOn: true }); signOutLocally();
       await open('/auth?mode=signup');
       const g = await waitFor(() => !$('googleBtn').classList.contains('hidden') && !$('googleBtn').disabled && $('googleBtn'), { what: 'Google button' });
+      $('ageOk').checked = true; // a new Google account needs the age/Terms tick
       g.click();
       // the browser leaves for Google straight away (the frame becomes another origin)
       await waitFor(() => { try { return !/\/auth/.test(w().location.pathname); } catch { return true; } }, { what: 'redirected to Google', timeout: 5000 });
