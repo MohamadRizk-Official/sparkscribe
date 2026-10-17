@@ -7,9 +7,21 @@
 // Supabase the token is simply ignored, so the site can ship before protection is switched on. The Secret Key lives
 // only in Supabase (Authentication → Attack Protection); it never reaches this code.
 //
-// The widget is Cloudflare's Managed mode with appearance "interaction-only": usually invisible and finished in about
-// a second; a checkbox appears only when Cloudflare wants a person to confirm. Tokens are single use and expire after
-// five minutes, so a form asks for a fresh one per attempt (token()) and starts the next one right after (reset()).
+// The widget is Cloudflare's Managed mode with appearance "always": a small box that is always there (no layout jumps),
+// shows "Success" when Cloudflare is satisfied without a click, and a "Verify you are human" checkbox when it wants one.
+// Tokens are single use and expire after five minutes, so each request takes the current token (take()) and the widget
+// starts the next challenge at once (reset()).
+//
+// States (state(), and onChange(fn)):
+//   loading      script or widget starting
+//   verifying    Cloudflare is checking, no input needed (usually about a second)
+//   interactive  Cloudflare shows its checkbox and waits for the person
+//   ready        a fresh, unused token is available
+//   expired      the token ran out unused; Cloudflare is fetching a new one
+//   error        the challenge failed (retry() starts again)
+//   unavailable  the script could not load (blocked, offline)
+// A form never waits on "interactive": it tells the person to complete the check. It waits briefly on loading /
+// verifying / expired (settle()), and on error / unavailable it sends without a token so Supabase decides.
 const SITE_KEY = String(import.meta.env.VITE_TURNSTILE_SITE_KEY || '').trim();
 export const captchaEnabled = /^[0-9A-Za-z_-]{10,}$/.test(SITE_KEY);
 const SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
@@ -40,54 +52,77 @@ function loadTurnstile(timeoutMs = 15000) {
   }));
 }
 
-// A widget in `container` (an empty element in the form). Returns { enabled, token(), reset(), remove() }; when Turnstile
-// is off, token() resolves to undefined and nothing is shown.
-export function createCaptcha(container, { action = 'auth' } = {}) {
-  if (!captchaEnabled || !container) return { enabled: false, token: async () => undefined, reset() {}, remove() {} };
-  let ts = null, id = null, token = null, state = 'loading', waiters = [];
-  const wake = () => { for (const w of waiters.splice(0)) w(); };
-  const restart = () => { token = null; state = 'loading'; try { ts?.reset(id); } catch { /* the next token() renders again */ } };
+// A widget in `container` (an empty element in the form). When Turnstile is off, state() is 'off' and take() gives undefined.
+export function createCaptcha(container, { action = 'auth', onChange } = {}) {
+  const off = { enabled: false, state: () => 'off', take: () => undefined, settle: async () => 'off', reset() {}, retry() {}, remove() {}, onChange() {} };
+  if (!captchaEnabled || !container) return off;
+  let ts = null, id = null, token = null, state = 'loading';
+  const listeners = new Set(onChange ? [onChange] : []);
+  const set = (next) => {
+    if (state === next) return;
+    state = next;
+    container.dataset.captcha = next;
+    container.classList.toggle('is-interactive', next === 'interactive');
+    for (const fn of listeners) { try { fn(next); } catch { /* a listener's problem stays there */ } }
+  };
   container.classList.add('captcha-slot');
-  const ready = loadTurnstile().then((t) => {
-    ts = t;
+  container.dataset.captcha = state;
+  const render = () => {
     id = ts.render(container, {
-      sitekey: SITE_KEY, action, appearance: 'interaction-only', size: 'flexible', theme: 'auto',
-      'refresh-expired': 'auto', retry: 'auto',
-      callback: (t2) => { token = t2; state = 'ready'; wake(); },
-      // an unused token expired (five minutes): Turnstile fetches a new one by itself
-      'expired-callback': () => { token = null; state = 'loading'; },
-      // an interactive check left unanswered for too long: start over
-      'timeout-callback': () => restart(),
-      'error-callback': () => { token = null; state = 'error'; wake(); return true; },
-      'before-interactive-callback': () => container.classList.add('is-interactive'),
-      'after-interactive-callback': () => container.classList.remove('is-interactive'),
+      sitekey: SITE_KEY, action, appearance: 'always', size: 'flexible', theme: 'auto',
+      'refresh-expired': 'auto', 'refresh-timeout': 'auto', retry: 'auto',
+      callback: (t) => { token = t; set('ready'); },
+      'expired-callback': () => { token = null; set('expired'); },
+      'timeout-callback': () => { token = null; set('interactive'); },
+      'error-callback': () => { token = null; set('error'); return true; },
+      'unsupported-callback': () => { token = null; set('unavailable'); },
+      'before-interactive-callback': () => { token = null; set('interactive'); },
+      'after-interactive-callback': () => { if (!token) set('verifying'); },
     });
-  }, () => { state = 'load-error'; wake(); });
+    if (!token && state === 'loading') set('verifying');
+  };
+  loadTurnstile().then((t) => { ts = t; render(); }, () => set('unavailable'));
 
-  return {
+  const api = {
     enabled: true,
-    // a fresh single-use token for one request; waits for the check to finish (or throws a CaptchaError to show)
-    async token({ timeoutMs = 30000 } = {}) {
-      await ready;
-      if (state === 'load-error') { loading = null; throw new CaptchaError('load'); }
-      if (state === 'error') restart(); // one more try on submit (e.g. a network blip earlier)
-      const until = Date.now() + timeoutMs;
-      while (!token && state !== 'error' && Date.now() < until) {
-        await new Promise((r) => { waiters.push(r); setTimeout(r, 250); });
-      }
-      if (!token) {
-        const code = state === 'error' ? 'failed' : 'timeout';
-        restart();
-        throw new CaptchaError(code);
-      }
+    state: () => state,
+    onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    // the current token for ONE request; it is never handed out twice
+    take() {
+      if (state !== 'ready' || !token) return undefined;
       const t = token;
-      token = null; // used: never sent twice
+      token = null;
+      set('verifying');
       return t;
     },
-    // after every attempt (success or not): start the next token in the background
-    reset() { if (id != null) restart(); },
-    remove() { try { if (id != null) ts?.remove(id); } catch { /* already gone */ } id = null; container.classList.remove('captcha-slot', 'is-interactive'); },
+    // wait (at most timeoutMs) until the check needs nothing more from Cloudflare: ready, interactive, error or unavailable
+    settle(timeoutMs = 10000) {
+      const done = (s) => s === 'ready' || s === 'interactive' || s === 'error' || s === 'unavailable';
+      if (done(state)) return Promise.resolve(state);
+      return new Promise((resolve) => {
+        const stop = api.onChange((s) => { if (done(s)) { clearTimeout(timer); stop(); resolve(s); } });
+        const timer = setTimeout(() => { stop(); resolve(state); }, timeoutMs);
+      });
+    },
+    // after every request (success or not): drop whatever token is left and start the next challenge
+    reset() {
+      token = null;
+      if (!ts || id == null) return;
+      set('verifying');
+      try { ts.reset(id); } catch { api.retry(); }
+    },
+    // start over after an error (or a script that has since loaded)
+    retry() {
+      token = null;
+      if (!ts) { loading = null; set('loading'); loadTurnstile().then((t) => { ts = t; render(); }, () => set('unavailable')); return; }
+      try { if (id != null) ts.remove(id); } catch { /* already gone */ }
+      id = null;
+      set('loading');
+      render();
+    },
+    remove() { try { if (id != null) ts?.remove(id); } catch { /* already gone */ } id = null; listeners.clear(); container.classList.remove('captcha-slot', 'is-interactive'); },
   };
+  return api;
 }
 
 // Supabase's reply when the token was missing, expired, reused or rejected by Cloudflare

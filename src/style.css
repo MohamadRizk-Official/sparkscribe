@@ -1266,8 +1266,11 @@ mark.cur { background: var(--k-fbbf24-60); }
 .auth-resend { margin-left: 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .auth-resend:disabled { opacity: .6; cursor: default; }
 /* Cloudflare Turnstile (lib/captcha.js): usually invisible; holds the checkbox when Cloudflare shows one */
-.captcha-slot { display: flex; justify-content: center; width: 100%; min-height: 0; }
-.captcha-slot.is-interactive { margin: 2px 0 6px; }
+.captcha-slot { display: flex; justify-content: center; width: 100%; min-height: 65px; margin: 2px 0 6px; border-radius: 10px; }
+/* asked to complete the check: a short pulse around the widget (not for reduced motion) */
+.captcha-slot.attention { animation: captcha-attn 1.2s ease-out 2; }
+@keyframes captcha-attn { 0% { box-shadow: 0 0 0 0 var(--k-22d3ee-35); } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .captcha-slot.attention { animation: none; outline: 2px solid var(--cyan); outline-offset: 3px; } }
 .captcha-slot.hidden { display: none; }
 .captcha-slot iframe { max-width: 100%; }
 .auth-foot { margin: 14px 0 0; font-size: 13.5px; }

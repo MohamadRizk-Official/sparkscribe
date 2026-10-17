@@ -10,13 +10,17 @@
 //     use them up, and they work in any browser.
 //
 // What each link may do:
-//   * password reset   -> a reset session that only reaches the new-password form (lib/recovery.js)
+//   * password reset, our link (#token_hash, type=recovery) -> NOT verified here. Its token is kept in this tab only and
+//     the new-password form opens; the token is used once, together with the new password, in a separate in-memory
+//     client (auth.js). Supabase would record such a session as "otp" (indistinguishable from a sign-in), so the link
+//     never becomes a session in this browser at all.
+//   * password reset, Supabase's ?code= link -> a reset session that only reaches the new-password form (lib/recovery.js)
 //   * email verification (sign-up) -> the address is confirmed, this browser is NOT left signed in by the link: the
 //     person signs in with their password next ("Email verified. Please sign in.")
 //   * Google sign-in   -> signed in, as before
 import { supabase, isConfigured, isolatedClient } from '../lib/supabase.js';
 import { safeNext, getSession } from '../lib/account.js';
-import { endSession } from '../lib/recovery.js';
+import { endSession, keepResetLink } from '../lib/recovery.js';
 
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
@@ -43,7 +47,7 @@ function verifiedSignIn(email) {
 }
 
 const EMAIL_LINKS = {
-  recovery: { title: 'Reset your password', text: 'Continue to choose a new password for your SparkScribe account.', btn: 'Continue' },
+  recovery: { title: 'Reset your password' }, // handled without a button (see emailLink)
   signup: { title: 'Verify your email address', text: 'Confirm this email address to activate your SparkScribe account.', btn: 'Verify email address' },
   email: { title: 'Verify your email address', text: 'Confirm this email address to activate your SparkScribe account.', btn: 'Verify email address' },
   magiclink: { title: 'Sign in to SparkScribe', text: 'Continue to sign in to your account.', btn: 'Sign in' },
@@ -71,14 +75,19 @@ function waitForButton(copy) {
 async function emailLink(tokenHash, type) {
   const copy = EMAIL_LINKS[type];
   if (!copy) return fail('This link didn’t work', 'Something went wrong with this link. Request a new one from the sign-in page.');
+  if (type === 'recovery') {
+    // nothing is used here (a scanner opening the link changes nothing): straight to the form, token kept in this tab
+    if (!/^[A-Za-z0-9_-]{10,200}$/.test(tokenHash) || !keepResetLink(tokenHash)) return fail('This link didn’t work', USED_UP);
+    return location.replace(RESET_FORM); // replace: the token leaves the address bar and the history
+  }
   await waitForButton(copy);
   history.replaceState(null, '', '/auth/callback'); // the token leaves the address bar before it is used
 
-  if (type === 'recovery' || type === 'magiclink') {
-    // these sign this browser in: a reset session (only the new-password form), or a sign-in link
+  if (type === 'magiclink') {
+    // a sign-in link signs this browser in
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     if (error) return fail('This link didn’t work', USED_UP);
-    return location.replace(type === 'recovery' ? RESET_FORM : next);
+    return location.replace(next);
   }
 
   // Confirmations: checked in a separate in-memory session that is signed out right after, so whoever is signed in
