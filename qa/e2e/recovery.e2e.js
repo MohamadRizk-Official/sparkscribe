@@ -85,7 +85,7 @@ export async function run() {
       w().location.href = '/auth?mode=update'; // a real navigation, so Back has somewhere to go
       await waitFor(() => title() === 'Choose a new password', { what: 'form' });
       fill('brand-new-pass-9');
-      await waitFor(() => /Password updated successfully\. Please sign in with your new password\./.test(msg()), { what: 'confirmation', timeout: 8000 });
+      await waitFor(() => /Password updated. Sign in with your new password./.test(msg()), { what: 'confirmation', timeout: 8000 });
       eq(at(), '/auth', 'the sign-in page, address cleaned');
       eq(title(), 'Welcome back', 'sign-in form');
       eq($('email').value, 'tester@example.com', 'email filled in');
@@ -116,7 +116,7 @@ export async function run() {
       knobs({ signedOut: true });
       await open('/auth?next=%2Flibrary');
       $('email').value = 'tester@example.com'; $('password').value = 'correct-horse-9'; $('authForm').requestSubmit();
-      await waitFor(() => /wrong email or password/i.test(msg()), { what: 'old password refused' });
+      await waitFor(() => /incorrect email or password/i.test(msg()), { what: 'old password refused' });
       $('password').value = 'brand-new-pass-9'; $('authForm').requestSubmit();
       await waitFor(() => at() === '/library', { what: 'signed in with the new password', timeout: 8000 });
       await sleep(800);
@@ -173,7 +173,7 @@ export async function run() {
       await open('/auth/callback#token_hash=pkce_qarec00002&type=recovery');
       await waitFor(() => title() === 'Choose a new password', { what: 'form', timeout: 8000 });
       fill('link-new-pass-7');
-      await waitFor(() => /Password updated successfully\. Please sign in with your new password\./.test(msg()), { what: 'confirmation', timeout: 8000 });
+      await waitFor(() => /Password updated. Sign in with your new password./.test(msg()), { what: 'confirmation', timeout: 8000 });
       eq(JSON.stringify(verifies().slice(-1)), JSON.stringify([{ type: 'recovery', hash: 'pkce_qarec00002' }]), 'verified once, as a reset');
       eq(sessionStorage.getItem('__qaPassword'), 'link-new-pass-7', 'password saved');
       eq(sessionStorage.getItem('__qaPasswordViaLink'), '1', 'by the link’s own in-memory session');
@@ -205,7 +205,7 @@ export async function run() {
       await waitFor(() => /stronger password/i.test(msg()), { what: 'weak refused' });
       eq(title(), 'Choose a new password', 'form stays');
       fill('a-much-better-pass-9');
-      await waitFor(() => /Password updated successfully/.test(msg()), { what: 'saved on the second try', timeout: 8000 });
+      await waitFor(() => /Password updated./.test(msg()), { what: 'saved on the second try', timeout: 8000 });
       eq(verifies().length, n0 + 1, 'the link was used once');
       knobs({ weakPassword: false });
     }],
@@ -241,7 +241,7 @@ export async function run() {
       await waitFor(() => title() === 'Choose a new password', { what: 'form', timeout: 8000 });
       assert(!$('accountSlot').children.length, 'the other account is not shown');
       fill('third-new-pass-1');
-      await waitFor(() => /Password updated successfully/.test(msg()), { what: 'saved', timeout: 8000 });
+      await waitFor(() => /Password updated./.test(msg()), { what: 'saved', timeout: 8000 });
       assert(!hasSession(), 'this browser signed out: the sign-in page comes next');
       knobs({ verifyEmail: null });
     }],
@@ -255,7 +255,7 @@ export async function run() {
       await sleep(300);
       eq(verifies().length, n0, 'nothing verified on opening');
       $('cbGo').click();
-      await waitFor(() => at().startsWith('/auth') && /Email verified\. Please sign in/.test(msg()), { what: 'verified, asked to sign in', timeout: 8000 });
+      await waitFor(() => at().startsWith('/auth') && /Email verified. Sign in to get started/.test(msg()), { what: 'verified, asked to sign in', timeout: 8000 });
       eq(at(), '/auth?next=%2Flibrary', 'address cleaned, still returns to the page asked for');
       eq($('email').value, 'new.person@example.com', 'email filled in');
       assert(!hasSession(), 'not signed in by the link');
@@ -276,7 +276,7 @@ export async function run() {
       resetLinkOpened(); knobs({ recovery: false });
       localStorage.setItem(TOKEN, JSON.stringify({ access_token: 'fake.jwt.token', refresh_token: 'r', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 3600, user: { id: '11111111-1111-4111-8111-111111111111', email: 'tester@example.com', user_metadata: {}, app_metadata: {} } }));
       await open('/auth/callback?next=%2F%2Fevil.example%2Fx&flow=signup');
-      await waitFor(() => /Email verified\. Please sign in/.test(msg()), { what: 'asked to sign in', timeout: 8000 });
+      await waitFor(() => /Email verified. Sign in to get started/.test(msg()), { what: 'asked to sign in', timeout: 8000 });
       eq(w().location.host, location.host, 'stayed on this site');
       assert(!hasSession(), 'signed out after confirming');
     }],

@@ -52,7 +52,7 @@ export async function run() {
       reset(); signOutLocally();
       await open('/auth');
       fill('qa@example.com', 'wrong-password');
-      await waitFor(() => /wrong email or password/i.test(msg()), { what: 'wrong password' });
+      await waitFor(() => /incorrect email or password/i.test(msg()), { what: 'wrong password' });
       signInLocally();
       fill('qa@example.com', 'correct-horse-9');
       await waitFor(() => w().location.pathname !== '/auth', { what: 'signed in', timeout: 8000 });
@@ -155,10 +155,15 @@ export async function run() {
       w().__qaTurnstile.solve();
       await waitFor(() => $('captchaSlot').dataset.captcha === 'ready', { what: 'ticked' });
       fill('qa@example.com', 'wrong-password');
-      await waitFor(() => /wrong email or password/i.test(msg()), { what: 'wrong password' });
+      await waitFor(() => /incorrect email or password/i.test(msg()), { what: 'wrong password' });
       assert(!$('submitBtn').disabled && !$('submitBtn').classList.contains('loading'), 'button back to normal');
       assert(!$('captchaSlot').classList.contains('hidden') && $('captchaSlot').getBoundingClientRect().height >= 60, 'widget still there');
       eq($('password').value, 'wrong-password', 'password kept for correcting');
+      // one compact group: widget, message and button sit one form gap apart (no reserved holes, no inherited margins)
+      const r = (id) => $(id).getBoundingClientRect();
+      const gapAbove = r('authMsg').top - r('captchaSlot').bottom, gapBelow = r('submitBtn').top - r('authMsg').bottom;
+      assert(gapAbove >= 8 && gapAbove <= 16 && gapBelow >= 8 && gapBelow <= 16, `gaps: widget→message ${gapAbove}px, message→button ${gapBelow}px`);
+      eq($('authMsg').getAttribute('role'), 'alert', 'the error is announced');
       // Cloudflare re-checks; after one pass it usually issues the next token without a click (as here)
       await waitFor(() => $('captchaSlot').dataset.captcha === 'ready', { what: 'next token issued' });
       signInLocally();
@@ -174,7 +179,7 @@ export async function run() {
       w().__qaTurnstile.solve();
       await waitFor(() => $('captchaSlot').dataset.captcha === 'ready', { what: 'ticked' });
       fill('qa@example.com', 'wrong-password');
-      await waitFor(() => /wrong email or password/i.test(msg()), { what: 'wrong password' });
+      await waitFor(() => /incorrect email or password/i.test(msg()), { what: 'wrong password' });
       await waitFor(() => $('captchaSlot').dataset.captcha === 'interactive', { what: 'checkbox again' });
       $('authForm').requestSubmit();
       await waitFor(() => /Please complete the security check/.test(msg()), { what: 'asked again' });

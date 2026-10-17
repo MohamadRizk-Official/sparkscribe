@@ -78,7 +78,7 @@ async function init() {
     setMode('signin');
     const note = done || verified;
     if (note.email) $('email').value = note.email;
-    showMsg(done ? 'Password updated successfully. Please sign in with your new password.' : 'Email verified. Please sign in to start using SparkScribe.', 'success');
+    showMsg(done ? 'Password updated. Sign in with your new password.' : 'Email verified. Sign in to get started.', 'success');
     (note.email ? $('password') : $('email')).focus();
   } else if (requested === 'update' && resetLink) {
     setMode('update');
@@ -174,10 +174,16 @@ function askForCheck() {
   slot.classList.remove('attention'); void slot.offsetWidth; slot.classList.add('attention');
 }
 
-function showMsg(text, kind = 'note', resendTo = null) { // kinds: note, error, success
+// One line of feedback under the form. kinds: note, error, success, styled by is-<kind> (namespaced: a bare "error"
+// class picked up the site's error-panel margin). Errors are announced at once (role=alert), the rest politely.
+function showMsg(text, kind = 'note', resendTo = null) {
   const el = $('authMsg');
-  el.textContent = text;
-  el.className = `auth-msg ${kind}`;
+  const line = document.createElement('span');
+  line.className = 'auth-msg-text';
+  line.textContent = text;
+  el.replaceChildren(line);
+  el.className = `auth-msg is-${kind}`;
+  el.setAttribute('role', kind === 'error' ? 'alert' : 'status');
   delete el.dataset.captcha;
   if (resendTo) {
     // the confirmation email didn't arrive (spam, slow, or the link expired): ask for a fresh one
@@ -186,7 +192,7 @@ function showMsg(text, kind = 'note', resendTo = null) { // kinds: note, error, 
     b.className = 'auth-resend';
     b.textContent = 'Send the link again';
     b.addEventListener('click', () => resend(resendTo, b));
-    el.append(' ', b);
+    line.append(' ', b);
   }
 }
 async function resend(email, btn) {
@@ -221,7 +227,7 @@ function explain(error) {
   if (code === 'same_password' || /different from the old password/i.test(msg)) return 'Choose a password that’s different from your current one.';
   if (code === 'weak_password' || /weak|pwned|leaked/i.test(msg)) return 'Choose a stronger password: this one is too easy to guess or has appeared in a data breach.';
   if (error?.name === 'AuthSessionMissingError' || /session missing|session_not_found|refresh token/i.test(msg)) return 'Your reset link has expired. Request a new one below.';
-  if (code === 'invalid_credentials' || /invalid login credentials/i.test(msg)) return 'Wrong email or password.';
+  if (code === 'invalid_credentials' || /invalid login credentials/i.test(msg)) return 'Incorrect email or password.';
   if (code === 'email_not_confirmed' || /email not confirmed/i.test(msg)) return 'Please confirm your email first. Check your inbox (and spam) for the link we sent.';
   // the email service refused or failed: not the person's fault, and retrying right away rarely helps
   if (/not authori[sz]ed|error sending|sending (confirmation|recovery|magic link)|smtp/i.test(msg)) return "We couldn't send the email just now. Please try again in a few minutes; if it keeps happening, contact support.";
@@ -270,7 +276,7 @@ async function submit(e) {
     } else if (mode === 'forgot') {
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: callbackUrl('/auth?mode=update'), captchaToken: token });
       if (error) throw error;
-      showMsg(`If an account exists for ${email}, a reset link is on its way. Check spam too.`, 'success');
+      showMsg(`If an account exists for ${email}, a reset link is on its way. Check your inbox and spam.`, 'success');
     } else if (mode === 'update' && resetLink) {
       await saveWithResetLink(password);
     } else if (mode === 'update') {

@@ -1259,14 +1259,33 @@ mark.cur { background: var(--k-fbbf24-60); }
   padding: 12px 13px; outline: none; transition: border-color .15s, box-shadow .15s;
 }
 .field input:focus { border-color: var(--cyan); box-shadow: 0 0 0 3px var(--k-22d3ee-14); }
-.auth-msg { font-size: 13.5px; line-height: 1.5; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); }
-.auth-msg.error { color: var(--k-fecdd3); border-color: var(--k-fb7185-40); background: var(--k-fb7185-08); }
-.auth-msg.success { color: var(--k-d9f99d); border-color: var(--k-a3e635-35); background: var(--k-a3e635-07); }
-.auth-msg.note { color: var(--text); border-color: var(--k-22d3ee-35); background: var(--k-22d3ee-14); }
+/* Sign-in feedback: one quiet line under the form. Text stays in the normal text colour on a neutral surface with a
+   hairline; the tone (success / error / note) lives only in a small icon and a faint tint. Classes are namespaced
+   (is-*): a bare .error picked up the site's error-panel margin (6vh) and left a gap above the message. */
+.auth-msg {
+  --tone: var(--cyan);
+  display: flex; align-items: flex-start; gap: 10px; margin: 0; padding: 10px 12px; border-radius: 12px;
+  font-size: 13.5px; line-height: 1.5; color: var(--text);
+  background: color-mix(in srgb, var(--tone) 6%, color-mix(in srgb, var(--text) 3%, transparent));
+  border: 1px solid var(--line);
+}
+.auth-msg::before {
+  content: "i"; flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-top: 1px; border-radius: 50%;
+  font: 700 11px/1 var(--font); color: #fff; background: var(--tone);
+}
+.auth-msg.is-success { --tone: #10b981; }
+.auth-msg.is-success::before { content: "✓"; }
+.auth-msg.is-error { --tone: var(--red); }
+.auth-msg.is-error::before { content: "!"; }
+:root[data-theme="light"] .auth-msg.is-success { --tone: #059669; }
+.auth-msg-text { min-width: 0; }
 .auth-resend { margin-left: 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .auth-resend:disabled { opacity: .6; cursor: default; }
 /* Cloudflare Turnstile (lib/captcha.js): usually invisible; holds the checkbox when Cloudflare shows one */
-.captcha-slot { display: flex; justify-content: center; width: 100%; min-height: 65px; margin: 2px 0 6px; border-radius: 10px; }
+/* the widget's box (65 px, Cloudflare's flexible size) is reserved from the start, so nothing moves when it loads or resets;
+   no margins of its own: the form's grid gap spaces the widget, the message and the button evenly */
+.captcha-slot { display: flex; justify-content: center; width: 100%; min-height: 65px; margin: 0; border-radius: 10px; line-height: 0; }
+.captcha-slot > div { display: flex; }
 /* asked to complete the check: a short pulse around the widget (not for reduced motion) */
 .captcha-slot.attention { animation: captcha-attn 1.2s ease-out 2; }
 @keyframes captcha-attn { 0% { box-shadow: 0 0 0 0 var(--k-22d3ee-35); } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
