@@ -6,7 +6,7 @@
 import { isConfigured } from '../lib/supabase.js';
 import { mountAccountMenu, getSession, esc } from '../lib/account.js';
 import { loadPlans, getBillingStatus, startCheckout } from '../lib/billing.js';
-import { allowance, money, times, perHour, priceGap, priceLines } from '../lib/pricing-catalog.js';
+import { allowance, money, times, perHour, priceGap, priceLines, hasYearly, yearlySavings, yearlySavingsPct, yearlyPriceLines } from '../lib/pricing-catalog.js';
 
 const $ = (id) => document.getElementById(id);
 // VITE_PAID_PLANS=1 only in the build that launches paid plans; until then nothing here can start a payment.
@@ -16,6 +16,10 @@ let session = null;
 let status = null;
 let busy = null;
 let plans = [];
+// Monthly or yearly prices on the cards (?billing=year). Yearly is offered only when every paid plan has a yearly price.
+let interval = new URLSearchParams(location.search).get('billing') === 'year' ? 'year' : 'month';
+const yearlyShown = () => plans.some((p) => p.billing_interval) && plans.filter((p) => p.billing_interval).every(hasYearly);
+const yearly = () => interval === 'year' && yearlyShown();
 
 function notice(html, kind = '') {
   const n = $('notice');
@@ -72,8 +76,9 @@ const lookFor = (p, i, list) => LOOK[p.key] || {
   line: p.tagline || '', items: [], cta: p.billing_interval ? `Upgrade to ${p.name}` : 'Start free',
 };
 const byKey = (k) => plans.find((p) => p.key === k);
-// the introductory price applies only to customers the server says are eligible (signed out: shown as the offer)
-const introFor = (p) => (p.intro && status?.introEligible !== false ? p.intro : null);
+// the introductory price applies only to customers the server says are eligible (signed out: shown as the offer), and
+// only to monthly billing: a yearly plan never shows (or gets) the $1 first month
+const introFor = (p) => (p.intro && status?.introEligible !== false && !yearly() ? p.intro : null);
 const shownPlan = (p) => ({ ...p, intro: introFor(p) });
 
 // ---------- the allowance meter: one block per hour, on the scale of the largest plan ----------
@@ -98,11 +103,11 @@ function ctaFor(p, look) {
     return status && status.plan !== 'free' ? '<span class="pz-note">Included when a paid plan ends</span>' : '<span class="pz-current">Your current plan</span>';
   }
   // paid plans only when this build offers them AND the server says they can be bought (it refuses otherwise anyway)
-  if (!PAID_PLANS || (session && !status?.upgradesAvailable)) return '<span class="pz-note">Coming soon</span>';
+  if (!PAID_PLANS || (session && !(yearly() ? status?.yearlyAvailable : status?.upgradesAvailable))) return '<span class="pz-note">Coming soon</span>';
   const intro = introFor(p);
-  const cta = intro ? `Get ${p.name} for ${money(intro.price_cents)}` : look.cta;
-  if (!session) return `<a class="pz-btn" href="/auth?next=${encodeURIComponent(`/pricing?plan=${p.key}`)}">${esc(cta)}</a>`;
-  const label = status && status.plan !== 'free' ? `Switch to ${p.name}` : cta;
+  const cta = intro ? `Get ${p.name} for ${money(intro.price_cents)}` : yearly() ? `Choose ${p.name} yearly` : look.cta;
+  if (!session) return `<a class="pz-btn" href="/auth?next=${encodeURIComponent(`/pricing?plan=${p.key}${yearly() ? '&billing=year' : ''}`)}">${esc(cta)}</a>`;
+  const label = status && status.plan !== 'free' ? `Switch to ${p.name}${yearly() ? ' yearly' : ''}` : cta;
   return `<button class="pz-btn" type="button" data-plan="${esc(p.key)}"${busy ? ' disabled' : ''}>${busy === p.key ? 'Opening secure checkout…' : esc(label)}</button>`;
 }
 
@@ -112,13 +117,13 @@ function card(p, i) {
   const sp = shownPlan(p);
   const free = plans.find((x) => !x.billing_interval);
   const a = allowance(p.monthly_seconds);
-  const pl = priceLines(sp);
-  const sub = look.sub || (p.billing_interval && !sp.intro ? 'Billed monthly' : pl.note);
+  const pl = yearly() && hasYearly(p) ? yearlyPriceLines(p) : priceLines(sp);
+  const sub = look.sub || (yearly() && hasYearly(p) ? `${pl.note} · save ${money(yearlySavings(p))}` : p.billing_interval && !sp.intro ? 'Billed monthly' : pl.note);
   const items = look.items.map((t) => t.replace('{x:free}', free ? times(p, free) : '').replace('{ph}', perHour(p) || ''));
   const flash = byKey('flash');
   let callout = '';
   if (p.key === 'bolt' && flash) {
-    callout = `<div class="pz-x"><span class="pz-x-big">${esc(times(p, flash))}</span><span class="pz-x-text"><b>Flash’s transcription time</b><span>Just ${esc(priceGap(p, flash))} more per month than Flash’s regular ${esc(money(flash.price_cents))} price.</span></span></div>`;
+    callout = `<div class="pz-x"><span class="pz-x-big">${esc(times(p, flash))}</span><span class="pz-x-text"><b>Flash’s transcription time</b><span>${yearly() && hasYearly(p) && hasYearly(flash) ? `Just ${esc(money(p.yearly_price_cents - flash.yearly_price_cents))} more per year than Flash yearly.` : `Just ${esc(priceGap(p, flash))} more per month than Flash’s regular ${esc(money(flash.price_cents))} price.`}</span></span></div>`;
   } else if (p.key === 'thunder' && p.features.includes('across_ask')) {
     callout = `<div class="pz-x feature"><span class="pz-x-text"><b>${esc(FEATURE.across_ask.name)}</b><span>${esc(FEATURE.across_ask.text)}</span><span class="pz-x-more">Plus combined study guides from up to 10 recordings.</span></span></div>`;
   } else if (p.key === 'flash' && sp.intro) {
@@ -152,6 +157,35 @@ function card(p, i) {
   </article>`;
 }
 
+// the Monthly / Yearly switch (shown only when yearly prices exist); the savings badge is the smallest saving, so it
+// is true for every plan
+function renderBilling() {
+  const box = $('billing');
+  box.hidden = !yearlyShown();
+  if (box.hidden) return;
+  const pct = Math.min(...plans.filter(hasYearly).map(yearlySavingsPct));
+  $('billingSave').textContent = pct > 0 ? `save ${pct}%+` : '';
+  box.querySelectorAll('[role="radio"]').forEach((b) => { const on = b.dataset.v === interval; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+}
+function setInterval_(v, focus) {
+  if (v === interval) return;
+  interval = v;
+  const u = new URL(location.href);
+  if (v === 'year') u.searchParams.set('billing', 'year'); else u.searchParams.delete('billing');
+  history.replaceState(null, '', u);
+  renderBilling(); renderCards(); renderCompare(); renderFaq();
+  if (focus) $('billing').querySelector(`[data-v="${v}"]`)?.focus();
+}
+function bindBilling() {
+  const seg = $('billingSeg');
+  seg.addEventListener('click', (e) => { const b = e.target.closest('[role="radio"]'); if (b) setInterval_(b.dataset.v); });
+  seg.addEventListener('keydown', (e) => {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    setInterval_(interval === 'year' ? 'month' : 'year', true);
+  });
+}
+
 function renderCards() {
   $('plans').innerHTML = plans.map(card).join('');
   $('plans').removeAttribute('aria-busy');
@@ -161,7 +195,10 @@ function renderCards() {
   const paid = plans.some((p) => p.billing_interval);
   $('disclose').hidden = !paid;
   const flash = byKey('flash'), intro = flash && introFor(flash);
-  $('disclose').innerHTML = `Prices in US dollars. ${intro ? `The ${esc(money(intro.price_cents))} Flash price is for your first month only, for new subscribers; Flash then renews at ${esc(money(flash.price_cents))}/month. ` : ''}Paid plans renew every month until you cancel. Cancel anytime in Plan &amp; usage and keep your plan until the end of the period you’ve paid for. Any applicable tax is shown at checkout before you pay. Under 18? A parent or guardian must buy a paid plan. <a href="/terms">Terms of Service</a>`;
+  const billed = yearly()
+    ? 'Yearly plans are paid once a year and renew every year until you cancel; your transcription time still renews every month. The $1 Flash first month is for monthly billing only.'
+    : 'Paid plans renew every month until you cancel.';
+  $('disclose').innerHTML = `Prices in US dollars. ${intro ? `The ${esc(money(intro.price_cents))} Flash price is for your first month only, for new subscribers; Flash then renews at ${esc(money(flash.price_cents))}/month. ` : ''}${billed} Cancel anytime in Plan &amp; usage and keep your plan until the end of the period you’ve paid for. Any applicable tax is shown at checkout before you pay. Under 18? A parent or guardian must buy a paid plan. <a href="/terms">Terms of Service</a>`;
 }
 
 // ---------- Flash or Bolt? (the 3× comparison, regular prices only) ----------
@@ -203,7 +240,9 @@ function renderCompare() {
   const dash = '<span class="pz-na"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span>';
   const has = (cap) => (p) => (p.features.includes(cap) ? yes : dash);
   const rows = [
-    ['Monthly price', (p) => { const i = introFor(p); return i ? `<b>${esc(money(p.price_cents))}</b><small>${esc(money(i.price_cents))} first month</small>` : `<b>${esc(money(p.price_cents))}</b>`; }],
+    yearly()
+      ? ['Yearly price', (p) => (hasYearly(p) ? `<b>${esc(money(p.yearly_price_cents))}</b><small>save ${esc(money(yearlySavings(p)))} vs monthly</small>` : `<b>${esc(money(0))}</b>`)]
+      : ['Monthly price', (p) => { const i = introFor(p); return i ? `<b>${esc(money(p.price_cents))}</b><small>${esc(money(i.price_cents))} first month</small>` : `<b>${esc(money(p.price_cents))}</b>`; }],
     ['Transcription each month', (p) => `<b>${esc(allowance(p.monthly_seconds).long)}</b>`],
     ['Compared with Flash', (p) => (flash && p.billing_interval && p.key !== 'flash' ? `<b class="pz-ratio">${esc(times(p, flash))}</b>` : p.key === 'flash' ? '<span class="pz-muted">1×</span>' : dash)],
     ['Price per hour of transcription', (p) => (perHour(p) ? esc(perHour(p)) : dash), 'Regular monthly price'],
@@ -234,6 +273,7 @@ function renderFaq() {
     ['What happens when I reach my limit?', 'SparkScribe checks before it starts. If a recording is longer than the time you have left, it tells you and uses none of your time. Everything already in your library stays available, your time resets at the start of your next month or billing period, and you can upgrade at any time.'],
     fr && ['What is Focused Review?', `${FEATURE.focused_review.text} When a concept needs more practice, ${fr} can also write new questions on it, checked against the recording like every quiz question. Every plan keeps quiz difficulty, exam focus, per-question review and retakes.`],
     ax && ['What does asking across recordings do?', `With ${ax}, you choose 2 to 12 saved recordings and ask one question about all of them: what changed between lectures, which decisions came up in several meetings, what every lecture repeated. Each point names the recording it comes from and links to the exact passage; if the recordings don’t answer the question, it says so. You can also make one combined study guide from up to 10 recordings. Answers and guides are saved to your account, so you can reopen them on any device.`],
+    yearlyShown() && ['How does yearly billing work?', `You pay once for the year (${plans.filter(hasYearly).map((p) => `${p.name} ${money(p.yearly_price_cents)}`).join(', ')}), which costs less than 12 months at the regular monthly price. Your transcription time still renews every month, so you get the plan’s full monthly time all year. The $1 Flash first month is only for monthly billing. You can cancel anytime: the plan stays until the end of the year you paid for and doesn’t renew.`],
     ['Can I upgrade later?', 'Yes, whenever you like. An upgrade takes effect right away: you get the higher plan’s monthly time and features, and you pay only the prorated difference for the rest of your current billing period.'],
     ['Can I cancel anytime?', 'Yes, in Plan & usage → Manage billing. Your plan stays active until the end of the period you’ve paid for, then you move to the Free plan. No further payments are taken, and nothing in your library is deleted.'],
     intro && [`How does the ${money(intro.price_cents)} Flash offer work?`, `If you’ve never had a paid SparkScribe plan, your first month of Flash costs ${money(intro.price_cents)}. From your second month, Flash renews at ${money(flash.price_cents)} a month until you cancel. Checkout shows both prices before you pay.`],
@@ -252,7 +292,7 @@ async function upgrade(plan) {
   renderCards();
   notice('');
   try {
-    await startCheckout(plan); // navigates to Stripe
+    await startCheckout(plan, yearly() ? 'year' : 'month'); // navigates to Stripe
   } catch (err) {
     busy = null;
     renderCards();
@@ -281,15 +321,17 @@ async function main() {
     if (status && status.plan !== 'free' && !byKey(status.plan)) notice(`You’re on ${esc(status.planName || status.plan)}, an earlier plan. It stays exactly as it is until you change it.`);
   }
   // the footer mirrors the same state: Stripe is only mentioned once plans can actually be bought
-  if (PAID_PLANS && (!session || status?.upgradesAvailable)) $('billFoot').textContent = 'Monthly plans · secure payments by Stripe';
+  if (PAID_PLANS && (!session || status?.upgradesAvailable)) $('billFoot').textContent = `${yearlyShown() ? 'Monthly or yearly plans' : 'Monthly plans'} · secure payments by Stripe`;
   if (!PAID_PLANS || (session && !status?.upgradesAvailable)) notice('<b>Paid plans are coming soon.</b> The Free plan is available today. Nothing on this page can charge you.');
+  renderBilling();
+  bindBilling();
   renderCards();
   renderWhy();
   renderCompare();
   renderFaq();
   // back from signing in after choosing a plan (or from a feature that needs one): continue to checkout
   const wanted = q.get('plan');
-  if (PAID_PLANS && status?.upgradesAvailable && session && wanted && plans.some((p) => p.key === wanted && p.billing_interval) && status?.plan === 'free') upgrade(wanted);
+  if (PAID_PLANS && (yearly() ? status?.yearlyAvailable : status?.upgradesAvailable) && session && wanted && plans.some((p) => p.key === wanted && p.billing_interval) && status?.plan === 'free') upgrade(wanted);
   else if (wanted && byKey(wanted)) document.getElementById(`pz-${wanted}`)?.closest('.pz-card')?.classList.add('is-selected');
 }
 main();

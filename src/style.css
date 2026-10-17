@@ -2166,6 +2166,11 @@ dialog.sheet p.dlg-dim, .dlg-dim { color: var(--dim); font-size: 13px; margin: 0
 .segctl button:hover { color: var(--text); }
 .segctl button[aria-checked="true"] { color: var(--k-04050c); background: var(--grad); box-shadow: 0 4px 18px -6px var(--k-7c5cff-70); }
 .segctl button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.pz-billing { display: flex; justify-content: center; margin: 0 0 18px; }
+.pz-billing .segctl { width: auto; }
+.pz-billing .segctl button { flex: none; }
+.pz-save { margin-left: 6px; padding: 2px 7px; border-radius: 999px; font-size: 11.5px; font-weight: 700; color: var(--c-ok); background: color-mix(in srgb, var(--c-ok) 14%, transparent); }
+.segctl button[aria-checked="true"] .pz-save { color: inherit; background: color-mix(in srgb, #fff 35%, transparent); }
 .set-modes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .set-modes li { font-size: 14.5px; color: var(--dim); line-height: 1.5; padding: 9px 12px; border-radius: 10px; border: 1px solid transparent; transition: color .2s, border-color .2s, background-color .2s; }
 .set-modes li b { color: var(--muted); margin-right: 6px; }

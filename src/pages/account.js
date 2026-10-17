@@ -4,7 +4,7 @@
 import { isConfigured } from '../lib/supabase.js';
 import { mountAccountMenu, requireUser, esc } from '../lib/account.js';
 import { loadPlans, getBillingStatus, startCheckout, openPortal, price, perInterval, allowanceLabel, usageParts, usageLevel, durationText, dateText } from '../lib/billing.js';
-import { money } from '../lib/pricing-catalog.js';
+import { money, hasYearly, yearlySavings } from '../lib/pricing-catalog.js';
 
 // what a premium capability is called on this page
 const FEATURE_NAME = { focused_review: 'Focused Review', across_ask: 'Ask across recordings', across_guide: 'Combined study guides' };
@@ -35,6 +35,10 @@ function render() {
   const s = status;
   const plan = plans.find((p) => p.key === s.plan) || { name: s.planName, price_cents: 0, tier: null, features: s.features || [] };
   const paid = s.plan !== 'free';
+  // yearly: the subscription renews once a year (renewsAt) while the transcription time renews monthly (periodEnd)
+  const yearly = paid && s.billingInterval === 'year';
+  const subEnd = (paid && s.renewsAt) || s.periodEnd;
+  const period = paid && !yearly ? 'billing period' : 'month';
   // every higher plan in the lineup is an upgrade path; the next one is offered first
   const tier = plan.tier ?? -1;
   const higher = plans.filter((p) => p.billing_interval && (p.tier ?? -1) > tier);
@@ -43,22 +47,31 @@ function render() {
   const level = usageLevel(Number(s.usedSeconds), s.monthlySeconds);
   let when;
   if (!paid) when = `Resets ${dateText(s.periodEnd)}`;
-  else if (s.cancelAtPeriodEnd) when = `Your ${esc(plan.name)} plan remains active until ${dateText(s.periodEnd)}`;
+  else if (s.cancelAtPeriodEnd) when = `Your ${esc(plan.name)} plan remains active until ${dateText(subEnd)}`;
   else if (s.scheduledChange) when = `Switches to ${esc(s.scheduledChange.planName)} on ${dateText(s.scheduledChange.at)}. Until then you keep ${esc(plan.name)}.`;
+  else if (yearly) when = `Billed yearly · renews ${dateText(subEnd)}. Your transcription time renews ${dateText(s.periodEnd)}.`;
   else when = `Renews ${dateText(s.periodEnd)}`;
 
   const warn = s.paymentProblem
     ? `<div class="bill-alert bad"><b>We couldn't process your payment.</b> ${paid ? `Your ${esc(plan.name)} plan stays active while Stripe retries.` : 'Your paid plan is paused until the payment goes through.'} Update your payment method in Manage Billing. Your recordings and everything you created are safe.</div>`
     : s.cancelAtPeriodEnd
-      ? `<div class="bill-alert">Your subscription is canceled and won't renew. Until ${dateText(s.periodEnd)} you keep ${esc(allowanceLabel(s.monthlySeconds))} a month; after that you're on Free (${esc(allowanceLabel(plans.find((p) => p.is_default)?.monthly_seconds || 0))} a month). Nothing in your library is removed.</div>`
+      ? `<div class="bill-alert">Your subscription is canceled and won't renew. Until ${dateText(subEnd)} you keep ${esc(allowanceLabel(s.monthlySeconds))} a month; after that you're on Free (${esc(allowanceLabel(plans.find((p) => p.is_default)?.monthly_seconds || 0))} a month). Nothing in your library is removed.</div>`
       : '';
   const limitMsg = level === 'high' && next
-    ? `<p class="meter-hint">${Number(s.remainingSeconds) < 1 ? `You've used your ${esc(allowanceLabel(s.monthlySeconds))} for this ${paid ? 'billing period' : 'month'}.` : 'You’re almost out of transcription time.'} <b>${esc(next.name)}</b> includes ${esc(allowanceLabel(next.monthly_seconds))} a month.</p>`
-    : level === 'warn' && next ? `<p class="meter-hint">You’ve used most of this ${paid ? 'period' : 'month'}’s time.</p>` : '';
+    ? `<p class="meter-hint">${Number(s.remainingSeconds) < 1 ? `You've used your ${esc(allowanceLabel(s.monthlySeconds))} for this ${period}.` : 'You’re almost out of transcription time.'} <b>${esc(next.name)}</b> includes ${esc(allowanceLabel(next.monthly_seconds))} a month.</p>`
+    : level === 'warn' && next ? `<p class="meter-hint">You’ve used most of this ${period === 'month' ? 'month' : 'period'}’s time.</p>` : '';
 
-  const priceOf = (p) => (p.intro && !paid && s.introEligible !== false ? `${money(p.intro.price_cents)} first month, then ${price(p)}${perInterval(p)}` : `${price(p)}${perInterval(p)}`);
-  const upgradeBtn = next && s.upgradesAvailable
-    ? `<button class="btn btn-primary" type="button" data-up="${esc(next.key)}"${busy ? ' disabled' : ''}>${busy === next.key ? 'Opening…' : `${paid ? 'Switch' : 'Upgrade'} to ${esc(next.name)} · ${esc(priceOf(next))}`}</button>`
+  // a yearly subscriber moves up within yearly billing; everyone else sees monthly prices (with the $1 offer if eligible)
+  const priceOf = (p) => (yearly && hasYearly(p) ? `${money(p.yearly_price_cents)}/year`
+    : p.intro && !paid && s.introEligible !== false ? `${money(p.intro.price_cents)} first month, then ${price(p)}${perInterval(p)}` : `${price(p)}${perInterval(p)}`);
+  const upInterval = yearly ? 'year' : 'month';
+  const canUp = yearly ? s.yearlyAvailable : s.upgradesAvailable;
+  const upgradeBtn = next && canUp
+    ? `<button class="btn btn-primary" type="button" data-up="${esc(next.key)}" data-interval="${upInterval}"${busy ? ' disabled' : ''}>${busy === next.key ? 'Opening…' : `${paid ? 'Switch' : 'Upgrade'} to ${esc(next.name)} · ${esc(priceOf(next))}`}</button>`
+    : '';
+  // a monthly subscriber can move the same plan to yearly billing (confirmed in Stripe's portal, prorated there)
+  const toYearly = paid && !yearly && hasYearly(plan) && s.yearlyAvailable && !s.cancelAtPeriodEnd
+    ? `<button class="btn btn-ghost" type="button" data-up="${esc(plan.key)}" data-interval="year"${busy ? ' disabled' : ''}>${busy === plan.key ? 'Opening…' : `Switch to yearly · ${esc(money(plan.yearly_price_cents))}/year, save ${esc(money(yearlySavings(plan)))}`}</button>`
     : '';
   const included = features.length
     ? `<ul class="acct-feats" aria-label="Included with ${esc(plan.name)}">${features.map((f) => `<li>${esc(FEATURE_NAME[f])}</li>`).join('')}</ul>`
@@ -74,21 +87,21 @@ function render() {
     ${warn}
     <div class="panel acct-card">
       <div class="ins-label">Current plan</div>
-      <div class="acct-plan"><h2>${esc(plan.name)}</h2><span class="acct-price">${paid ? `${esc(price(plan))}${esc(perInterval(plan))}` : 'Free'}</span></div>
+      <div class="acct-plan"><h2>${esc(plan.name)}</h2><span class="acct-price">${!paid ? 'Free' : yearly && hasYearly(plan) ? `${esc(money(plan.yearly_price_cents))}/year` : `${esc(price(plan))}${esc(perInterval(plan))}`}</span></div>
       <p class="acct-when">${when}</p>
-      <p class="acct-allow"><b>${esc(allowanceLabel(s.monthlySeconds))}</b> of transcription a ${paid ? 'billing period' : 'month'}</p>
+      <p class="acct-allow"><b>${esc(allowanceLabel(s.monthlySeconds))}</b> of transcription a ${period}</p>
       ${included}
-      <div class="acct-actions">${s.paymentProblem ? manage + upgradeBtn : upgradeBtn + manage}<a class="btn btn-ghost" href="/pricing">Compare plans</a></div>
+      <div class="acct-actions">${s.paymentProblem ? manage + upgradeBtn : upgradeBtn + manage}${toYearly}<a class="btn btn-ghost" href="/pricing">Compare plans</a></div>
     </div>
     <div class="panel acct-card">
-      <div class="ins-label">Transcription this ${paid ? 'billing period' : 'month'}</div>
+      <div class="ins-label">Transcription this ${period}</div>
       ${meterHtml(s)}
       ${limitMsg}
       <p class="acct-fine">Counts the length of recordings you transcribe. Summaries, notes, Ask, study tools, exports and opening old recordings don’t use time. ${s.meteringStarted ? '' : 'Usage tracking starts when plans launch; recordings you already have are never counted.'}</p>
     </div>
     ${paths}
     ${s.testMode ? '<p class="acct-fine test">Test mode: Stripe test payments only. No real card is charged.</p>' : ''}`;
-  $('account').querySelectorAll('[data-up]').forEach((b) => b.addEventListener('click', () => act(b.dataset.up, () => startCheckout(b.dataset.up))));
+  $('account').querySelectorAll('[data-up]').forEach((b) => b.addEventListener('click', () => act(b.dataset.up, () => startCheckout(b.dataset.up, b.dataset.interval || 'month'))));
   $('account').querySelector('[data-act="portal"]')?.addEventListener('click', () => act('portal', openPortal));
 }
 

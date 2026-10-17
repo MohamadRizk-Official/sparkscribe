@@ -11,7 +11,7 @@ let plansPromise = null;
 export function loadPlans() {
   if (!isConfigured) return Promise.resolve([]);
   return (plansPromise ||= supabase.from('billing_plans')
-    .select('key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default')
+    .select('key, name, tagline, price_cents, yearly_price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default')
     .not('tier', 'is', null).order('tier')
     .then(({ data, error }) => { if (error) { plansPromise = null; throw error; } return (data || []).map(planFromRow); }));
 }
@@ -47,7 +47,8 @@ async function call(action, payload = {}) {
 
 export const getBillingStatus = (opts = {}) => call('status', opts.detail ? { detail: true } : {});
 export const authorizeTranscription = (durationSeconds) => call('authorize', { durationSeconds });
-export async function startCheckout(plan) { const r = await call('checkout', { plan }); location.assign(r.url); return r; }
+// interval: 'month' (default) or 'year'; the server picks the Stripe price and decides any introductory offer
+export async function startCheckout(plan, interval = 'month') { const r = await call('checkout', { plan, interval }); location.assign(r.url); return r; }
 export async function openPortal() { const r = await call('portal'); location.assign(r.url); return r; }
 export const deleteAccountOnServer = () => call('delete_account', { confirm: 'DELETE' });
 

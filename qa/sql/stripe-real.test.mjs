@@ -43,10 +43,12 @@ for (const w of (await stripe.webhookEndpoints.list({ limit: 50 })).data) {
 // ---------- prices and the coupon, as the setup script made them ----------
 const priceFor = async (key, cents) => (await stripe.prices.list({ lookup_keys: [`sparkscribe_${key}_monthly_${cents}`], limit: 1 })).data[0]?.id;
 const PRICE = { flash: await priceFor('flash', 599), bolt: await priceFor('bolt', 999), thunder: await priceFor('thunder', 1499) };
+const yearlyFor = async (key, cents) => (await stripe.prices.list({ lookup_keys: [`sparkscribe_${key}_yearly_${cents}`], limit: 1 })).data[0]?.id;
+const YEARLY = { flash: await yearlyFor('flash', 5900), bolt: await yearlyFor('bolt', 9900), thunder: await yearlyFor('thunder', 14900) };
 const COUPON = 'sparkscribe_flash_intro_499_1m';
 // the four-tier Customer Portal configuration made by scripts/stripe-setup.mjs (the account's default one only knows Plus/Pro)
 const PORTAL = (await stripe.billingPortal.configurations.list({ active: true, limit: 50 })).data.find((c) => c.metadata?.sparkscribe === 'portal_four_tier')?.id;
-assert.ok(PRICE.flash && PRICE.bolt && PRICE.thunder, 'run scripts/stripe-setup.mjs first');
+assert.ok(PRICE.flash && PRICE.bolt && PRICE.thunder && YEARLY.flash && YEARLY.bolt && YEARLY.thunder, 'run scripts/stripe-setup.mjs first');
 
 // ---------- isolated database + PostgREST stand-in for the server's anonymous calls ----------
 const P = await freshDb();
@@ -61,7 +63,7 @@ const rest = http.createServer(async (req, res) => {
   try {
     const rpc = /^\/rest\/v1\/rpc\/([a-z_]+)$/.exec(url.pathname);
     if (rpc) { const a = JSON.parse(body || '{}'); const k = Object.keys(a); return send(200, (await P.asAnon((d) => d.query(`select public.${rpc[1]}(${k.map((x, i) => `${x} => $${i + 1}`).join(', ')}) r`, k.map((x) => a[x])))).rows[0].r); }
-    if (url.pathname === '/rest/v1/billing_plans') return send(200, (await P.asAnon((d) => d.query(`select key, name, tagline, price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default from public.billing_plans where tier is not null order by tier`))).rows);
+    if (url.pathname === '/rest/v1/billing_plans') return send(200, (await P.asAnon((d) => d.query(`select key, name, tagline, price_cents, yearly_price_cents, currency, billing_interval, monthly_seconds, tier, features, intro_price_cents, intro_months, is_default from public.billing_plans where tier is not null order by tier`))).rows);
     send(404, { code: 'PGRST125', message: 'not in the stand-in' });
   } catch (e) { send(400, { code: e.code || 'P0001', message: e.message }); }
 });
@@ -72,6 +74,7 @@ Object.assign(process.env, {
   BILLING_DB_SECRET: SECRET, STRIPE_SECRET_KEY: KEY, STRIPE_WEBHOOK_SECRET: WHSEC, BILLING_PAYMENTS_ENABLED: '1', BILLING_SCOPE: 'qa-local',
   STRIPE_FLASH_PRICE_ID: PRICE.flash, STRIPE_BOLT_PRICE_ID: PRICE.bolt, STRIPE_THUNDER_PRICE_ID: PRICE.thunder, STRIPE_FLASH_INTRO_COUPON: COUPON,
   STRIPE_PORTAL_CONFIGURATION_ID: PORTAL,
+  STRIPE_FLASH_YEARLY_PRICE_ID: YEARLY.flash, STRIPE_BOLT_YEARLY_PRICE_ID: YEARLY.bolt, STRIPE_THUNDER_YEARLY_PRICE_ID: YEARLY.thunder,
 });
 delete process.env.VERCEL; delete process.env.STRIPE_API_HOST; delete process.env.STRIPE_AUTOMATIC_TAX;
 const quiet = console.log; console.log = (...a) => { if (!String(a[0]).startsWith('[billing]')) quiet(...a); };
@@ -335,14 +338,54 @@ try {
   const change = await service.createCheckout(userSb(fr.uid), { id: fr.uid, email: fr.email }, 'thunder', 'http://localhost:5173');
   ok(change.kind === 'change' && /^https:\/\/billing\.stripe\.com\//.test(change.url), '19 · a subscriber choosing another plan is sent to confirm the change in the portal (no second subscription)');
 
+  // 21–23. yearly billing
+  const y = await newUser('yearly-flash', { clock: true });
+  ok((await statusOf(y.uid)).introEligible === true, '21 · a new account, eligible for the monthly $1 offer');
+  await service.createCheckout(userSb(y.uid), { id: y.uid, email: y.email }, 'flash', 'http://localhost:5173', 'year');
+  const ys = (await stripe.checkout.sessions.list({ customer: y.customer, limit: 1 })).data[0];
+  ok(ys.amount_subtotal === 5900 && !(ys.total_details?.amount_discount) && ys.amount_total === 5900, `21 · yearly Flash Checkout (real session): $59.00, no $1 offer (${ys.amount_subtotal}/${ys.total_details?.amount_discount}/${ys.amount_total})`);
+  const yl = await completeCheckout(y, ys);
+  await pump(since);
+  let yst = await statusOf(y.uid);
+  const ysub = await stripeSub(yl.sub.id);
+  const yStart = ysub.items.data[0].current_period_start, yEnd = ysub.items.data[0].current_period_end;
+  ok(yl.invoice.total === 5900 && yl.invoice.status === 'paid' && ysub.items.data[0].price.recurring.interval === 'year', `21 · first invoice $59.00, paid; a yearly Stripe subscription (${yl.invoice.total})`);
+  ok(yst.plan === 'flash' && yst.billingInterval === 'year' && yst.monthlySeconds === 10800 && Date.parse(yst.renewsAt) / 1000 === yEnd && Date.parse(yst.periodEnd) / 1000 < yEnd,
+    '21 · the account is on Flash billed yearly: 3 h this month, allowance renews monthly, the subscription in a year');
+  // a month later (Stripe test clock): no new charge; in the database the allowance has renewed
+  await advance(y.clock, 32 * 86400);
+  await pump(since);
+  const yInv = await invoicesOf(yl.sub.id);
+  ok(yInv.length === 1 && (await stripeSub(yl.sub.id)).items.data[0].current_period_end === yEnd, `22 · a month later: still one invoice, same yearly period (${yInv.length})`);
+  await db.query(`insert into public.usage (user_id, transcription_id, seconds, plan, billing_period_start, billing_period_end, created_at) values ($1, gen_random_uuid(), 10000, 'flash', to_timestamp($2), to_timestamp($2), to_timestamp($2) + interval '2 days')`, [y.uid, yStart]);
+  const e1 = (await db.query(`select used_seconds::float8 u, period_start from private.entitlement($1, to_timestamp($2) + interval '10 days')`, [y.uid, yStart])).rows[0];
+  const e2 = (await db.query(`select used_seconds::float8 u, period_start from private.entitlement($1, to_timestamp($2) + interval '32 days')`, [y.uid, yStart])).rows[0];
+  ok(e1.u === 10000 && e2.u === 0 && e2.period_start > e1.period_start, `22 · month 1: 10000 s of 10800 used; month 2: the full 3 h again (${e1.u} → ${e2.u})`);
+  // a monthly subscriber moves to yearly: the server sends them to confirm in the portal; the change itself (done
+  // here through the API as the portal would) arrives as real events and the account becomes yearly
+  const my = await newUser('monthly-to-yearly');
+  const mcs = await service.createCheckout(userSb(my.uid), { id: my.uid, email: my.email }, 'bolt', 'http://localhost:5173');
+  const msess = (await stripe.checkout.sessions.list({ customer: my.customer, limit: 1 })).data[0];
+  const ml = await completeCheckout(my, msess);
+  await pump(since);
+  ok(mcs.kind === 'checkout' && (await statusOf(my.uid)).billingInterval === 'month', '23 · Bolt monthly to start with');
+  const toYear = await service.createCheckout(userSb(my.uid), { id: my.uid, email: my.email }, 'bolt', 'http://localhost:5173', 'year');
+  ok(toYear.kind === 'change' && /^https:\/\/billing\.stripe\.com\//.test(toYear.url), '23 · choosing Bolt yearly while paying monthly: a portal confirmation (no second subscription)');
+  const msub = await stripeSub(ml.sub.id);
+  await stripe.subscriptions.update(ml.sub.id, { items: [{ id: msub.items.data[0].id, price: YEARLY.bolt }], proration_behavior: 'always_invoice' });
+  await pump(since);
+  const mst = await statusOf(my.uid);
+  ok(mst.plan === 'bolt' && mst.billingInterval === 'year' && mst.monthlySeconds === 32400, '23 · after the switch: Bolt billed yearly, 9 h a month');
+  out.scenarios.yearly = { firstInvoice: yl.invoice.total, invoicesAfterAMonth: yInv.length, switchInvoice: (await invoicesOf(ml.sub.id)).map((i) => i.total) };
+
   // 20. Stripe and the database agree for every account
-  const accounts = [f, up, bt, fr, dc, dbl, unk];
+  const accounts = [f, up, bt, fr, dc, dbl, unk, y, my];
   const mismatches = [];
   for (const u of accounts) {
     const subs = (await stripe.subscriptions.list({ customer: u.customer, status: 'all', limit: 10 })).data;
     const paying = subs.filter((s) => ['active', 'trialing', 'past_due'].includes(s.status));
     const stx = await statusOf(u.uid);
-    const want = paying.length ? Object.entries(PRICE).find(([, id]) => id === paying[0].items.data[0].price.id)?.[0] || 'free' : 'free';
+    const want = paying.length ? [...Object.entries(PRICE), ...Object.entries(YEARLY)].find(([, id]) => id === paying[0].items.data[0].price.id)?.[0] || 'free' : 'free';
     if (paying.length > 1 || stx.plan !== want) mismatches.push({ customer: u.customer, stripe: want, db: stx.plan, paying: paying.length });
   }
   ok(!mismatches.length, `20 · Stripe and the database agree for all ${accounts.length} accounts (at most one paying subscription each)`, mismatches);

@@ -58,7 +58,9 @@ async function renderBilling(session) {
   if (billingFor !== who) return;
   const u = usageParts(Number(s.usedSeconds) || 0, s.monthlySeconds);
   const pct = s.monthlySeconds ? Math.min(100, Math.round(((Number(s.usedSeconds) || 0) / s.monthlySeconds) * 100)) : 0;
-  const when = s.periodEnd ? (s.cancelAtPeriodEnd ? `Ends ${dateText(s.periodEnd)}, then Free.` : s.plan === 'free' ? `Resets ${dateText(s.periodEnd)}.` : `Renews ${dateText(s.periodEnd)}.`) : '';
+  const subEnd = s.renewsAt || s.periodEnd;
+  const when = !s.periodEnd ? '' : s.cancelAtPeriodEnd ? `Ends ${dateText(subEnd)}, then Free.` : s.plan === 'free' ? `Resets ${dateText(s.periodEnd)}.`
+    : s.billingInterval === 'year' ? `Billed yearly, renews ${dateText(subEnd)}. Time renews ${dateText(s.periodEnd)}.` : `Renews ${dateText(s.periodEnd)}.`;
   body.innerHTML = `<div class="set-plan"><div class="set-row-text"><h3>${esc(s.planName || 'Free')}</h3>${when ? `<p>${esc(when)}</p>` : ''}</div>
       <div class="set-usage"><div class="set-usage-top"><span>Transcription this period</span><b>${esc(`${u.used} / ${u.total} ${u.unit}`)}</b></div>
         <div class="set-meter lvl-${esc(usageLevel(Number(s.usedSeconds) || 0, s.monthlySeconds))}" role="progressbar" aria-label="Transcription time used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div></div></div>

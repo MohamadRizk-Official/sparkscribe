@@ -6,7 +6,9 @@
 // Reads STRIPE_SECRET_KEY (and the public Supabase URL/key) from the environment or .env.local. Never prints
 // a secret. Creates, or finds by lookup key:
 //   * one product + monthly price per paid plan of the four-tier lineup in billing_plans (Flash, Bolt, Thunder; prices
-//     and names come from the database)
+//     and names come from the database), and on the same product a yearly price when the plan has yearly_price_cents
+//     (Flash $59, Bolt $99, Thunder $149). The introductory coupon below never applies to a yearly checkout: the server
+//     only adds it to monthly ones
 //   * for a plan with an introductory price (Flash: $1 first month), a coupon for the difference that applies to that
 //     plan's product only, for the first month(s) only (duration "once"); the server adds it at Checkout for eligible
 //     accounts
@@ -19,7 +21,8 @@
 //   * products carry the Stripe Tax code for SaaS (personal use); new prices are tax-exclusive (tax added at Checkout
 //     when STRIPE_AUTOMATIC_TAX=1 on the server)
 //   * --legal-base: adds <base>/terms and <base>/privacy to the Customer Portal (needed before live payments)
-// Prints the IDs to put in the server environment (STRIPE_<PLAN>_PRICE_ID, STRIPE_PORTAL_CONFIGURATION_ID).
+// Prints the IDs to put in the server environment (STRIPE_<PLAN>_PRICE_ID, STRIPE_<PLAN>_YEARLY_PRICE_ID,
+// STRIPE_PORTAL_CONFIGURATION_ID).
 import Stripe from 'stripe';
 import { readFileSync, writeFileSync } from 'node:fs';
 
@@ -74,7 +77,26 @@ for (const p of paid) {
   if ((typeof price.product === 'string' ? null : price.product.tax_code?.id ?? price.product.tax_code) !== TAX_CODE) await stripe.products.update(productId, { tax_code: TAX_CODE });
   if (price.tax_behavior === 'unspecified') console.log(`  note: ${p.name} price has no tax behavior; Stripe Tax uses the account default (set it to "exclusive" in Tax settings)`);
   out[`STRIPE_${p.key.toUpperCase()}_PRICE_ID`] = price.id;
-  prices.push({ product: productId, prices: [price.id] });
+  const productPrices = [price.id];
+
+  // yearly price on the same product (so the portal can switch between monthly and yearly)
+  if (p.yearly_price_cents) {
+    const ylookup = `sparkscribe_${p.key}_yearly_${p.yearly_price_cents}`;
+    let yprice = (await stripe.prices.list({ lookup_keys: [ylookup], limit: 1 })).data[0];
+    if (!yprice) {
+      yprice = await stripe.prices.create({
+        product: productId, currency: p.currency, unit_amount: p.yearly_price_cents, tax_behavior: 'exclusive',
+        recurring: { interval: 'year' }, lookup_key: ylookup, nickname: `SparkScribe ${p.name} yearly`,
+        metadata: { sparkscribe_plan: p.key, sparkscribe_interval: 'year' },
+      });
+      console.log(`created ${p.name} yearly: ${yprice.id}`);
+    } else console.log(`found   ${p.name} yearly: ${yprice.id}`);
+    const yproduct = typeof yprice.product === 'string' ? yprice.product : yprice.product.id;
+    if (yprice.unit_amount !== p.yearly_price_cents || yprice.currency !== p.currency || yprice.recurring?.interval !== 'year' || yproduct !== productId) { console.error(`Yearly price mismatch for ${p.key}`); process.exit(1); }
+    out[`STRIPE_${p.key.toUpperCase()}_YEARLY_PRICE_ID`] = yprice.id;
+    productPrices.push(yprice.id);
+  }
+  prices.push({ product: productId, prices: productPrices });
 
   // introductory price: a coupon worth the difference, on this plan's product only, for the intro months only
   if (p.intro_price_cents != null) {

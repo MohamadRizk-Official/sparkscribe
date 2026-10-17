@@ -2,7 +2,7 @@
 // same values the database holds (the migration that creates the plans is read here, so the two can't drift apart).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { allowance, money, times, perHour, priceGap, priceLines, planFromRow } from '../src/lib/pricing-catalog.js';
+import { allowance, money, times, perHour, priceGap, priceLines, planFromRow, hasYearly, yearlySavings, yearlySavingsPct, perMonthOfYearly, yearlyPriceLines } from '../src/lib/pricing-catalog.js';
 
 let pass = 0;
 const ok = (c, m) => { assert.ok(c, m); pass++; console.log('ok -', m); };
@@ -39,4 +39,15 @@ ok(!/\b(599|999|1499|10800|32400|72000)\b/.test(page) && !/\$5\.99|\$9\.99|\$14\
 ok(!/VITE_PRICING_PREVIEW|In development|PREVIEW_PLANS/.test(page), 'no design-preview switch or “in development” label is left');
 const serverFiles = ['api/billing.js', 'server/billing/config.js', 'server/billing/service.js'].map((f) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')).join('\n');
 ok(/not\('tier', 'is', null\)/.test(serverFiles) && !/'plus'|'pro'|PLUS_PRICE|PRO_PRICE/i.test(serverFiles), 'the server offers the four-tier lineup only (no Plus/Pro)');
+// ---- yearly billing (prices from 20261017300000_yearly_billing.sql) ----
+const ysql = readFileSync(new URL('../supabase/migrations/20261017300000_yearly_billing.sql', import.meta.url), 'utf8');
+const Y = Object.fromEntries([...ysql.matchAll(/when '(flash|bolt|thunder)' then (\d+)/g)].map((m) => [m[1], Number(m[2])]));
+ok(Y.flash === 5900 && Y.bolt === 9900 && Y.thunder === 14900, 'yearly prices in the migration: $59, $99, $149');
+const yp = (k) => ({ ...plan[k], yearly_price_cents: Y[k] ?? null });
+ok(hasYearly(yp('flash')) && hasYearly(yp('thunder')) && !hasYearly(yp('free')), 'paid plans have a yearly option; Free doesn’t');
+ok(yearlySavings(yp('flash')) === 1288 && yearlySavings(yp('bolt')) === 2088 && yearlySavings(yp('thunder')) === 3088, 'savings vs 12 regular months: $12.88, $20.88, $30.88');
+ok(yearlySavingsPct(yp('flash')) === 18 && yearlySavingsPct(yp('bolt')) === 17 && yearlySavingsPct(yp('thunder')) === 17, 'savings: 18%, 17%, 17%');
+ok(perMonthOfYearly(yp('flash')) === '$4.92' && perMonthOfYearly(yp('bolt')) === '$8.25' && perMonthOfYearly(yp('thunder')) === '$12.42', 'per-month equivalent rounds up: $4.92, $8.25, $12.42');
+const yl = yearlyPriceLines(yp('flash'));
+ok(yl.amount === '$59' && yl.per === '/year' && /every year until you cancel/.test(yl.renewal) && /3 hours renew every month/.test(yl.renewal) && !/\$1/.test(JSON.stringify(yl)), 'yearly Flash: $59/year, renewal and monthly allowance stated, no $1 offer');
 console.log(`\n${pass} checks passed`);

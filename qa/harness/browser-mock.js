@@ -105,13 +105,14 @@
   const speakers = (r) => Array.isArray(r.segments) && r.segments.length ? new Set(r.segments.map((s) => s.sp).filter((s) => s !== 'Unknown')).size
     : new Set([...(r.transcript_text || '').matchAll(/^\[\d{1,2}(?::\d{2}){1,2}\] ([^\n]+):$/gm)].map((m) => m[1]).filter((s) => s !== 'Unknown')).size;
 
-  // ---- billing (knobs: plan 'free'|'flash'|'bolt'|'thunder', usedSeconds, enforced, upgrades, cancelAtPeriodEnd, paymentProblem, introEligible) ----
-  // the same rows as supabase/migrations/20261016100000_four_tier.sql
+  // ---- billing (knobs: plan 'free'|'flash'|'bolt'|'thunder', usedSeconds, enforced, upgrades, cancelAtPeriodEnd, paymentProblem, introEligible,
+  //      yearly (the paid plan is billed yearly), checkoutOk (checkout returns a local URL instead of 503)) ----
+  // the same rows as supabase/migrations/20261016100000_four_tier.sql + 20261017300000_yearly_billing.sql
   const PLANS = [
-    { key: 'free', name: 'Free', tagline: 'Try the real product', price_cents: 0, currency: 'usd', billing_interval: null, monthly_seconds: 1800, tier: 0, features: [], intro_price_cents: null, intro_months: null, is_default: true },
-    { key: 'flash', name: 'Flash', tagline: 'Everyday studying', price_cents: 599, currency: 'usd', billing_interval: 'month', monthly_seconds: 10800, tier: 1, features: [], intro_price_cents: 100, intro_months: 1, is_default: false },
-    { key: 'bolt', name: 'Bolt', tagline: 'Focused Review', price_cents: 999, currency: 'usd', billing_interval: 'month', monthly_seconds: 32400, tier: 2, features: ['focused_review', 'followup_practice'], intro_price_cents: null, intro_months: null, is_default: false },
-    { key: 'thunder', name: 'Thunder', tagline: 'Connected recordings', price_cents: 1499, currency: 'usd', billing_interval: 'month', monthly_seconds: 72000, tier: 3, features: ['focused_review', 'followup_practice', 'across_ask', 'across_guide'], intro_price_cents: null, intro_months: null, is_default: false },
+    { key: 'free', name: 'Free', tagline: 'Try the real product', price_cents: 0, yearly_price_cents: null, currency: 'usd', billing_interval: null, monthly_seconds: 1800, tier: 0, features: [], intro_price_cents: null, intro_months: null, is_default: true },
+    { key: 'flash', name: 'Flash', tagline: 'Everyday studying', price_cents: 599, yearly_price_cents: 5900, currency: 'usd', billing_interval: 'month', monthly_seconds: 10800, tier: 1, features: [], intro_price_cents: 100, intro_months: 1, is_default: false },
+    { key: 'bolt', name: 'Bolt', tagline: 'Focused Review', price_cents: 999, yearly_price_cents: 9900, currency: 'usd', billing_interval: 'month', monthly_seconds: 32400, tier: 2, features: ['focused_review', 'followup_practice'], intro_price_cents: null, intro_months: null, is_default: false },
+    { key: 'thunder', name: 'Thunder', tagline: 'Connected recordings', price_cents: 1499, yearly_price_cents: 14900, currency: 'usd', billing_interval: 'month', monthly_seconds: 72000, tier: 3, features: ['focused_review', 'followup_practice', 'across_ask', 'across_guide'], intro_price_cents: null, intro_months: null, is_default: false },
   ];
   window.__qaBilling = [];
   async function billingApi(init) {
@@ -125,7 +126,8 @@
     const st = { plan: plan.key, planName: plan.name, tier: plan.tier, features: plan.features, ...(K.introEligible != null && { introEligible: !!K.introEligible }), status: plan.key === 'free' ? 'free' : 'active', monthlySeconds: plan.monthly_seconds, usedSeconds: used, remainingSeconds: remaining,
       periodStart: new Date().toISOString(), periodEnd: end, periodKind: plan.key === 'free' ? 'calendar_month' : 'billing', cancelAtPeriodEnd: !!K.cancelAtPeriodEnd,
       hasBillingAccount: plan.key !== 'free', paymentProblem: !!K.paymentProblem,
-      ...(body.detail && K.scheduledPlan && { scheduledChange: { plan: K.scheduledPlan, planName: PLANS.find((p) => p.key === K.scheduledPlan)?.name, at: end } }), meteringStarted: !!K.enforced, enforced: !!K.enforced, upgradesAvailable: !!K.upgrades, testMode: false };
+      ...(body.detail && K.scheduledPlan && { scheduledChange: { plan: K.scheduledPlan, planName: PLANS.find((p) => p.key === K.scheduledPlan)?.name, at: end } }), meteringStarted: !!K.enforced, enforced: !!K.enforced, upgradesAvailable: !!K.upgrades, yearlyAvailable: !!K.upgrades, testMode: false,
+      billingInterval: plan.key === 'free' ? null : K.yearly ? 'year' : 'month', renewsAt: plan.key === 'free' ? null : K.yearly ? new Date(Date.now() + 300 * 86400e3).toISOString() : end };
     if (body.action === 'status') return json(st);
     if (body.action === 'authorize') {
       const next = PLANS.find((p) => p.billing_interval && p.monthly_seconds > plan.monthly_seconds);
@@ -133,6 +135,8 @@
       if (!K.enforced || body.durationSeconds <= remaining + 1) return json({ ok: true, enforced: !!K.enforced, ...base });
       return json({ ok: false, enforced: true, reason: remaining < 1 ? 'limit_reached' : 'too_long', requestedSeconds: body.durationSeconds, ...base });
     }
+    if (body.action === 'checkout') window.__qaBilling.push(`checkout:${body.plan}:${body.interval || 'month'}`);
+    if (body.action === 'checkout' && K.checkoutOk) return json({ url: `#qa_checkout=${body.plan}:${body.interval || 'month'}`, kind: 'checkout' }); // hash only: the page stays
     if (body.action === 'checkout' || body.action === 'portal') return json({ error: 'payments_unavailable', message: "Paid plans aren't available yet. Nothing was charged." }, 503);
     if (body.action === 'delete_account') { // the server (no Stripe subscription here), then the delete_my_account RPC below
       if (K.deleteMissing) return json({ error: 'deletion_unavailable', message: 'Deleting accounts isn’t switched on yet. Nothing was deleted.' }, 503);

@@ -37,3 +37,20 @@ export function priceLines(p) {
   }
   return { amount: money(p.price_cents), per: '/month', note: null, renewal: `Renews at ${money(p.price_cents)}/month until you cancel.` };
 }
+
+// ---------- yearly billing ----------
+// A plan can be billed yearly when it has a yearly price (Flash $59, Bolt $99, Thunder $149). The transcription time
+// still renews every month. The $1 Flash first month is a monthly-only offer and is never shown with a yearly price.
+export const hasYearly = (p) => !!(p?.billing_interval && p.yearly_price_cents);
+// what a year costs at the regular monthly price, and what yearly saves against it (never against the $1 month)
+export const yearlySavings = (p) => (hasYearly(p) ? Math.max(0, p.price_cents * 12 - p.yearly_price_cents) : 0);
+export const yearlySavingsPct = (p) => (hasYearly(p) ? Math.round((yearlySavings(p) / (p.price_cents * 12)) * 100) : 0);
+// "$4.92": the yearly price spread over 12 months, rounded UP to the cent (never shown cheaper than it is)
+export const perMonthOfYearly = (p) => `$${(Math.ceil(p.yearly_price_cents / 12) / 100).toFixed(2)}`;
+export function yearlyPriceLines(p) {
+  return {
+    amount: money(p.yearly_price_cents), per: '/year',
+    note: `${perMonthOfYearly(p)}/month, billed yearly`,
+    renewal: `${money(p.yearly_price_cents)} today, then ${money(p.yearly_price_cents)} every year until you cancel. Your ${allowance(p.monthly_seconds).long} renew every month.`,
+  };
+}
