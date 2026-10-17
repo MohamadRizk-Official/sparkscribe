@@ -68,14 +68,15 @@ Legend: ✅ functional and verified (tests and/or real use) · 🟡 implemented,
 | Focused Review (weak concepts from quiz results; Bolt+) | 🟡 | Branch only; e2e + unit tested |
 | Across recordings: Ask and combined guide (Thunder) | 🟡 | Branch only; real-model tested $0.023 |
 | Four-tier billing: Stripe checkout, portal, webhooks, entitlements | 🟡 | Test mode 32/32 real scenarios; not in prod |
-| Yearly prices | ⬜ | Decision 2026-10-17 |
+| Yearly prices | ⬜ | Owner chose monthly + yearly; amounts not set. Needs: amounts, a DB change so yearly plans still get a monthly allowance (billing period = 1 year), yearly Stripe prices |
 | AI usage ledger and limits | 🟡 | DB applied; enforcement off |
 | Account deletion | 🟡 | Migration applied; UI on branch |
 | Legal pages (/privacy, /terms) | 🟠 | Drafts; [CONFIRM] items remain; must add Turnstile + Resend |
-| Student dashboard (Continue Studying, recent, courses, what's next) | ⬜ | Phase 3 of the 2026-10-17 directive |
-| Course exam dates / study plan | ⬜ | |
-| Flashcard spaced repetition | ⬜ | |
-| Theme circle transition | ⬜ | Theme switch exists (lib/theme-toggle.js) |
+| Student dashboard (Continue Studying, recent, courses, what's next) | 🟡 | src/home/dashboard.js; harness-verified; branch only |
+| Course exam dates / study plan | 🟠 | src/home/exam.js; e2e 7/7. Needs migration 20261017200000_course_exams (NOT applied: blocked pending owner approval); hidden until applied |
+| Flashcard spaced repetition | 🟡 | src/insights/srs.js, schedule in the set's progress (no schema change); e2e 7/7; home suggests due cards |
+| Theme circle transition | 🟡 | View Transitions from the button; instant with reduced motion/unsupported; 300 ms safety fallback |
+| Settings: Account, Plan & billing, Preferences, Privacy | 🟡 | Current-section nav, sidebar ≥980px, scrolling row on phones |
 | Product analytics (privacy-conscious) | ⬜ | Privacy Policy currently says "no analytics" |
 | Google OAuth brand verification | ⬜ | Needs the published Privacy Policy (docs/auth/GOOGLE-BRANDING.md) |
 | Original audio playback across devices | ⬜ by design | Audio is kept only in the browser that recorded it (IndexedDB, opt-out in Settings) |
