@@ -1,6 +1,6 @@
 // /auth — sign in, create account, forgot password, and set a new password (after a reset link).
 // How the pieces fit (reset sessions, email links, Turnstile): docs/auth/README.md
-import { supabase, isConfigured, authSettings, isolatedClient } from '../lib/supabase.js';
+import { supabase, isConfigured, authSettings, isolatedClient, revokeSessionNow } from '../lib/supabase.js';
 import { mountAccountMenu, safeNext, getUser } from '../lib/account.js';
 import { createCaptcha, isCaptchaRejection, CAPTCHA_REJECTED } from '../lib/captcha.js';
 import { recoveryAge, isFreshRecovery, currentSession, endSession, takeResetLink, peekResetLink, dropResetLink } from '../lib/recovery.js';
@@ -24,7 +24,7 @@ let mode = 'signin';
 // with a spinner) -> idle. Every path back ends in setPhase('idle'), so nothing can leave the button busy.
 let phase = 'idle';
 // A reset link from our email (lib/recovery.js): its token, and once used, the in-memory session it gave
-let resetLink = null, resetClient = null;
+let resetLink = null, resetClient = null, resetToken = null;
 // Cloudflare Turnstile (lib/captcha.js): for the modes that call Supabase with an email and password or send an email.
 // Created the first time one of them is shown; off (no widget, no token) when the build has no Site Key.
 let captcha = null;
@@ -305,7 +305,7 @@ async function saveWithResetLink(password) {
   if (!resetClient) {
     const link = takeResetLink(); // used once: a refresh after this can't try it again
     const iso = link && isolatedClient();
-    const { error } = link ? await iso.auth.verifyOtp({ token_hash: link.hash, type: 'recovery' }) : { error: true };
+    const { data: verified, error } = link ? await iso.auth.verifyOtp({ token_hash: link.hash, type: 'recovery' }) : { error: true };
     if (error) {
       resetLink = null;
       setMode('forgot');
@@ -313,17 +313,29 @@ async function saveWithResetLink(password) {
       return;
     }
     resetClient = iso; // a refused password (too weak, same as before) can be fixed without a new link
+    resetToken = verified?.session?.access_token || null;
+    // leaving the page before the password is saved ends that session on the server too (nothing is left behind)
+    window.addEventListener('pagehide', endResetClient, { once: true });
   }
   const { data, error } = await resetClient.auth.updateUser({ password });
   if (error) throw error;
   const owner = data?.user?.email || '';
   await passwordSaved(owner, async () => {
-    const { error: out } = await resetClient.auth.signOut({ scope: 'global' }).catch((e) => ({ error: e }));
-    if (out) await resetClient.auth.signOut({ scope: 'local' }).catch(() => {});
-    resetClient = null;
+    window.removeEventListener('pagehide', endResetClient);
+    const c = resetClient, t = resetToken;
+    resetClient = null; resetToken = null;
+    const { error: out } = await c.auth.signOut({ scope: 'global' }).catch((e) => ({ error: e }));
+    if (out) revokeSessionNow(t); // the global sign-out failed: at least this session ends
     resetLink = null;
     if (await currentSession()) await endSession(); // whoever else was signed in here: the sign-in page comes next
   });
+}
+
+function endResetClient() {
+  if (!resetClient) return;
+  resetClient = null;
+  revokeSessionNow(resetToken); // synchronous keepalive request: it goes out even as the page closes
+  resetToken = null;
 }
 
 // Saved: end the session(s), then the sign-in page says so (history replaced: Back can't return to a signed-in page)

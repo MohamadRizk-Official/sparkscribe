@@ -209,6 +209,18 @@ export async function run() {
       eq(verifies().length, n0 + 1, 'the link was used once');
       knobs({ weakPassword: false });
     }],
+    ['a reset that is abandoned after the link was used leaves nothing: no stored session, and leaving ends it on the server', async () => {
+      signedOutBrowser();
+      knobs({ weakPassword: true }); sessionStorage.removeItem('__qaWeakSeen'); sessionStorage.removeItem('__qaLogouts');
+      await open('/auth/callback#token_hash=pkce_qarec00007&type=recovery');
+      await waitFor(() => title() === 'Choose a new password', { what: 'form', timeout: 8000 });
+      fill('password1');
+      await waitFor(() => /stronger password/i.test(msg()), { what: 'refused (the link is now used, its session in memory)' });
+      assert(!Object.keys(localStorage).some((k) => /^sb-/.test(k)) && !Object.keys(sessionStorage).some((k) => /^sb-/.test(k)), 'no session stored anywhere');
+      await open('/qa/e2e/host.html'); // the person leaves the page
+      await waitFor(() => logouts().includes('local'), { what: 'that session ended on leaving' });
+      knobs({ weakPassword: false });
+    }],
     ['refreshing the form before saving keeps it working; an hour-old link is refused before any typing', async () => {
       signedOutBrowser();
       await open('/auth/callback#token_hash=pkce_qarec00004&type=recovery');
