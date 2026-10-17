@@ -131,3 +131,20 @@ Cloudflare's automatic "Success!" (no click) is a normal, fresh token: Supabase 
 
 **Rollback:** Supabase → Authentication → Attack Protection → turn CAPTCHA off (takes effect at once). The site keeps sending
 tokens, which Supabase then ignores.
+
+## Final status (2026-10-17)
+Verified on Production (www.spark-scribe.com, `main` 1097f4d, app code from 01c6f9c), from the Supabase Auth logs and
+direct server requests:
+- Password reset under CAPTCHA enforcement: `/recover` 200 at 05:44:40 (token accepted). A repeat within 60 s was
+  correctly throttled (429). The earlier full reset at 05:26:05 (verify → new password → global sign-out) left no
+  session behind.
+- Password sign-in under enforcement: three real tokens accepted (wrong, wrong, then correct → signed in).
+- Missing or invalid tokens refused on reset, sign-in, resend and magic link (`captcha_failed`).
+- Branded email: the owner reports the reset email arrived from SparkScribe. Independent delivery evidence is not
+  available here: there is no Resend access, Supabase writes no send log for custom SMTP, and the recipient isn't the
+  connected mailbox.
+- **Google sign-in after enforcement: not seen in the logs.** `/authorize` at 05:30:24, 05:39:18 and 05:45:37, but no
+  `/callback` or Login afterwards. The last completed Google sign-in in the logs was 03:59:10 (before enforcement).
+  Google sign-in isn't CAPTCHA-checked by Supabase, so enforcement shouldn't affect it. Confirm with one sign-in and
+  check its time in the logs.
+- Google's chooser shows the Supabase host: see `GOOGLE-BRANDING.md`.
