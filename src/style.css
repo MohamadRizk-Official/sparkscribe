@@ -2126,6 +2126,31 @@ dialog.sheet p.dlg-dim, .dlg-dim { color: var(--dim); font-size: 13px; margin: 0
 .set-nav { display: flex; gap: 6px; flex-wrap: wrap; position: sticky; top: 8px; z-index: 5; }
 .set-nav a { padding: 7px 14px; border-radius: 999px; font-size: 14px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); background: var(--k-0c0f1e-70); backdrop-filter: blur(12px); transition: color .15s, border-color .15s; }
 .set-nav a:hover, .set-nav a:focus-visible { color: var(--text); border-color: var(--k-22d3ee-45); outline: none; }
+.set-nav a[aria-current] { color: var(--text); border-color: var(--k-22d3ee-45); background: color-mix(in srgb, var(--c-cyan) 10%, var(--k-0c0f1e-70)); }
+.set-nav a:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.set-plan { display: grid; gap: 12px; }
+.set-usage { display: grid; gap: 7px; }
+.set-usage-top { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+.set-usage-top b { color: var(--ink); font-weight: 600; }
+.set-meter { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--ink) 8%, transparent); overflow: hidden; }
+.set-meter span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--c-cyan), var(--c-violet)); }
+.set-meter.lvl-warn span { background: var(--c-amber); }
+.set-meter.lvl-high span { background: var(--c-pink); }
+.set-warn { margin: 0; padding: 9px 12px; border-radius: 10px; font-size: 14px; color: var(--ink); background: color-mix(in srgb, var(--c-amber) 14%, transparent); border: 1px solid color-mix(in srgb, var(--c-amber) 40%, transparent); }
+.set-card { scroll-margin-top: 70px; }
+@media (max-width: 979px) {
+  .set-nav { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -4px; padding: 2px 4px; }
+  .set-nav::-webkit-scrollbar { display: none; }
+  .set-nav a { flex: none; white-space: nowrap; }
+}
+/* wide screens: the sections list becomes a sidebar */
+@media (min-width: 980px) {
+  .set-app { max-width: 1000px; grid-template-columns: 190px minmax(0, 1fr); column-gap: 28px; align-items: start; }
+  .set-app > .page-title { grid-column: 1 / -1; }
+  .set-app > .set-nav { grid-column: 1; grid-row: 2 / span 6; flex-direction: column; top: 84px; }
+  .set-app > .set-nav a { border-radius: 10px; }
+  .set-app > .set-card { grid-column: 2; }
+}
 .set-card { padding: 24px; display: grid; gap: 16px; scroll-margin-top: 64px; }
 .set-card h2 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
 .set-card h3 { margin: 0 0 4px; font-size: 16px; }

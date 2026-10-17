@@ -1,10 +1,12 @@
-// Settings: Account (who you're signed in as), Preferences (the mascot), Privacy (how your data is handled).
+// Settings: Account (who you're signed in as), Plan & billing (a summary; changes happen on /account),
+// Preferences (appearance, the mascot), Privacy (how your data is handled).
 // Works signed out too: preferences are kept in this browser, and on the account when signed in.
 import { mountAccountMenu, getSession, signOut, esc, deleteMyAccount } from '../lib/account.js';
 import { makeDialog } from '../library/dialogs.js';
 import { createCaptcha } from '../lib/captcha.js';
 import { getMascotPref, setMascotPref, getThemePref, setThemePref } from '../lib/prefs.js';
 import { mountMascot } from '../mascot/mascot.js';
+import { getBillingStatus, usageParts, usageLevel, dateText } from '../lib/billing.js';
 import { keepAudioPref, setKeepAudioPref, audioStorageInfo, clearAllAudio, fmtBytes } from '../lib/audio-store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -20,8 +22,10 @@ function renderAccount(session) {
       : `<div class="set-row-text"><h3>Not signed in</h3><p>Sign in to save transcripts to My Library and keep your preferences on every device.</p></div>
       <a class="btn btn-primary" href="/auth?next=%2Fsettings">Sign in</a>`;
     showSaved();
+    renderBilling(null);
     return;
   }
+  renderBilling(session);
   const u = session.user, meta = u.user_metadata || {};
   const name = meta.full_name || meta.name || '';
   body.innerHTML = `<div class="set-who"><b>${esc(name || u.email || 'Signed in')}</b>${name ? `<span>${esc(u.email || '')}</span>` : ''}</div>
@@ -32,6 +36,60 @@ function renderAccount(session) {
   $('deleteAccountBtn')?.addEventListener('click', () => openDeleteDialog(u));
   showSaved();
 }
+
+// ---------- plan & billing: what the server says (display only; every check happens on the server) ----------
+let billingFor;
+async function renderBilling(session) {
+  const body = $('billingBody');
+  const who = session?.user?.id || null;
+  if (billingFor === who && body.dataset.done) return;
+  billingFor = who;
+  if (!session) {
+    body.innerHTML = `<div class="set-row-text"><h3>Free to start</h3><p>Sign in to see your plan and this month’s transcription time.</p></div>
+      <a class="btn btn-ghost" href="/pricing">See plans</a>`;
+    body.dataset.done = '1';
+    return;
+  }
+  let s;
+  try { s = await getBillingStatus(); } catch {
+    body.innerHTML = '<p class="set-note">Your plan couldn’t be loaded just now. <a href="/account">Open Plan &amp; billing</a></p>';
+    return;
+  }
+  if (billingFor !== who) return;
+  const u = usageParts(Number(s.usedSeconds) || 0, s.monthlySeconds);
+  const pct = s.monthlySeconds ? Math.min(100, Math.round(((Number(s.usedSeconds) || 0) / s.monthlySeconds) * 100)) : 0;
+  const when = s.periodEnd ? (s.cancelAtPeriodEnd ? `Ends ${dateText(s.periodEnd)}, then Free.` : s.plan === 'free' ? `Resets ${dateText(s.periodEnd)}.` : `Renews ${dateText(s.periodEnd)}.`) : '';
+  body.innerHTML = `<div class="set-plan"><div class="set-row-text"><h3>${esc(s.planName || 'Free')}</h3>${when ? `<p>${esc(when)}</p>` : ''}</div>
+      <div class="set-usage"><div class="set-usage-top"><span>Transcription this period</span><b>${esc(`${u.used} / ${u.total} ${u.unit}`)}</b></div>
+        <div class="set-meter lvl-${esc(usageLevel(Number(s.usedSeconds) || 0, s.monthlySeconds))}" role="progressbar" aria-label="Transcription time used" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><span style="width:${pct}%"></span></div></div></div>
+    ${s.paymentProblem ? '<p class="set-warn" role="status">There’s a problem with your last payment. Update your card in Plan &amp; billing to keep your plan.</p>' : ''}
+    <div class="set-actions"><a class="btn btn-primary" href="/account">${s.plan === 'free' ? 'Upgrade' : 'Manage plan &amp; billing'}</a><a class="btn btn-ghost" href="/pricing">Compare plans</a></div>`;
+  body.dataset.done = '1';
+}
+
+// ---------- section navigation: the link for the section in view is marked current ----------
+function trackSections() {
+  const links = [...document.querySelectorAll('.set-nav a')];
+  const byId = new Map(links.map((a) => [a.getAttribute('href').slice(1), a]));
+  const nav = document.querySelector('.set-nav');
+  const mark = (id) => {
+    links.forEach((a) => { if (a === byId.get(id)) a.setAttribute('aria-current', 'location'); else a.removeAttribute('aria-current'); });
+    // on phones the list scrolls sideways: keep the current one in view (horizontally only)
+    const a = byId.get(id);
+    if (a && nav.scrollWidth > nav.clientWidth) nav.scrollTo({ left: a.offsetLeft - (nav.clientWidth - a.offsetWidth) / 2, behavior: 'smooth' });
+  };
+  const visible = new Map();
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) visible.set(e.target.id, e.isIntersecting ? e.intersectionRatio : 0);
+    const top = [...byId.keys()].find((id) => visible.get(id) > 0);
+    if (top) mark(top);
+  }, { rootMargin: '-15% 0px -55% 0px', threshold: [0, 0.01] });
+  byId.forEach((_, id) => { const s = document.getElementById(id); if (s) io.observe(s); });
+  links.forEach((a) => a.addEventListener('click', () => mark(a.getAttribute('href').slice(1))));
+  const first = location.hash.slice(1);
+  mark(byId.has(first) ? first : 'account');
+}
+trackSections();
 
 // ---------- delete account ----------
 // What goes, said plainly; the password and the typed word guard against a slip or someone else at this computer.
