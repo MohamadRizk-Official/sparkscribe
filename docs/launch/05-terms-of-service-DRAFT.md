@@ -1,11 +1,11 @@
 # SparkScribe Terms of Service
 
 > **Draft for review, not legal advice.** **[CONFIRM]** marks the last details for the owner to confirm before
-> publication. It describes SparkScribe as built today (2026-10-16): the Free, Flash, Bolt and Thunder plans. It has not
-> been reviewed by a lawyer.
+> publication. It describes SparkScribe as built today (2026-10-17): the Free, Flash, Bolt and Thunder plans, billed
+> monthly or yearly. It has not been reviewed by a lawyer.
 
-**Effective date:** the date of publication **[CONFIRM: filled in when published]** · **Operator:** HRstudios LLC
-**[CONFIRM: postal address, optional]** · **Contact:** contact.hrstudios@gmail.com
+**Effective date:** the date of publication **[CONFIRM: filled in when published]** · **Operator:** HRstudios LLC, a
+Michigan limited liability company **[CONFIRM: postal address, optional]** · **Contact:** contact.hrstudios@gmail.com
 
 ## 1. Agreement
 SparkScribe is a product operated by HRstudios LLC. By creating an account or using SparkScribe you agree to these Terms and
@@ -28,36 +28,44 @@ when you can continue. We may adjust limits; your plan's transcription allowance
 gets the same transcription accuracy and the same quality of AI answers.
 
 ## 3. Plans and subscriptions
-**Plans** (US dollars, per month):
+**Plans** (US dollars). Transcription time is per month on every plan, including on yearly billing:
 
 
-| Plan | Price | Transcription | Also includes |
-|---|---|---|---|
-| Free | $0 | 30 minutes | Summaries, notes, Ask, flashcards, quizzes, study guides, Create tools and exports |
-| Flash | $5.99 ($1.00 for the first month, see below) | 3 hours | Everything in Free |
-| Bolt | $9.99 | 9 hours | Everything in Flash, plus Focused Review and new practice questions |
-| Thunder | $14.99 | 20 hours | Everything in Bolt, plus asking across recordings and combined study guides |
+| Plan | Monthly billing | Yearly billing | Transcription each month | Also includes |
+|---|---|---|---|---|
+| Free | $0 | – | 30 minutes | Summaries, notes, Ask, flashcards, quizzes, study guides, Create tools and exports |
+| Flash | $5.99 a month ($1.00 for the first month, see below) | $59 a year | 3 hours | Everything in Free |
+| Bolt | $9.99 a month | $99 a year | 9 hours | Everything in Flash, plus Focused Review and new practice questions |
+| Thunder | $14.99 a month | $149 a year | 20 hours | Everything in Bolt, plus asking across recordings and combined study guides |
 
 Where we're required to collect sales tax or a similar tax, it is calculated at checkout based on your billing address
 and added to the price; you'll see the total before you pay.
 
-- **Flash introductory offer:** if you have never had a paid SparkScribe plan, your first month of Flash costs $1.00. From
-  your second month, Flash renews at $5.99 a month until you cancel. The offer is available once per person and account;
+- **Flash introductory offer:** if you have never had a paid SparkScribe plan, your first month of Flash on monthly
+  billing costs $1.00. From your second month, Flash renews at $5.99 a month until you cancel. The offer doesn't apply to
+  yearly billing. The offer is available once per person and account;
   it ends when the first month ends, and it isn't available on a plan change from another paid plan. We may end the offer
   for new customers at any time; that doesn't change the price of a first month you've already paid for.
 - **What the allowance counts:** the length of recordings you transcribe and save. AI features, exports and opening
-  saved recordings don't use it. Free resets each calendar month (UTC); paid plans reset at each renewal. Unused time
-  doesn't carry over.
-- **Payment and renewal:** payments are handled by Stripe; we never see your full card details. Paid plans renew
-  automatically every month on the same date until you cancel. You'll see the price and renewal terms before you pay.
+  saved recordings don't use it. Free resets each calendar month (UTC). Paid plans reset every billing month: on monthly
+  billing at each renewal; on yearly billing every month on the same day of the month your subscription started (or the
+  month's last day, when that month is shorter). Unused time doesn't carry over.
+- **Payment and renewal:** payments are handled by Stripe; we never see your full card details. Monthly plans renew
+  automatically every month, and yearly plans every year, on the same date until you cancel. You'll see the price and
+  renewal terms before you pay. Before each yearly renewal we email you a reminder with the price and how to cancel.
+  **[CONFIRM: turn on Stripe's renewal reminder emails for yearly plans (Stripe Dashboard → Settings → Billing →
+  Subscriptions and emails), or we add our own reminder before publishing]**
+- **Switching between monthly and yearly billing** is a plan change, made in Manage Billing: moving to yearly (or to a
+  higher plan) takes effect at once and the prorated difference is charged then; moving to a cheaper price takes effect
+  at the next renewal.
 - **Upgrades** (to a plan with more time or features) take effect immediately; the prorated difference for the rest of the
   current period is charged at once. If you upgrade during your $1 Flash month, you're credited for the unused part of
-  what you actually paid and charged the new plan's price for the rest of the period. **[CONFIRM: upgrade during the
-  $1 month]**
+  what you actually paid and charged the new plan's price for the rest of the period.
 - **Downgrades** (to a plan with less time or features) take effect at the end of the current period; until then you keep
   the plan you paid for, and the lower price applies from your next renewal.
 - **Cancellation:** at any time in Plan & usage → Manage Billing. Your plan stays active until the end of the period
-  you've paid for, then you return to Free and no further payments are taken. Nothing in your library is deleted.
+  you've paid for (the month, or for yearly billing the year), with its monthly transcription time each month until then;
+  then you return to Free and no further payments are taken. Nothing in your library is deleted.
 - **When a plan ends or changes:** your recordings, transcripts, notes, quizzes, review progress and practice questions
   stay in your account, and so do the answers and study guides you made across recordings (you can still open and delete
   them). Creating new ones with a feature your plan no longer includes needs a plan that includes it.
@@ -68,7 +76,9 @@ and added to the price; you'll see the total before you pay.
   charges for a period in which a service failure on our side prevented you from using SparkScribe, and where the law
   requires a refund. Duplicate charges and charges made after an account was deleted are refunded automatically; for
   anything else, email contact.hrstudios@gmail.com. Canceling stops future payments, and your plan stays active until
-  the end of the period you've paid for.
+  the end of the period you've paid for. This includes yearly plans: canceling a yearly plan stops its next renewal,
+  and the months left in the year you paid for aren't refunded. **[CONFIRM: no refund for unused months of a yearly
+  plan, or offer a prorated refund on request in the first 14 days]**
 - **Price changes:** at least 30 days' notice by email before the renewal they apply to; you can cancel before then.
   **[CONFIRM: 30 days]**
 - **Deleting your account** cancels any subscription immediately, so you are never charged again. The unused part of
@@ -122,7 +132,6 @@ limits liability that can't be limited by law, or your statutory consumer rights
 Please contact us first; most concerns can be resolved quickly. These Terms are governed by the laws of the State of
 Michigan, USA, without regard to its conflict-of-laws rules. Disputes go to the state or federal courts located in
 Michigan, unless your local consumer law gives you the right to bring a claim where you live.
-**[CONFIRM: the state HRstudios LLC is registered in]**
 
 ## 12. Changes to these Terms
 We'll give at least 14 days' notice of material changes in the app or by email. Continuing to use

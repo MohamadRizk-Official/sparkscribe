@@ -1,10 +1,10 @@
 # SparkScribe Privacy Policy
 
 > **Draft for review, not legal advice.** **[CONFIRM]** marks the last details for the owner to confirm before
-> publication. Everything else describes how SparkScribe works today (2026-10-16). It has not been reviewed by a lawyer.
+> publication. Everything else describes how SparkScribe works today (2026-10-17). It has not been reviewed by a lawyer.
 
 **Effective date:** the date of publication **[CONFIRM: filled in when published]**
-**Who we are:** SparkScribe is a product operated by HRstudios LLC **[CONFIRM: postal address, optional]** ("we", "us").
+**Who we are:** SparkScribe is a product operated by HRstudios LLC, a Michigan limited liability company **[CONFIRM: postal address, optional]** ("we", "us").
 Contact: contact.hrstudios@gmail.com
 
 ## 1. The short version
@@ -25,7 +25,9 @@ address and browser type). Optionally, a display name. If you sign in with Googl
 profile picture.
 
 **Content you save:** transcript titles and text, speaker names you assign, timestamps, recording length, language and
-recording type, folders and favourites. If you use AI features: the summaries, notes, insights, study material, drafts,
+recording type, when you last opened each recording, courses (their names and, if you add them, an exam date and the
+topics you expect) and favourites. Flashcard review: when you rate a flashcard ("didn't know", "knew it", "easy"), we save
+when that card is next due, so the app can bring it back at the right time. If you use AI features: the summaries, notes, insights, study material, drafts,
 quizzes (and your quiz progress, including which concepts you're reviewing), and questions and answers they produce. If
 you ask across several recordings or make a combined study guide (Thunder), the question, the answer or guide, which
 recordings it used, and links to the passages it cites are saved to your account so you can reopen them on any device;
@@ -34,13 +36,13 @@ the recordings' audio and full transcripts are not copied into them.
 **Your confirmation:** when you create an account (by email, or the first time you sign in with Google) we record that
 you confirmed you're 13 or older and agreed to the Terms, with the time.
 
-**Subscription information (paid plans):** your plan, its status and renewal date, whether you've had a paid plan before
+**Subscription information (paid plans):** your plan, whether it's billed monthly or yearly, its status and renewal date, whether you've had a paid plan before
 and whether you've used the Flash first-month offer (so it's used once), and the identifiers Stripe gives us for
 your customer record and subscription. Stripe collects your name, email, card details and billing address directly; we
 receive only the card brand and last four digits when Stripe shows them to you in its billing portal, not the card number.
 
-**Usage records:** how many seconds of recordings you've transcribed and saved in each billing period (to apply your
-plan's allowance), and a record of each AI action (which feature, when, how many AI tokens it used and what it cost us).
+**Usage records:** how many seconds of recordings you've transcribed and saved in each allowance period (a calendar
+month on Free, each billing month on paid plans, including on yearly billing; to apply your plan's allowance), and a record of each AI action (which feature, when, how many AI tokens it used and what it cost us).
 We use these to run the plan allowances and fair-use limits and to understand costs.
 
 **Technical data:** our hosting and database providers keep short-lived logs of requests (IP address, time, page or API
@@ -53,7 +55,7 @@ address, browser type). Our own log lines contain your account ID and a recordin
   Settings → Privacy. Deleting a recording or your account removes it from the browser where you do so; signing out
   does not. On a shared computer, remove it before you leave.
 - your preferences (theme, mascot, transcription settings), whether you've agreed to AI processing, small progress
-  markers, and a transcript (with its audio) waiting for you to sign in, kept for at most one hour;
+  markers, the Pricing page's monthly or yearly choice, and a transcript (with its audio) waiting for you to sign in, kept for at most one hour;
 - the speech-recognition models (downloaded once; not personal).
 
 We use your browser's local storage and IndexedDB for these and for keeping you signed in. We don't set advertising or
@@ -64,7 +66,8 @@ analytics cookies.
 ## 3. How we use it
 - To provide the service: transcribe on your device, save and show your library, and run the AI features you ask for.
 - To provide subscriptions: apply your plan's allowance, show your usage, and keep your plan in sync with Stripe.
-- To keep accounts secure: sign-in, password reset, email confirmation, fraud and abuse prevention, usage limits.
+- To keep accounts secure: sign-in, password reset, email confirmation, a security check against automated sign-ups
+  and sign-ins (Cloudflare Turnstile), fraud and abuse prevention, usage limits.
 - To charge for subscriptions and meet tax and accounting obligations (Stripe uses your billing address to calculate any
   sales tax).
 - To keep costs sustainable: fair-use limits on AI features per account and a service-wide daily cap.
@@ -82,7 +85,8 @@ required).
 | Supabase | accounts, authentication, database | account and saved content, usage and subscription records | United States (us-east-1) |
 | Anthropic | AI features | transcript text and your question for each AI request | United States |
 | Stripe | payments and subscriptions | name, email, card details (entered directly with Stripe), billing address | United States |
-| Resend **[CONFIRM: email provider]** | sign-up confirmation and password-reset emails | email address, message content | United States |
+| Resend | sign-up confirmation and password-reset emails | email address, message content | United States |
+| Cloudflare (Turnstile) | the security check on sign-up, sign-in, password reset and account deletion | your IP address and browser and device signals the check needs; no content | global |
 | Hugging Face; jsDelivr | delivering the speech-recognition model and runtime files to your browser | your IP address (standard web request); no content | global CDNs |
 | Google Fonts | delivering the website's fonts | your IP address (standard web request) | global |
 
@@ -100,7 +104,8 @@ results are stored in your account until you delete them or your account. AI out
 against the transcript and the recording.
 
 ## 6. How long we keep it
-- Saved transcripts and AI results (including answers and guides across recordings): until you delete them or your account.
+- Saved transcripts and AI results (including answers and guides across recordings), courses, exam dates and topics,
+  and flashcard review schedules: until you delete them or your account.
 - Account: until you delete it.
 - Usage and subscription records: with your account; billing records Stripe keeps are governed by Stripe's own policies.
 - Payment and tax records: Stripe keeps them, and we keep invoices and payment records, as long as accounting and tax
