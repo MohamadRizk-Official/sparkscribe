@@ -48,3 +48,5 @@ qa/out/
 cloudflare/.wrangler
 cloudflare/node_modules
 cloudflare/.dev.vars
+# webhook signing secrets written by scripts/stripe-setup.mjs --secret-out
+whsec*.txt

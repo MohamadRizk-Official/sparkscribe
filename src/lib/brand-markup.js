@@ -39,5 +39,5 @@ export const MARK_HTML = markSvg();
 
 export const BRAND_FONT_LINK = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&amp;text=Spark&amp;display=swap" />';
 
-// Site-wide legal links (<!-- sparkscribe:legal -->). The documents are drafts until reviewed; the pages say so.
+// Site-wide footer and legal links (<!-- sparkscribe:legal -->).
 export const LEGAL_HTML = '<footer class="site-foot"><nav class="foot-links" aria-label="Footer"><a href="/pricing">Pricing</a><a href="/help">Help</a><a href="mailto:contact.hrstudios@gmail.com">Contact</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></nav><nav class="foot-topics" aria-label="For students"><a href="/lecture-notes">Lecture notes</a><a href="/flashcards">Flashcards</a><a href="/exam-prep">Exam prep</a></nav><p class="foot-fine">© HRstudios LLC · Your audio is transcribed on your device and never uploaded.</p></footer>';

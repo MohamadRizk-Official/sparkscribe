@@ -1,9 +1,8 @@
 # student/v2 → Production: release runbook
 
-**Status (2026-10-17):** ready on Preview (`https://sparkscribe-git-student-v2-moerizz.vercel.app`), all suites green
-(docs/launch/23-student-v2-qa.md). **One gate left: owner approval of the Privacy Policy and Terms.** Production has no
-legal pages today, and the student-first site links to them (footer, sign-up consent), so the production build refuses
-drafts by design (`legal-final-guard` in vite.config.js).
+**Status (2026-10-17):** legal pages finalized with the owner's decisions (effective October 17, 2026); the production
+build with `REQUIRE_FINAL_LEGAL=1` passes; all suites green (docs/launch/23-student-v2-qa.md). Released by
+fast-forwarding `main`.
 
 ## What ships
 Student-first home and navigation, signed-in study home (Continue studying, What to study next, Recent lectures, My
@@ -21,16 +20,15 @@ Nothing to apply. Every migration on the branch is already in production and add
 yearly_billing, applied 2026-10-17). The code that runs in Production today ignores the new columns.
 
 ## Steps
-1. Owner decisions in docs/launch/04 and 05 (the remaining **[CONFIRM]** notes: effective date, optional postal address,
-   yearly renewal reminders, refunds for unused yearly months, 30-day price-change notice, liability cap).
-2. Edit the drafts accordingly, then `node scripts/build-legal.mjs --final` (refuses while any note remains) and commit.
-3. Turn on Stripe's renewal reminder emails for yearly plans (if that is the chosen answer in step 1).
-4. Fast-forward `main` to `student/v2` (`main` is an ancestor: no merge commit) and push; Vercel builds Production.
-5. Post-deploy checks (read-only, Production URL and www.spark-scribe.com): `/` signed out (student hero, Pricing
-   preview, footer), `/pricing` and `/pricing?billing=year` ("Coming soon", prices from the database), `/privacy` and
-   `/terms` (no Draft banner), `/help`, `/lecture-notes`, `/flashcards`, `/exam-prep`, `/auth?mode=signup` (age +
-   Terms tick, Turnstile), then a signed-in check by the owner: home dashboard, Library, a transcript, Settings.
-6. Google OAuth brand verification can then use the published Privacy Policy (docs/auth/GOOGLE-BRANDING.md).
+1. ~~Owner decisions in docs/launch/04 and 05~~ done 2026-10-17; `node scripts/build-legal.mjs --final` committed.
+2. Fast-forward `main` to `student/v2` (`main` is an ancestor: no merge commit) and push; Vercel builds Production.
+3. Post-deploy checks (read-only, www.spark-scribe.com): `/` signed out (student hero, Pricing preview, footer),
+   `/pricing` and `/pricing?billing=year` ("Coming soon", prices from the database), `/privacy` and `/terms` (final,
+   effective date), `/help`, `/lecture-notes`, `/flashcards`, `/exam-prep`, `/auth?mode=signup` (age + Terms tick,
+   Turnstile), desktop and phone widths; then a signed-in check by the owner: home dashboard, Library, a transcript,
+   Settings.
+4. Google OAuth brand verification can now use the published Privacy Policy (docs/auth/GOOGLE-BRANDING.md).
+5. Real payments: docs/launch/25-live-payments.md.
 
 ## Rollback
 - Vercel → Deployments → the previous Production deployment → **Instant Rollback**. Current Production before this

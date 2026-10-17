@@ -241,8 +241,15 @@ ok(ret.url && !lastCheckout.has('discounts[0][coupon]') && (await statusOf(retur
     'yearly Flash: Checkout uses the server’s yearly Flash price');
   ok(!lastCheckout.has('discounts[0][coupon]') && lastCheckout.get('allow_promotion_codes') === 'false' && lastCheckout.get('metadata[intro]') === '0',
     'yearly Flash never gets the $1 first-month coupon, even for an eligible account');
+  ok(/^\$59 today, then \$59 every year until you cancel\. 3 hours of transcription renew every month\./.test(lastCheckout.get('custom_text[submit][message]')) && !lastCheckout.has('consent_collection[terms_of_service]'),
+    'yearly Checkout states the renewal terms next to the pay button');
   const mc = await tryCheckoutFor(yu, 'flash', 'month');
   ok(mc.url && lastCheckout.get('line_items[0][price]') === 'price_flash' && lastCheckout.get('discounts[0][coupon]') === 'sparkscribe_flash_intro_499', '…while monthly Flash for the same account still gets it');
+  ok(/^\$1 today for your first month, then \$5\.99 every month until you cancel\./.test(lastCheckout.get('custom_text[submit][message]')), 'the $1 month and the renewal price are both stated at checkout');
+  process.env.STRIPE_REQUIRE_TOS = '1';
+  await tryCheckoutFor(yu, 'thunder', 'month');
+  ok(lastCheckout.get('consent_collection[terms_of_service]') === 'required' && /^\$14\.99 today, then \$14\.99 every month/.test(lastCheckout.get('custom_text[submit][message]')), 'STRIPE_REQUIRE_TOS=1: the customer must accept the Terms in Checkout');
+  delete process.env.STRIPE_REQUIRE_TOS;
   const dc = await tryCheckoutFor(yu, 'bolt');
   ok(dc.url && lastCheckout.get('line_items[0][price]') === 'price_bolt', 'no interval given: monthly (older pages keep working)');
   const savedY = process.env.STRIPE_THUNDER_YEARLY_PRICE_ID;

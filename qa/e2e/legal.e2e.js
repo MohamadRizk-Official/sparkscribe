@@ -1,4 +1,4 @@
-// Legal pages (drafts until the owner approves them) and the links to them. Run on any harness page.
+// The published legal pages and the links to them. Run on any harness page.
 import { waitFor, runTests, assert } from './lib.js';
 
 const page = async (path) => new DOMParser().parseFromString(await (await fetch(path)).text(), 'text/html');
@@ -16,13 +16,13 @@ async function open(path) {
 
 export async function run() {
   const r = await runTests([
-    ['/privacy and /terms are served, clearly marked as drafts, with review notes highlighted', async () => {
+    ['/privacy and /terms are published: final text, effective date, no draft banner or review notes', async () => {
       for (const [path, heading] of [['/privacy', /Privacy Policy/], ['/terms', /Terms of Service/]]) {
         const d = await page(path);
         assert(heading.test(d.querySelector('h1')?.textContent || ''), `${path} heading`);
-        assert(/Draft, not yet in effect/.test(d.querySelector('.legal-banner')?.textContent || ''), `${path} draft banner`);
-        assert(/\(draft\)/.test(d.title), `${path} title says draft`);
-        assert(d.querySelectorAll('.legal-flag').length >= 1, `${path} remaining owner decisions highlighted`);
+        assert(!d.querySelector('.legal-banner') && !/draft/i.test(d.title), `${path} no draft banner or title`);
+        assert(!d.querySelectorAll('.legal-flag').length && !/\[(CONFIRM|LEGAL REVIEW)/.test(d.body.textContent), `${path} no review notes`);
+        assert(/Effective date:\s*October \d+, 2026/.test(d.body.textContent), `${path} effective date`);
         assert(!/Draft for review, not legal advice/.test(d.body.textContent), `${path} internal reviewer note removed`);
       }
       const terms = await page('/terms');

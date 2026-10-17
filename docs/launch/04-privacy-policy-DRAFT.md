@@ -3,9 +3,9 @@
 > **Draft for review, not legal advice.** **[CONFIRM]** marks the last details for the owner to confirm before
 > publication. Everything else describes how SparkScribe works today (2026-10-17). It has not been reviewed by a lawyer.
 
-**Effective date:** the date of publication **[CONFIRM: filled in when published]**
-**Who we are:** SparkScribe is a product operated by HRstudios LLC, a Michigan limited liability company **[CONFIRM: postal address, optional]** ("we", "us").
-Contact: contact.hrstudios@gmail.com
+**Effective date:** October 17, 2026
+**Who we are:** SparkScribe is a product operated by HRstudios LLC, a Michigan limited liability company ("we", "us").
+Contact for privacy questions and requests: contact.hrstudios@gmail.com
 
 ## 1. The short version
 - **Your audio is never uploaded.** Recordings are converted and transcribed inside your browser. If you allow it, the

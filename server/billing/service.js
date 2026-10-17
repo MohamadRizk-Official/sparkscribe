@@ -127,8 +127,19 @@ export async function createCheckout(sb, user, planKey, origin, interval = 'mont
     // an earlier checkout that never completed payment: let Stripe expire it rather than stacking another
     await stripe.subscriptions.cancel(current.id).catch(() => {});
   }
+  // The renewal terms, next to Stripe's pay button (auto-renewal disclosure at the point of purchase). With
+  // STRIPE_REQUIRE_TOS=1 (needs the Terms URL in the Stripe account's public details) the customer also ticks the Terms.
+  const usd = (c) => (c % 100 ? `$${(c / 100).toFixed(2)}` : `$${c / 100}`);
+  const hours = `${Math.round(plan.monthly_seconds / 360) / 10} hours`;
+  const renewal = interval === 'year'
+    ? `${usd(plan.yearly_price_cents)} today, then ${usd(plan.yearly_price_cents)} every year until you cancel. ${hours} of transcription renew every month. We email you before each yearly renewal.`
+    : coupon
+      ? `${usd(plan.intro_price_cents)} today for your first month, then ${usd(plan.price_cents)} every month until you cancel.`
+      : `${usd(plan.price_cents)} today, then ${usd(plan.price_cents)} every month until you cancel.`;
   const session = await stripe.checkout.sessions.create({
     mode: 'subscription',
+    custom_text: { submit: { message: `${renewal} Cancel anytime in Plan & billing; your plan stays active until the end of the period you paid for.` } },
+    ...(process.env.STRIPE_REQUIRE_TOS === '1' && { consent_collection: { terms_of_service: 'required' } }),
     customer,
     client_reference_id: user.id,
     line_items: [{ price, quantity: 1 }],

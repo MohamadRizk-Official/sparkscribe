@@ -4,8 +4,8 @@
 > publication. It describes SparkScribe as built today (2026-10-17): the Free, Flash, Bolt and Thunder plans, billed
 > monthly or yearly. It has not been reviewed by a lawyer.
 
-**Effective date:** the date of publication **[CONFIRM: filled in when published]** · **Operator:** HRstudios LLC, a
-Michigan limited liability company **[CONFIRM: postal address, optional]** · **Contact:** contact.hrstudios@gmail.com
+**Effective date:** October 17, 2026 · **Operator:** HRstudios LLC, a Michigan limited liability company ·
+**Contact:** contact.hrstudios@gmail.com
 
 ## 1. Agreement
 SparkScribe is a product operated by HRstudios LLC. By creating an account or using SparkScribe you agree to these Terms and
@@ -52,9 +52,8 @@ and added to the price; you'll see the total before you pay.
   month's last day, when that month is shorter). Unused time doesn't carry over.
 - **Payment and renewal:** payments are handled by Stripe; we never see your full card details. Monthly plans renew
   automatically every month, and yearly plans every year, on the same date until you cancel. You'll see the price and
-  renewal terms before you pay. Before each yearly renewal we email you a reminder with the price and how to cancel.
-  **[CONFIRM: turn on Stripe's renewal reminder emails for yearly plans (Stripe Dashboard → Settings → Billing →
-  Subscriptions and emails), or we add our own reminder before publishing]**
+  renewal terms before you pay. Before each yearly renewal we email you a reminder with the renewal date, the price and
+  how to cancel.
 - **Switching between monthly and yearly billing** is a plan change, made in Manage Billing: moving to yearly (or to a
   higher plan) takes effect at once and the prorated difference is charged then; moving to a cheaper price takes effect
   at the next renewal.
@@ -77,10 +76,10 @@ and added to the price; you'll see the total before you pay.
   requires a refund. Duplicate charges and charges made after an account was deleted are refunded automatically; for
   anything else, email contact.hrstudios@gmail.com. Canceling stops future payments, and your plan stays active until
   the end of the period you've paid for. This includes yearly plans: canceling a yearly plan stops its next renewal,
-  and the months left in the year you paid for aren't refunded. **[CONFIRM: no refund for unused months of a yearly
-  plan, or offer a prorated refund on request in the first 14 days]**
-- **Price changes:** at least 30 days' notice by email before the renewal they apply to; you can cancel before then.
-  **[CONFIRM: 30 days]**
+  you keep the plan until the end of the year you paid for, and the unused months aren't refunded, except where the
+  law requires a refund.
+- **Price changes:** we'll email you at least 30 days before a new price applies to your renewal, and give any longer
+  notice or ask for any consent the law requires; you can cancel before the new price applies.
 - **Deleting your account** cancels any subscription immediately, so you are never charged again. The unused part of
   the current period is not refunded.
 
@@ -125,8 +124,9 @@ we'll tell you why first. You may stop using SparkScribe and delete your account
 ## 10. Liability
 To the extent the law allows, we aren't liable for indirect, incidental, special or consequential losses, or for loss of
 data you didn't export, and our total liability for any claim relating to SparkScribe is limited to the greater of the
-amount you paid us in the 12 months before the claim and US$50. **[CONFIRM: liability cap]** Nothing in these Terms
-limits liability that can't be limited by law, or your statutory consumer rights.
+amount you paid us in the 12 months before the claim and US$50. Nothing in these Terms excludes or limits liability
+that can't be excluded or limited by law, or your statutory consumer rights; where the law doesn't allow a limitation,
+it applies only to the extent the law allows.
 
 ## 11. Governing law and disputes
 Please contact us first; most concerns can be resolved quickly. These Terms are governed by the laws of the State of
