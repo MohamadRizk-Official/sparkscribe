@@ -51,3 +51,8 @@ must run after a reload that follows clearing sessionStorage (it writes back the
   courses/exam prep, study tools, spaced review, Settings. Owner smoke test recommended.
 - Rollback: previous production deployment `sparkscribe-a323queji` (main 50d49a5) is Ready and serving; Vercel Instant
   Rollback restores it. Database changes are additive (no rollback needed).
+
+## Billing release 654557f (2026-10-17)
+Two-key live setup with probed permissions, the pilot allowlist, webhook reuse. billing-server 80/80, unit and SQL
+suites pass, production build (`REQUIRE_FINAL_LEGAL=1`) passes, `stripe-live-setup.mjs --dry-run` passes in test mode.
+Payments remain off in Production (no Stripe variables; billing_settings all off). Rollback: `sparkscribe-3tayxn24r`.
