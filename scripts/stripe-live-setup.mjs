@@ -126,5 +126,8 @@ const check = spawnSync(process.execPath, ['scripts/billing-check.mjs', '--env',
 });
 process.stdout.write(check.stdout);
 if (check.status !== 0) fail('the live readiness check found problems (above)');
-console.log('\nDone. Live Stripe is configured in Vercel Production. Payments are still OFF.');
-console.log('Tell Claude "live setup done" to continue (database switch, payments on, controlled purchase).');
+if (DRY) console.log('\nDry run passed (test mode). Nothing was changed in Vercel.');
+else {
+  console.log('\nDone. Live Stripe is configured in Vercel Production. Payments are still OFF.');
+  console.log('Tell Claude "live setup done" to continue (database switch, payments on, controlled purchase).');
+}
