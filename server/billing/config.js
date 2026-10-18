@@ -50,6 +50,14 @@ export function portalAllowed(env = process.env) {
 // the places where the business is registered to collect it (registrations are made in the Stripe Dashboard, not
 // here). Prices stay $5.99 / $9.99 / $14.99 with tax added on top and shown before payment. Off by default.
 export const automaticTax = (env = process.env) => env.STRIPE_AUTOMATIC_TAX === '1';
+// Pilot: BILLING_CHECKOUT_ALLOWLIST="email,…" (or account ids) lets only these accounts start a NEW checkout, for the
+// controlled first live purchase. Everyone else is told paid plans aren't available yet; existing subscribers keep the
+// Customer Portal. Unset = everyone (the public launch).
+export function checkoutAllowedFor(user, env = process.env) {
+  const list = String(env.BILLING_CHECKOUT_ALLOWLIST || '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
+  if (!list.length) return true;
+  return !!user && (list.includes(String(user.email || '').toLowerCase()) || list.includes(String(user.id || '').toLowerCase()));
+}
 export function assertPaymentsEnabled() {
   if (!paymentsEnabled()) throw new BillingError("Paid plans aren't available yet. Nothing was charged.", { status: 503, code: 'payments_unavailable' });
 }

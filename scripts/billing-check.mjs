@@ -32,8 +32,9 @@ const live = /^(sk|rk)_live_/.test(key);
 info(`mode: ${live ? 'LIVE' : 'test'}${key.startsWith('rk_') ? ' (restricted key)' : ''}`);
 const stripe = new Stripe(key);
 
-const acct = await stripe.accounts.retrieve().catch((e) => ({ error: e.message }));
-if (acct.error) ok(false, 'Stripe account readable', acct.error);
+const acct = await stripe.accounts.retrieve().catch((e) => ({ error: e.message, forbidden: e.statusCode === 403 }));
+if (acct.forbidden) info('this restricted key may not read the account; account readiness is checked by a live Checkout probe (stripe-live-setup)');
+else if (acct.error) ok(false, 'Stripe account readable', acct.error);
 else {
   ok(acct.charges_enabled, 'the Stripe account can accept charges');
   if (live) ok(acct.payouts_enabled, 'payouts are enabled');

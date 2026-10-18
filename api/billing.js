@@ -8,7 +8,7 @@
 // The user is always the one in the verified session token; the browser never names a user, customer,
 // price or plan status. Only a plan key and an interval are accepted, and the server maps them to its own Stripe price.
 import { readJson, sendJson } from '../server/http.js';
-import { userClient, appOrigin, BillingError, billingLog, billingConfigured, isLiveMode, priceIdFor, loadPlans, paymentsEnabled } from '../server/billing/config.js';
+import { userClient, appOrigin, BillingError, billingLog, billingConfigured, isLiveMode, priceIdFor, loadPlans, paymentsEnabled, checkoutAllowedFor } from '../server/billing/config.js';
 import { getStatus, authorize, createCheckout, createPortal, deleteAccount, scheduledChange } from '../server/billing/service.js';
 
 async function signedIn(req) {
@@ -30,15 +30,15 @@ export default async function handler(req, res) {
         return sendJson(res, 200, {
           ...(await getStatus(sb)),
           // whether upgrades can be bought here, and whether they are Stripe test payments (Preview)
-          upgradesAvailable: paymentsEnabled() && (await loadPlans()).filter((p) => p.billing_interval).every((p) => priceIdFor(p.key)),
+          upgradesAvailable: paymentsEnabled() && checkoutAllowedFor(user) && (await loadPlans()).filter((p) => p.billing_interval).every((p) => priceIdFor(p.key)),
           // yearly can be bought only when every paid plan has a yearly price on the site and in Stripe
-          yearlyAvailable: paymentsEnabled() && (await loadPlans()).filter((p) => p.billing_interval).every((p) => p.yearly_price_cents && priceIdFor(p.key, 'year')),
+          yearlyAvailable: paymentsEnabled() && checkoutAllowedFor(user) && (await loadPlans()).filter((p) => p.billing_interval).every((p) => p.yearly_price_cents && priceIdFor(p.key, 'year')),
           testMode: billingConfigured() && !isLiveMode(),
           // the Account page asks for a scheduled plan change too (one Stripe read; never fails the status)
           ...(body.detail === true && { scheduledChange: await scheduledChange(sb, user).catch(() => null) }),
         });
       case 'authorize':
-        return sendJson(res, 200, await authorize(sb, body.durationSeconds));
+        return sendJson(res, 200, await authorize(sb, body.durationSeconds, user));
       case 'checkout':
         return sendJson(res, 200, await createCheckout(sb, user, String(body.plan || ''), appOrigin(req), body.interval == null ? 'month' : String(body.interval)));
       case 'portal':

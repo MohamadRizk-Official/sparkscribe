@@ -229,6 +229,21 @@ const returning = await P.createUser('returning@example.com');
 await db.query(`insert into private.billing_paid_history (user_id, livemode, first_plan) values ($1, false, 'flash')`, [returning]);
 const ret = await tryCheckoutFor(returning, 'flash');
 ok(ret.url && !lastCheckout.has('discounts[0][coupon]') && (await statusOf(returning)).introEligible === false, 'a returning customer (had Flash before) gets the regular $5.99, and the page is told so (introEligible: false)');
+// ---------- 3a. pilot: only allow-listed accounts can start a checkout ----------
+{
+  const pilot = await P.createUser('pilot@example.com'), other2 = await P.createUser('someone@example.com');
+  process.env.BILLING_CHECKOUT_ALLOWLIST = ' Pilot@Example.com ';
+  const before = stripeCalls.length;
+  const no = await service.createCheckout(fakeSb(other2), { id: other2, email: 'someone@example.com' }, 'flash', 'http://localhost:5173').catch((e) => e);
+  ok(no.code === 'payments_unavailable' && /Nothing was charged/.test(no.message) && stripeCalls.length === before, 'pilot: an account not on the list is refused before any Stripe call');
+  const yes = await service.createCheckout(fakeSb(pilot), { id: pilot, email: 'pilot@example.com' }, 'flash', 'http://localhost:5173');
+  ok(yes.url && lastCheckout.get('line_items[0][price]') === 'price_flash', 'pilot: the listed account (email, any case) gets Checkout');
+  const st = { rpc: async () => ({ data: await statusOf(other2), error: null }) };
+  ok((await service.authorize(st, 600, { id: other2, email: 'someone@example.com' })).upgradesAvailable === false && (await service.authorize(st, 600, null)).upgradesAvailable === false, 'pilot: others are not offered upgrades');
+  ok(config.checkoutAllowedFor({ id: pilot, email: 'x@y.z' }, { BILLING_CHECKOUT_ALLOWLIST: pilot.toUpperCase() }) && config.checkoutAllowedFor({ id: 'a', email: 'b' }, {}), 'the list also accepts account ids; no list = everyone');
+  delete process.env.BILLING_CHECKOUT_ALLOWLIST;
+}
+
 // ---------- 3c. yearly billing ----------
 {
   const yu = await P.createUser('yearly@example.com');

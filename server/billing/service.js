@@ -9,7 +9,7 @@
 //   createPortal()       Stripe Customer Portal for the signed-in user's own customer
 //   handleEvent()        a verified Stripe webhook event -> synchronized subscription state
 //   deleteAccount()      stop billing in Stripe, then delete the account (nobody keeps paying for a deleted account)
-import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, INTERVALS, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured, automaticTax, introCouponFor, billingScope } from './config.js';
+import { getStripe, isLiveMode, billingDb, loadPlans, priceIdFor, planForPrice, INTERVALS, checkoutAllowedFor, BillingError, billingLog, paymentsEnabled, assertPaymentsEnabled, portalAllowed, billingConfigured, automaticTax, introCouponFor, billingScope } from './config.js';
 
 const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
 const ACTIVE = (s) => PAID_STATUSES.has(s.status);
@@ -24,14 +24,14 @@ export async function getStatus(sb) {
 }
 
 // ---------- quota ----------
-export async function authorize(sb, durationSeconds) {
+export async function authorize(sb, durationSeconds, user = null) {
   const seconds = Number(durationSeconds);
   if (!Number.isFinite(seconds) || seconds <= 0 || seconds > MAX_SECONDS) throw new BillingError('Invalid recording length.', { status: 400, code: 'bad_request' });
   const s = await getStatus(sb);
   const plans = await loadPlans();
   const next = plans.find((p) => p.billing_interval && p.monthly_seconds > s.monthlySeconds) || null;
   const base = { plan: s.plan, remainingSeconds: Number(s.remainingSeconds), monthlySeconds: s.monthlySeconds, periodEnd: s.periodEnd, upgradeTo: next?.key || null,
-    upgradesAvailable: paymentsEnabled() && !!next && !!priceIdFor(next.key) };
+    upgradesAvailable: paymentsEnabled() && checkoutAllowedFor(user) && !!next && !!priceIdFor(next.key) };
   if (!s.enforced) return { ok: true, enforced: false, ...base };
   // one second of tolerance, matching the database check
   if (seconds > Number(s.remainingSeconds) + 1) {
@@ -76,6 +76,7 @@ async function liveSubscription(customer) {
 // ---------- Checkout / plan change ----------
 export async function createCheckout(sb, user, planKey, origin, interval = 'month') {
   assertPaymentsEnabled(); // before any Stripe or database call
+  if (!checkoutAllowedFor(user)) throw new BillingError("Paid plans aren't available yet. Nothing was charged.", { status: 503, code: 'payments_unavailable' });
   if (!INTERVALS.includes(interval)) throw new BillingError('Choose monthly or yearly billing.', { status: 400, code: 'bad_interval' });
   const stripe = getStripe();
   const plans = await loadPlans();
