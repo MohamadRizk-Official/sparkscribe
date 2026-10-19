@@ -19,7 +19,7 @@ import Stripe from 'stripe';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, rmSync, existsSync } from 'node:fs';
 import readline from 'node:readline';
-import { RUNTIME, SETUP, NOT_FOR_RUNTIME, probe, report } from './stripe-permissions.mjs';
+import { RUNTIME, SETUP, probe, report, checkExcess, reportExcess } from './stripe-permissions.mjs';
 
 const SITE = 'https://www.spark-scribe.com';
 const WEBHOOK = `${SITE}/api/stripe-webhook`;
@@ -59,11 +59,17 @@ console.log(report(sp));
 console.log('\nRuntime key permissions:');
 const rp = await probe(runtime, RUNTIME);
 console.log(report(rp));
-const extra = (await probe(runtime, NOT_FOR_RUNTIME)).filter((r) => r.result === 'ok').map((r) => r.label);
-if (extra.length) console.log(`${DRY ? '·' : '✗'} the runtime key can also write ${extra.join(', ')}: set ${extra.length > 1 ? 'them' : 'it'} to None (Production never needs ${extra.length > 1 ? 'them' : 'it'})`);
+// least privilege: the RUNTIME key (never the setup key) must have no access at all to what only setup needs
+console.log('\nRuntime key must have None on (checked with list reads, which have no object lookup):');
+const ex = await checkExcess(runtime);
+console.log(reportExcess(ex));
+const extra = ex.filter((r) => r.result === 'excess').map((r) => r.label);
+const unclear = ex.filter((r) => r.result === 'inconclusive').map((r) => r.label);
 const missing = [...sp.filter((r) => r.result !== 'ok').map((r) => `setup key: ${r.label} ${r.level}`), ...rp.filter((r) => r.result !== 'ok').map((r) => `runtime key: ${r.label} ${r.level}`)];
 if (missing.length) fail(`Add these permissions (Dashboard → Developers → API keys → ⋯ → Edit key), then run again:\n  - ${missing.join('\n  - ')}`);
-if (extra.length && !DRY) fail('The runtime key has more permissions than Production needs (above).');
+if (!DRY && extra.length) fail(`The runtime key can access ${extra.join(', ')}: set ${extra.length > 1 ? 'them' : 'it'} to None (Dashboard → Developers → API keys → ⋯ → Edit key), then run again.`);
+if (!DRY && unclear.length) fail(`Couldn't confirm the runtime key has no access to ${unclear.join(', ')} (details above). Nothing was changed.`);
+if (DRY && (extra.length || unclear.length)) console.log('· (dry run uses the sandbox secret key, which can access everything: expected here)');
 
 // ---- 2. the account (a restricted key may not be allowed to read it; the Checkout probe below then decides)
 const acct = await stripe.accounts.retrieve().catch((e) => (e.statusCode === 403 ? null : fail(`Stripe refused the key: ${e.message}`)));
