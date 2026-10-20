@@ -99,7 +99,9 @@ if (!DRY) {
   }
 }
 console.log('\nCreating or finding the live products, prices, coupon, portal and webhook…');
-const setup = spawnSync(process.execPath, ['scripts/stripe-setup.mjs', ...(DRY ? [] : ['--webhook-url', WEBHOOK, '--secret-out', SECRET_FILE]), '--legal-base', SITE],
+// the setup key reaches the child only through its environment (never the command line): --key-from-env makes the child
+// use exactly that key and never .env.local; --expect-mode makes it refuse a key of the other mode
+const setup = spawnSync(process.execPath, ['scripts/stripe-setup.mjs', '--key-from-env', '--expect-mode', mode, ...(DRY ? [] : ['--webhook-url', WEBHOOK, '--secret-out', SECRET_FILE]), '--legal-base', SITE],
   { env: { ...process.env, STRIPE_SECRET_KEY: setupKey }, encoding: 'utf8' });
 process.stdout.write(setup.stdout.split('\nServer environment variables')[0] + '\n');
 if (setup.status !== 0) fail(`stripe-setup failed: ${setup.stderr.trim()}`);

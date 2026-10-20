@@ -25,11 +25,15 @@
 // STRIPE_PORTAL_CONFIGURATION_ID).
 import Stripe from 'stripe';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { resolveStripeKey } from './stripe-key.mjs';
 
-const env = { ...Object.fromEntries((() => { try { return readFileSync('.env.local', 'utf8').split(/\r?\n/).map((l) => /^([A-Z0-9_]+)=(.*)$/.exec(l.trim())).filter(Boolean).map((m) => [m[1], m[2].trim()]); } catch { return []; } })()), ...process.env };
-const key = env.STRIPE_SECRET_KEY || '';
-if (!/^sk_(test|live)_/.test(key)) { console.error('STRIPE_SECRET_KEY (sk_test_… or sk_live_…) is not set in .env.local.'); process.exit(1); }
-const live = key.startsWith('sk_live_');
+const fileEnv = Object.fromEntries((() => { try { return readFileSync('.env.local', 'utf8').split(/\r?\n/).map((l) => /^([A-Z0-9_]+)=(.*)$/.exec(l.trim())).filter(Boolean).map((m) => [m[1], m[2].trim()]); } catch { return []; } })());
+const env = { ...fileEnv, ...process.env }; // the public Supabase URL/key may come from .env.local
+// The Stripe key (scripts/stripe-key.mjs): under stripe-live-setup only the key it handed over, never .env.local
+const resolved = resolveStripeKey({ argv: process.argv, env: process.env, fileEnv });
+if (resolved.error) { console.error(resolved.error); process.exit(1); }
+const { key, live } = resolved;
+if (process.argv.includes('--check-key')) { console.log(`key ok: ${live ? 'live' : 'test'} ${resolved.restricted ? 'restricted' : 'secret'} key from the ${resolved.source}`); process.exit(0); }
 const arg = (name) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : null; };
 const webhookUrl = arg('--webhook-url');
 const secretOut = arg('--secret-out');
