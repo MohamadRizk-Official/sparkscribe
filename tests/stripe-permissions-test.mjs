@@ -1,9 +1,10 @@
 // scripts/stripe-permissions.mjs: how Stripe's answers are read, with fake clients (no network, no Stripe account).
-// Regression for 2026-10-19: a runtime key with Coupons = None was reported as able to write coupons, because the old
-// excess probe (POST /v1/coupons/<fake id>) got "No such coupon" (404) and 404 was read as "allowed".
+// Regressions: 2026-10-19 a runtime key with Coupons = None was reported as able to write coupons (POST
+// /v1/coupons/<fake id> answered 404, read as "allowed"); 2026-10-20 the same key was refused because GET /v1/products
+// answered 200 although Products = None (catalog read is granted with other permissions; it can't change anything).
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { RUNTIME, SETUP, EXCESS, probe, checkExcess, classify, classifyExcess } from '../scripts/stripe-permissions.mjs';
+import { RUNTIME, SETUP, EXCESS, probe, checkExcess, classify, classifyWrite } from '../scripts/stripe-permissions.mjs';
 
 let pass = 0;
 const ok = (c, m) => { assert.ok(c, m); pass++; console.log('ok -', m); };
@@ -32,30 +33,43 @@ function fakeStripe(answers) {
 const throws = (e) => () => { throw e(); };
 const empty = () => ({ object: 'list', data: [] });
 
-// ---- 1. the reported case: Coupons = None on the runtime key
+// a runtime key configured as in the dashboard: Products/Prices/Coupons/Webhook Endpoints = None
+const noneKey = (over = {}) => fakeStripe({
+  'products.create': throws(E.forbidden), 'products.update': throws(E.forbidden), 'products.list': throws(E.forbidden),
+  'prices.create': throws(E.forbidden), 'prices.update': throws(E.forbidden), 'prices.list': throws(E.forbidden),
+  'coupons.create': throws(E.forbidden), 'coupons.list': throws(E.forbidden), 'coupons.update': throws(() => E.noSuch('coupon')),
+  'webhookEndpoints.create': throws(E.forbidden), 'webhookEndpoints.update': throws(E.forbidden), 'webhookEndpoints.list': throws(E.forbidden),
+  ...over,
+});
+const byLabel = (rows, l) => rows.find((r) => r.label === l);
+
+// ---- 1. the reported cases (2026-10-19 and 2026-10-20)
 {
-  const { client, calls } = fakeStripe({
-    'products.list': throws(E.forbidden), 'prices.list': throws(E.forbidden), 'webhookEndpoints.list': throws(E.forbidden),
-    'coupons.list': throws(E.forbidden),
-    // what the old probe saw: the coupon lookup answers before the permission check
-    'coupons.update': throws(() => E.noSuch('coupon')),
-  });
+  // 2026-10-20, as observed live: Products = None, yet GET /v1/products answers 200 (read granted with another permission)
+  // while POST /v1/products/<id> answers 403
+  const { client, calls } = noneKey({ 'products.list': empty });
   const rows = await checkExcess(client);
-  ok(rows.every((r) => r.result === 'none'), `runtime key with Products/Prices/Coupons/Webhooks = None passes (${rows.map((r) => `${r.label}:${r.result}`).join(', ')})`);
-  ok(!calls.some((c) => c.path === 'coupons.update') && calls.every((c) => c.path.endsWith('.list')), 'the excess check only makes list reads (no update of a fake coupon)');
-  ok(rows.find((r) => r.label === 'Coupons').evidence === 'HTTP 403 (StripePermissionError)', 'the evidence (status, type) is reported');
-  ok(classify(E.noSuch('coupon')) === 'ok' && classifyExcess(E.noSuch('coupon')) === 'inconclusive', 'a 404 is never read as "has the permission" by the excess check');
+  ok(rows.every((r) => r.result === 'none'), `Products readable through another permission but not writable: passes (${rows.map((r) => `${r.label}:${r.result}`).join(', ')})`);
+  ok(byLabel(rows, 'Products').read.result === 'readable' && /HTTP 200/.test(byLabel(rows, 'Products').read.evidence), '…and the read is reported (informational), with its evidence');
+  ok(byLabel(rows, 'Products').writes.every((w) => /HTTP 403/.test(w.evidence)), '…both write probes show 403');
+  // 2026-10-19: the coupon lookup answers "No such coupon" before the permission check
+  ok(!calls.some((c) => c.path === 'coupons.update') && byLabel(rows, 'Coupons').result === 'none', 'Coupons = None passes; no update of a made-up coupon id');
+  ok(classify(E.noSuch('coupon')) === 'ok' && classifyWrite([{ create: false, err: E.noSuch('coupon') }]) === 'inconclusive', 'a 404 alone is never read as "can change"');
+  ok(calls.filter((c) => c.path.endsWith('.create')).every((c) => !('name' in c.args[0]) && !('currency' in c.args[0]) && !('amount_off' in c.args[0]) && !('percent_off' in c.args[0]) && !('url' in c.args[0])), 'every create probe lacks its required field: nothing can be created');
 }
 
-// ---- 2. strictness kept: a genuinely over-privileged runtime key still fails
+// ---- 2. strictness kept: a genuinely over-privileged runtime key still fails, and names the permission
 {
-  const { client } = fakeStripe({ 'products.list': throws(E.forbidden), 'prices.list': throws(E.forbidden), 'webhookEndpoints.list': throws(E.forbidden), 'coupons.list': empty });
+  const { client } = noneKey({ 'products.create': throws(E.invalid), 'products.update': throws(() => E.noSuch('product')), 'products.list': empty });
   const rows = await checkExcess(client);
-  ok(rows.find((r) => r.label === 'Coupons').result === 'excess' && rows.filter((r) => r.result === 'excess').length === 1, 'Coupons readable (Read or Write) → reported as excess');
-  const { client: c2 } = fakeStripe({ 'products.list': empty, 'prices.list': empty, 'webhookEndpoints.list': empty, 'coupons.list': empty });
+  ok(byLabel(rows, 'Products').result === 'excess' && byLabel(rows, 'Products').permission === 'product_write' && rows.filter((r) => r.result === 'excess').length === 1, 'Products writable → excess, naming product_write');
+  const { client: c2 } = fakeStripe(Object.fromEntries(['products', 'prices', 'coupons', 'webhookEndpoints'].flatMap((r) => [[`${r}.create`, throws(E.invalid)], [`${r}.update`, throws(() => E.noSuch('x'))], [`${r}.list`, empty]])));
   ok((await checkExcess(c2)).every((r) => r.result === 'excess'), 'an unrestricted key → excess on all four');
-  const { client: c3 } = fakeStripe({ 'products.list': throws(E.forbidden), 'prices.list': throws(E.forbidden), 'webhookEndpoints.list': throws(E.forbidden), 'coupons.list': throws(E.server) });
-  ok((await checkExcess(c3)).find((r) => r.label === 'Coupons').result === 'inconclusive', 'an unexpected answer (500) is "can\'t tell", never a pass');
+  const { client: c3 } = noneKey({ 'coupons.create': throws(E.server) });
+  ok(byLabel(await checkExcess(c3), 'Coupons').result === 'inconclusive', 'an unexpected answer (500) is "can\'t tell", never a pass');
+  const { client: c4 } = noneKey({ 'prices.create': throws(E.invalid) });
+  ok(byLabel(await checkExcess(c4), 'Prices').result === 'inconclusive', 'contradictory answers (create 400, update 403) are "can\'t tell", never a pass');
+  ok(classifyWrite([{ create: true, err: E.forbidden() }]) === 'none' && classifyWrite([{ create: true, err: E.invalid() }]) === 'excess', '403 = cannot change; 400 on an invalid create = can change');
 }
 
 // ---- 3. required permissions
@@ -69,7 +83,7 @@ const empty = () => ({ object: 'list', data: [] });
   const { client: c2 } = fakeStripe({ 'coupons.create': throws(E.forbidden) });
   ok((await probe(c2, [coupon]))[0].result === 'missing', 'setup Coupons: 403 = missing');
   ok(!SETUP.concat(RUNTIME).some((p) => p.label === 'Coupons' && /\/coupons\/sparkscribe/.test(p.endpoint)), 'no probe updates a coupon by a made-up id any more');
-  ok(EXCESS.map((p) => p.label).join() === 'Products,Prices,Coupons,Webhook Endpoints' && EXCESS.every((p) => /^GET /.test(p.endpoint)), 'the runtime key must have None on Products, Prices, Coupons, Webhook Endpoints (list reads)');
+  ok(EXCESS.map((p) => `${p.label}:${p.permission}`).join() === 'Products:product_write,Prices:plan_write,Coupons:coupon_write,Webhook Endpoints:webhook_write' && EXCESS.every((p) => p.writes.some((w) => w.create)), 'the runtime key must not be able to change Products, Prices, Coupons, Webhook Endpoints (permission names from the Stripe reference)');
   ok(!RUNTIME.some((p) => EXCESS.some((x) => x.label === p.label)), 'nothing the runtime key needs is in the excess list');
 }
 
