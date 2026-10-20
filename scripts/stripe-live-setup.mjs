@@ -17,8 +17,8 @@
 // It does NOT turn payments on (BILLING_PAYMENTS_ENABLED, VITE_PAID_PLANS, BILLING_LIVE_APPROVED stay as they are).
 import Stripe from 'stripe';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, rmSync, existsSync } from 'node:fs';
-import readline from 'node:readline';
+import { readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { readHidden } from './hidden-input.mjs';
 import { RUNTIME, SETUP, probe, report, checkExcess, reportExcess } from './stripe-permissions.mjs';
 
 const SITE = 'https://www.spark-scribe.com';
@@ -28,18 +28,23 @@ const win = process.platform === 'win32';
 const DRY = process.argv.includes('--dry-run');
 const mode = DRY ? 'test' : 'live';
 
-function ask(question) {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    rl._writeToOutput = (s) => { if (s.includes(question)) rl.output.write(s); else if (!/[\r\n]/.test(s)) rl.output.write('*'); };
-    rl.question(question, (a) => { rl.close(); process.stdout.write('\n'); resolve(a.trim()); });
-  });
+// hidden prompt: keystrokes are read directly and only "*" is shown (scripts/hidden-input.mjs)
+const ask = (question) => readHidden(question).catch(() => fail('Cancelled.'));
+// The webhook signing secret is kept in SECRET_FILE (git- and Vercel-ignored) until Vercel has stored it, so a run that
+// stops after the webhook was created never loses it (2026-10-20 a failed Vercel step deleted it). Removed on success.
+let pendingSecret = null;
+function fail(m) {
+  if (pendingSecret && !existsSync(SECRET_FILE)) writeFileSync(SECRET_FILE, pendingSecret, { mode: 0o600 });
+  console.error(`\n✗ ${m}\nNothing was switched on.${existsSync(SECRET_FILE) ? `\n· The webhook signing secret is kept in ${SECRET_FILE} (not committed, not deployed); the next run uses it.` : ''}`);
+  process.exit(1);
 }
-const cleanup = () => { if (existsSync(SECRET_FILE)) rmSync(SECRET_FILE, { force: true }); };
-const fail = (m) => { console.error(`\n✗ ${m}\nNothing was switched on.`); cleanup(); process.exit(1); };
-process.on('exit', cleanup);
 const fromLocal = (name) => (readFileSync('.env.local', 'utf8').match(new RegExp(`^${name}=(.*)$`, 'm'))?.[1] || '').trim();
-const vercel = (args, input) => spawnSync(win ? 'npx.cmd' : 'npx', ['--yes', 'vercel@latest', ...args], { input, encoding: 'utf8', shell: win });
+// The Vercel CLI used for the writes: the first of (installed `vercel`, npx vercel@latest) that is signed in to the
+// project and supports `env add --force --sensitive` (chosen in the preflight below, before anything is done in Stripe)
+const CLIS = [['vercel'], [win ? 'npx.cmd' : 'npx', '--yes', 'vercel@latest']];
+let vercelBin = CLIS[0];
+const run = (bin, args, input) => spawnSync(bin[0], [...bin.slice(1), ...args], { input, encoding: 'utf8', shell: win });
+const vercel = (args, input) => run(vercelBin, args, input);
 
 console.log(DRY ? 'DRY RUN with the test key from .env.local (no webhook, no Vercel changes).\n'
   : 'SparkScribe LIVE Stripe setup. Keys are hidden while you type and are never stored or printed.\n');
@@ -50,6 +55,23 @@ if (!new RegExp(`^(rk|sk)_${mode}_[A-Za-z0-9]+$`).test(setupKey)) fail(`That is 
 const runtimeKey = DRY ? fromLocal('STRIPE_SECRET_KEY') : await ask('RUNTIME key for Production (restricted rk_live_… with the runtime permissions): ');
 if (!DRY && !/^rk_live_[A-Za-z0-9]+$/.test(runtimeKey)) fail('Production needs a RESTRICTED live key (rk_live_…), not the secret key. Create it in Dashboard → Developers → API keys → Create restricted key.');
 if (!DRY && runtimeKey === setupKey) fail('Use two different keys: the setup key is temporary and must not stay in Production.');
+
+// Vercel first: if the variables can't be written at the end, nothing should be created or replaced in Stripe now
+let vercelNames = '';
+if (!DRY) {
+  const usable = CLIS.find((bin) => {
+    const ls = run(bin, ['env', 'ls', 'production']);
+    const help = run(bin, ['env', 'add', '--help']);
+    if (ls.status !== 0 || !/NEXT_PUBLIC_SUPABASE_URL/.test(ls.stdout || '')) return false;
+    if (!/--sensitive/.test((help.stdout || '') + (help.stderr || '')) || !/--force/.test((help.stdout || '') + (help.stderr || ''))) return false;
+    vercelNames = ls.stdout;
+    return true;
+  });
+  if (!usable) fail('No Vercel CLI here is signed in to the sparkscribe project with `env add --force --sensitive` (run `vercel login`; `vercel env ls production` must list the variables). Nothing was done in Stripe.');
+  vercelBin = usable;
+  console.log(`✓ Vercel CLI (${usable.join(' ')}) signed in; Production variables readable\n`);
+}
+const vercelHas = (n) => new RegExp(`^\\s*${n}\\s`, 'm').test(vercelNames);
 
 const stripe = new Stripe(setupKey);
 const runtime = new Stripe(runtimeKey);
@@ -87,15 +109,25 @@ else {
 }
 
 // ---- 3. products, prices, coupon, portal, webhook (reused when they exist; nothing is duplicated)
-const vercelNames = DRY ? '' : (vercel(['env', 'ls', 'production']).stdout || '');
-const vercelHas = (n) => new RegExp(`^\\s*${n}\\s`, 'm').test(vercelNames);
+// The webhook is kept whenever its signing secret is available; it is replaced only if it isn't and you choose to
 let keepSecret = false;
+let reuseSecret = null;
 if (!DRY) {
   const wh = (await stripe.webhookEndpoints.list({ limit: 100 })).data.find((w) => w.url === WEBHOOK);
   if (wh && vercelHas('STRIPE_WEBHOOK_SECRET')) { keepSecret = true; console.log(`\n· the live webhook ${wh.id} exists and Vercel has its secret: kept`); }
   else if (wh) {
-    console.log(`\nThe live webhook ${wh.id} exists but Vercel has no secret for it: replacing it (Stripe shows a secret only at creation).`);
-    await stripe.webhookEndpoints.del(wh.id);
+    const saved = existsSync(SECRET_FILE) ? readFileSync(SECRET_FILE, 'utf8').trim() : '';
+    if (saved) console.log(`\n· the live webhook ${wh.id} exists; using its signing secret saved in ${SECRET_FILE} by the earlier run`);
+    const given = saved || await ask(`\nThe live webhook ${wh.id} exists. Paste its signing secret (Stripe Dashboard → Developers → Webhooks → this endpoint → Signing secret → Reveal), or press Enter to replace the endpoint: `);
+    if (given) {
+      if (!/^whsec_[A-Za-z0-9]+$/.test(given)) fail('That is not a webhook signing secret (whsec_…).');
+      reuseSecret = given;
+      pendingSecret = given;
+      console.log(`✓ webhook ${wh.id} kept`);
+    } else {
+      console.log(`· replacing ${wh.id} (nothing has been sent to it: payments are off)`);
+      await stripe.webhookEndpoints.del(wh.id);
+    }
   }
 }
 console.log('\nCreating or finding the live products, prices, coupon, portal and webhook…');
@@ -109,10 +141,10 @@ const ids = Object.fromEntries([...setup.stdout.matchAll(/^(STRIPE_[A-Z_]+)=(\S+
 const want = ['FLASH', 'BOLT', 'THUNDER'].flatMap((p) => [`STRIPE_${p}_PRICE_ID`, `STRIPE_${p}_YEARLY_PRICE_ID`]).concat(['STRIPE_FLASH_INTRO_COUPON', 'STRIPE_PORTAL_CONFIGURATION_ID']);
 const absent = want.filter((k) => !ids[k]);
 if (absent.length) fail(`setup did not return ${absent.join(', ')}`);
-const whsec = DRY ? 'whsec_dryrun' : keepSecret ? null : existsSync(SECRET_FILE) ? readFileSync(SECRET_FILE, 'utf8').trim() : '';
-cleanup();
+const whsec = DRY ? 'whsec_dryrun' : keepSecret ? null : reuseSecret || (existsSync(SECRET_FILE) ? readFileSync(SECRET_FILE, 'utf8').trim() : '');
 if (whsec !== null && !/^whsec_/.test(whsec)) fail('no webhook signing secret was returned');
-if (whsec && !DRY) console.log('✓ new webhook signing secret received (kept in memory only)');
+if (whsec && !DRY) pendingSecret = whsec;
+if (whsec && !DRY && !reuseSecret) console.log(`✓ new webhook signing secret received (kept in ${SECRET_FILE} until Vercel has it)`);
 
 // ---- 4. a live Checkout probe per plan and interval, with the runtime key (never paid: expired at once)
 console.log('\nProbing Checkout with the runtime key (each session is expired immediately; nobody is charged)…');
@@ -143,6 +175,7 @@ for (const [name, [value, sensitive]] of DRY ? [] : Object.entries(vars)) {
   console.log(`✓ ${name}${sensitive ? ' (sensitive)' : ''}`);
 }
 if (keepSecret) console.log('· STRIPE_WEBHOOK_SECRET unchanged (the webhook was kept)');
+if (!DRY && whsec) { pendingSecret = null; if (existsSync(SECRET_FILE)) rmSync(SECRET_FILE, { force: true }); console.log(`· ${SECRET_FILE} removed (Vercel has the secret)`); }
 
 // ---- 6. readiness check against the live configuration
 console.log(`\nReadiness check (${mode}):`);
