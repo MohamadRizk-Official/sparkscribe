@@ -19,13 +19,15 @@ import Stripe from 'stripe';
 import { spawnSync } from 'node:child_process';
 import { readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { readHidden } from './hidden-input.mjs';
-import { RUNTIME, SETUP, probe, report, checkExcess, reportExcess } from './stripe-permissions.mjs';
+import { RUNTIME, SETUP, probe, report, checkExcess, reportExcess, checkAuth, looksLikeRuntimeKey, clean } from './stripe-permissions.mjs';
 
 const SITE = 'https://www.spark-scribe.com';
 const WEBHOOK = `${SITE}/api/stripe-webhook`;
 const SECRET_FILE = 'whsec-live.txt';
 const win = process.platform === 'win32';
 const DRY = process.argv.includes('--dry-run');
+// --check-keys: only check the two keys (accepted by Stripe? which role do their permissions fit?) and stop. Read-only.
+const CHECK_ONLY = process.argv.includes('--check-keys');
 const mode = DRY ? 'test' : 'live';
 
 // hidden prompt: keystrokes are read directly and only "*" is shown (scripts/hidden-input.mjs)
@@ -56,9 +58,26 @@ const runtimeKey = DRY ? fromLocal('STRIPE_SECRET_KEY') : await ask('RUNTIME key
 if (!DRY && !/^rk_live_[A-Za-z0-9]+$/.test(runtimeKey)) fail('Production needs a RESTRICTED live key (rk_live_…), not the secret key. Create it in Dashboard → Developers → API keys → Create restricted key.');
 if (!DRY && runtimeKey === setupKey) fail('Use two different keys: the setup key is temporary and must not stay in Production.');
 
+// What each prompt received (length and type only: never any characters of the key)
+const kind = (k) => `${k.length} characters, ${k.startsWith('rk_') ? 'restricted' : 'secret'} ${k.includes('_live_') ? 'live' : 'test'} key`;
+if (!DRY) console.log(`· SETUP prompt received: ${kind(setupKey)}
+· RUNTIME prompt received: ${kind(runtimeKey)}`);
+
+// Is each key accepted by Stripe at all? (read-only GET /v1/customers?limit=1; a 401 is a key problem, never permissions)
+const stripe = new Stripe(setupKey);
+const runtime = new Stripe(runtimeKey);
+const authFix = (a, which) => `The ${which} key was rejected by Stripe (${a.evidence}: ${a.expired ? 'this key has expired; after a roll, only the NEW value works' : 'Stripe does not recognize this key'}). Copy the key again from Dashboard → Developers → API keys with its copy button (so no character is cut off at the start or end), check it's the key's current value, and run again. This is not a permissions problem.`;
+const [sa, ra] = [await checkAuth(stripe), await checkAuth(runtime)];
+console.log(`${sa.ok ? '✓' : '✗'} SETUP key ${sa.ok ? 'accepted by Stripe' : 'REJECTED'}  [GET /v1/customers?limit=1 → ${sa.evidence}]`);
+console.log(`${ra.ok ? '✓' : '✗'} RUNTIME key ${ra.ok ? 'accepted by Stripe' : 'REJECTED'}  [GET /v1/customers?limit=1 → ${ra.evidence}]
+`);
+if (!sa.ok && !ra.ok) fail(`Both keys were rejected by Stripe. ${authFix(sa, 'SETUP')}`);
+if (!sa.ok) fail(authFix(sa, 'SETUP'));
+if (!ra.ok) fail(authFix(ra, 'RUNTIME'));
+
 // Vercel first: if the variables can't be written at the end, nothing should be created or replaced in Stripe now
 let vercelNames = '';
-if (!DRY) {
+if (!DRY && !CHECK_ONLY) {
   const usable = CLIS.find((bin) => {
     const ls = run(bin, ['env', 'ls', 'production']);
     const help = run(bin, ['env', 'add', '--help']);
@@ -73,8 +92,6 @@ if (!DRY) {
 }
 const vercelHas = (n) => new RegExp(`^\\s*${n}\\s`, 'm').test(vercelNames);
 
-const stripe = new Stripe(setupKey);
-const runtime = new Stripe(runtimeKey);
 console.log('Setup key permissions:');
 const sp = await probe(stripe, SETUP);
 console.log(report(sp));
@@ -87,14 +104,18 @@ const ex = await checkExcess(runtime);
 console.log(reportExcess(ex));
 const extra = ex.filter((r) => r.result === 'excess').map((r) => r.label);
 const unclear = ex.filter((r) => r.result === 'inconclusive').map((r) => r.label);
+if ([...sp, ...rp].some((r) => r.result === 'auth')) fail('Stripe stopped accepting a key during the checks (401). Copy the keys again and run again. This is not a permissions problem.');
+// the first key behaves like a Production key (and the second one can create the catalog): they were swapped
+if (looksLikeRuntimeKey(sp)) fail(`The key entered at the SETUP prompt has the Production key's permissions (it can't create products, prices, coupons or webhooks${extra.length ? '; and the key at the RUNTIME prompt can' : ''}). The keys were probably entered in the wrong order: the FIRST prompt is the temporary setup key, the SECOND is the Production key.`);
 const missing = [...sp.filter((r) => r.result !== 'ok').map((r) => `setup key: ${r.label} ${r.level}`), ...rp.filter((r) => r.result !== 'ok').map((r) => `runtime key: ${r.label} ${r.level}`)];
 if (missing.length) fail(`Add these permissions (Dashboard → Developers → API keys → ⋯ → Edit key), then run again:\n  - ${missing.join('\n  - ')}`);
 if (!DRY && extra.length) fail(`The runtime key can change ${extra.join(', ')} (${ex.filter((r) => r.result === 'excess').map((r) => r.permission).join(', ')}): set ${extra.length > 1 ? 'them' : 'it'} to None (Dashboard → Developers → API keys → ⋯ → Edit key), then run again.`);
 if (!DRY && unclear.length) fail(`Couldn't confirm the runtime key cannot change ${unclear.join(', ')} (answers above). Nothing was changed.`);
 if (DRY && (extra.length || unclear.length)) console.log('· (dry run uses the sandbox secret key, which can change everything: expected here)');
+if (CHECK_ONLY) { console.log('\n✓ Both keys are accepted by Stripe and fit their roles. Nothing was changed. Run without --check-keys to set up.'); process.exit(0); }
 
 // ---- 2. the account (a restricted key may not be allowed to read it; the Checkout probe below then decides)
-const acct = await stripe.accounts.retrieve().catch((e) => (e.statusCode === 403 ? null : fail(`Stripe refused the key: ${e.message}`)));
+const acct = await stripe.accounts.retrieve().catch((e) => (e.statusCode === 403 ? null : fail(`Stripe refused the key: ${clean(e.message)}`)));
 if (!acct) console.log('\n· the setup key can’t read the account status; the live Checkout probe below checks the account can take payments');
 else {
   console.log(`\nAccount: ${acct.business_profile?.name || acct.settings?.dashboard?.display_name || '(no public name)'}`);
@@ -160,7 +181,7 @@ for (const k of ['FLASH', 'BOLT', 'THUNDER']) {
       await runtime.checkout.sessions.expire(s.id);
       console.log(`✓ ${k.toLowerCase()}${y ? ' yearly' : ' monthly'}: ${(s.amount_total / 100).toFixed(2)} ${s.currency.toUpperCase()} today${k === 'FLASH' && !y ? ' (the $1 first month)' : ''}`);
     } catch (e) {
-      fail(`Checkout probe failed for ${k}${y}: ${e.message.replace(/(sk|rk)_(live|test)_[A-Za-z0-9]+/g, '<key>')}${/terms of service/i.test(e.message) ? `\n  → Stripe Dashboard → Settings → Public details: add the Terms of service URL ${SITE}/terms` : ''}${/live charges|activate/i.test(e.message) ? '\n  → finish activating the Stripe account' : ''}`);
+      fail(`Checkout probe failed for ${k}${y}: ${clean(e.message)}${/terms of service/i.test(e.message) ? `\n  → Stripe Dashboard → Settings → Public details: add the Terms of service URL ${SITE}/terms` : ''}${/live charges|activate/i.test(e.message) ? '\n  → finish activating the Stripe account' : ''}`);
     }
   }
 }

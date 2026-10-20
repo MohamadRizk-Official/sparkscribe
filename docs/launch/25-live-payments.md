@@ -74,3 +74,10 @@ Remove `BILLING_CHECKOUT_ALLOWLIST`, set `VITE_PAID_PLANS=1` (Pricing buttons), 
 `billing_settings` (`metering_starts_at = now()`, `enforce_quota`, `enforce_ai_limits`), redeploy, verify on the live
 site. Rollback: set `BILLING_PAYMENTS_ENABLED=0` and redeploy (checkout stops at once; subscribers keep the portal), or
 Vercel Instant Rollback to the previous deployment.
+
+### Checking the keys first (no changes anywhere)
+`node scripts/stripe-live-setup.mjs --check-keys` asks for both keys (FIRST the temporary setup key, SECOND the
+Production key), shows only how many characters each prompt received, checks with a read-only request that Stripe
+accepts each key (a 401 is reported as a rejected/expired key, never as missing permissions), checks each key fits its
+role (and says so if the two were entered in the wrong order), then stops. After a key is rolled, only its new value
+works.

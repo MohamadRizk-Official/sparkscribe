@@ -66,11 +66,14 @@ export const EXCESS = [
 // kept for compatibility (the labels the runtime key must not be able to change)
 export const NOT_FOR_RUNTIME = EXCESS;
 
+// 401: Stripe doesn't accept the key at all (wrong, truncated, or rolled/expired). Never a permission question.
+export const isAuthError = (err) => !!err && (err.statusCode === 401 || err.type === 'StripeAuthenticationError');
 const isPermissionError = (err) => err && (err.statusCode === 403 || err.type === 'StripePermissionError' || /required permissions|does not have the required permission/i.test(String(err.message || '')));
 
 // REQUIRED permission: a Stripe error -> 'missing' | 'ok' (allowed; the fake id doesn't exist / the request is invalid) | 'error'
 export function classify(err) {
   if (!err) return 'ok';
+  if (isAuthError(err)) return 'auth';
   if (isPermissionError(err)) return 'missing';
   const msg = String(err.message || '');
   if (err.code === 'resource_missing' || err.statusCode === 404 || /^No such /i.test(msg)) return 'ok';
@@ -97,7 +100,22 @@ export function classifyExcess(err) {
 }
 
 const evidence = (err) => (err ? `HTTP ${err.statusCode ?? '?'}${err.code ? ` ${err.code}` : ''}${err.type ? ` (${err.type})` : ''}` : 'HTTP 200');
-const clean = (s) => String(s || '').replace(/(sk|rk)_(live|test)_[A-Za-z0-9]+/g, '<key>').slice(0, 200);
+// removes any key, including Stripe's own masked echo ("Invalid API Key provided: rk_live_****abcd" shows its last 4)
+export const clean = (s) => String(s || '').replace(/\b(sk|rk|pk)_(live|test)_[A-Za-z0-9*]+/g, '<key>').slice(0, 200);
+
+// Is the key accepted at all? One read-only request any authenticated key answers without 401 (200, or 403 when the key
+// has no Customers permission). -> { ok, expired, evidence }
+export async function checkAuth(stripe) {
+  try { await stripe.customers.list({ limit: 1 }); return { ok: true, expired: false, evidence: 'HTTP 200' }; } catch (e) {
+    if (isAuthError(e)) return { ok: false, expired: /expired/i.test(String(e.message || '')), evidence: evidence(e) };
+    return { ok: true, expired: false, evidence: evidence(e) };
+  }
+}
+// The setup key's answers look like the runtime key's: can't create catalog or webhooks, but can do Checkout
+export function looksLikeRuntimeKey(setupRows) {
+  const r = (l) => setupRows.find((x) => x.label === l)?.result;
+  return ['Products', 'Prices', 'Coupons', 'Webhook Endpoints'].every((l) => r(l) === 'missing') && r('Checkout Sessions') === 'ok';
+}
 
 // -> [{ label, level, why, endpoint, result: 'ok' | 'missing' | 'error', evidence, detail }]
 export async function probe(stripe, list) {
@@ -129,7 +147,7 @@ export async function checkExcess(stripe, list = EXCESS) {
   return out;
 }
 
-export const report = (rows) => rows.map((r) => `${r.result === 'ok' ? '✓' : '✗'} ${r.label}: ${r.level}  [${r.endpoint} → ${r.evidence}]${r.result === 'ok' ? '' : r.result === 'missing' ? `  — MISSING (needed to ${r.why})` : `  — could not check: ${r.detail}`}`).join('\n');
+export const report = (rows) => rows.map((r) => `${r.result === 'ok' ? '✓' : '✗'} ${r.label}: ${r.level}  [${r.endpoint} → ${r.evidence}]${r.result === 'ok' ? '' : r.result === 'missing' ? `  — MISSING (needed to ${r.why})` : r.result === 'auth' ? '  — KEY REJECTED (401: invalid or expired key)' : `  — could not check: ${r.detail}`}`).join('\n');
 export const reportExcess = (rows) => rows.map((r) => {
   const head = r.result === 'none' ? `✓ ${r.label}: cannot change` : r.result === 'excess' ? `✗ ${r.label}: CAN CHANGE (the key has ${r.permission}; set ${r.label} to None)` : `✗ ${r.label}: can't tell whether it can change (answers below)`;
   const lines = r.writes.map((w) => `    [${w.endpoint} → ${w.evidence}]`);
