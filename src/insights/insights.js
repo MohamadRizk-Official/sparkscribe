@@ -104,7 +104,7 @@ const TYPE_DESC = {
 
 // Starter questions per recording type: things people actually want to know about that kind of recording.
 const STARTERS = {
-  general: ['What was this about?', 'What needs to happen next?', 'Were any dates or deadlines mentioned?', 'What still needs clarification?'],
+  general: ['What was this about?', 'What are the main ideas?', 'What should I remember from this?', 'Were any dates or deadlines mentioned?'],
   meeting: ['What decisions were made?', 'What are my action items?', 'What is still unresolved?', 'Were there deadlines?'],
   lecture: ['What were the main concepts?', 'What did the professor emphasize?', 'Was anything mentioned about the exam?', 'What should I review?'],
   interview: ['What were the main questions asked?', 'What are the key takeaways?', 'What stood out in the answers?'],
@@ -351,7 +351,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   function chips(refs, byId) {
     const seen = new Set();
     return (refs || []).map((r) => byId.get(r)).filter((s) => s && !seen.has(Math.floor(s.start)) && seen.add(Math.floor(s.start)))
-      .map((s) => `<button class="cite" type="button" data-seek="${s.start}" data-ref="${s.id}" title="Go to ${fmtClock(s.start)}">${fmtClock(s.start)}</button>`).join('');
+      .map((s) => `<button class="cite" type="button" data-seek="${s.start}" data-ref="${s.id}" title="Go to ${fmtClock(s.start)}" aria-label="Go to ${fmtClock(s.start)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>${fmtClock(s.start)}</button>`).join('');
   }
   // Model text with [12] citations → escaped HTML with timestamp chips; "- " lines become a list.
   function rich(text, byId) {
@@ -439,7 +439,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
       // a failed update keeps the previous summary on screen, with the error and a retry next to it
       const c = ov.content;
       html += ovErr ? `<div class="panel ins-card">${errorBox(ovErr, 'overview-retry')}</div>` : staleBox(ov, 'overview-retry');
-      html += `<section class="sum-tldr"><span class="sum-eyebrow">${ICON.spark}TL;DR</span><p>${esc(c.short_summary)}</p></section>`;
+      html += `<section class="sum-tldr"><span class="sum-eyebrow">The short version</span><p>${esc(c.short_summary)}</p></section>`;
       if (c.key_points?.length) {
         html += `<section class="sum-sec" aria-labelledby="sumKp"><h3 class="sum-h" id="sumKp">Key points <span>${c.key_points.length}</span></h3>
           <ol class="kp-grid">${c.key_points.map((k, i) => `<li class="kp-card"><span class="kp-n" aria-hidden="true">${i + 1}</span><span class="kp-text">${esc(k.text)}</span>${chips(k.refs, byId)}</li>`).join('')}</ol></section>`;
@@ -586,7 +586,11 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     if (errKinds.length) html += errorBox(errOf(errKinds[0]), 'notes-retry', "Part of your notes couldn't be created.");
     if (!ins && !nt) {
       if (!busy && !errKinds.length) {
-        html += `<div class="ins-intro-row"><p>${esc(NOTES_INTRO[t])} Only what was said in this recording, nothing added.</p><button class="btn btn-primary" type="button" data-act="notes-make">Organize notes</button></div>${privacyLine}`;
+        // before anything is made: what the notebook will look like for this kind of recording, and one button
+        const sections = NOTES_INTRO[t].replace(/\.$/, '').split(/, (?:and )?| and /).slice(0, 5);
+        html += `<div class="notes-empty"><div class="ne-text"><h3>Your notes, organized</h3><p>${esc(NOTES_INTRO[t])} Only what was said in this recording, nothing added.</p>
+          <button class="btn btn-primary" type="button" data-act="notes-make">${t === 'lecture' ? 'Make study notes' : t === 'meeting' ? 'Make meeting notes' : 'Make notes'}</button>${privacyLine}</div>
+          <div class="ne-preview" aria-hidden="true"><span class="cr-sample-tag">What you'll get</span>${sections.map((x, i) => `<span class="ne-sec"><b>${esc(x.charAt(0).toUpperCase() + x.slice(1))}</b><i style="--w:${[82, 64, 74, 58, 70][i]}%"></i><i style="--w:${[56, 70, 48, 66, 52][i]}%"></i></span>`).join('')}</div></div>`;
       }
     } else {
       if (stale.length && !busy) html += `<div class="ins-msg warn">${ICON.refresh}<span>The transcript changed after these notes were made (for example, a speaker was renamed), so they may be out of date.</span><button class="btn btn-ghost btn-sm" type="button" data-act="notes-update">Update</button></div>`;
@@ -656,6 +660,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
         <button class="ask-send" type="submit" aria-label="Ask"${pending && !pending.error ? ' disabled' : ''}>${ICON.send}</button>
       </form>
       ${privacyLine}
+      ${ctx.getId?.() ? `<a class="ask-across" href="/across?ids=${encodeURIComponent(ctx.getId())}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.3 8.2 15.7 11M8.3 15.8l7.4-2.8"/></svg><span><b>Ask across several recordings</b> One question, answered from up to 12 of your lectures at once.</span><span class="ask-across-plan">Thunder</span></a>` : ''}
     </div>`;
     const form = p.querySelector('.ask-form');
     const input = p.querySelector('.ask-input');

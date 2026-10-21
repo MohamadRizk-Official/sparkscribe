@@ -13,6 +13,7 @@ import { mascotSignal, mascotTravel } from './mascot/bus.js';
 import { confirmDialog } from './library/dialogs.js';
 import { putAudio, rekeyAudio, deleteAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
 import { mountDashboard } from './home/dashboard.js';
+import { attachSpeedMenu } from './electric/speed-menu.js';
 import { loadPlans, getBillingStatus, authorizeTranscription, startCheckout, allowanceLabel, usageText, usageLevel, durationText, dateText } from './lib/billing.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1026,12 +1027,7 @@ els.pbSeek.addEventListener('input', () => {
   updatePlayhead();
   updateActive(true);
 });
-const SPEEDS = [1, 1.25, 1.5, 1.75, 2, 0.75];
-els.speedBtn.addEventListener('click', () => {
-  const i = (SPEEDS.indexOf(els.player.playbackRate) + 1) % SPEEDS.length;
-  els.player.playbackRate = SPEEDS[i];
-  els.speedBtn.textContent = `${SPEEDS[i]}×`;
-});
+attachSpeedMenu(els.speedBtn, els.player); // the speed opens a selector (electric/speed-menu.js)
 // ---------- playback volume ----------
 // Listening volume only: it sets the <audio> element's volume. The decoded samples used for
 // transcription were taken from the file before playback and are never affected.
@@ -1052,7 +1048,7 @@ function applyVolume() {
   els.player.muted = vol.muted;
   els.volSlider.value = String(silent ? 0 : vol.level);
   const shown = silent ? 0 : vol.level;
-  els.volSlider.style.background = `linear-gradient(90deg, var(--cyan) 0%, var(--violet) ${shown}%, rgba(140,160,255,.16) ${shown}%)`;
+  els.volSlider.style.setProperty('--fill', `${shown}%`); // the filled part is drawn in CSS (electric/workspace.css)
   els.volSlider.setAttribute('aria-valuetext', silent ? 'muted' : `${vol.level}%`);
   els.muteBtn.innerHTML = VOL_ICONS[silent ? 'muted' : vol.level < 50 ? 'low' : 'high'];
   els.muteBtn.title = silent ? 'Unmute (M)' : `Mute (M) · volume ${vol.level}%`;
@@ -1085,7 +1081,7 @@ function updatePlayhead() {
   const t = els.player.currentTime || 0;
   const d = state.duration;
   if (document.activeElement !== els.pbSeek) els.pbSeek.value = Math.round((t / d) * 1000);
-  els.pbSeek.style.background = `linear-gradient(90deg, var(--cyan) 0%, var(--violet) ${(t / d) * 100}%, rgba(140,160,255,.16) ${(t / d) * 100}%)`;
+  els.pbSeek.style.setProperty('--fill', `${(t / d) * 100}%`);
   els.pbTime.textContent = `${fmtTime(t)} / ${fmtTime(d)}`;
   const { labelW } = timelineLayout();
   const W = els.timeline.clientWidth;

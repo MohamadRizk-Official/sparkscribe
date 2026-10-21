@@ -14,6 +14,8 @@ import { relatedMaterialHtml, bindRelatedMaterial } from '../lib/related-materia
 import { cleanText } from '../lib/clean.js';
 import { getAudio, putAudio, keepAudioPref } from '../lib/audio-store.js';
 import { mountInsights } from '../insights/insights.js';
+import { mountTransport } from '../electric/transport.js';
+import { courseTone } from '../lib/course-tone.js';
 
 const $ = (id) => document.getElementById(id);
 const COLORS = ['#22d3ee', '#a78bfa', '#f472b6', '#a3e635', '#fbbf24', '#fb7185', '#34d399', '#60a5fa', '#fb923c', '#e879f9'];
@@ -75,14 +77,15 @@ function initials(name) {
   let recordingType = RECORDING_TYPES.includes(row.recording_type) ? row.recording_type : null;
   const words = segments.reduce((t, s) => t + s.text.split(/\s+/).filter(Boolean).length, 0);
 
+  let uiRef = null; // the study panels (set once mounted below); the header redraws their type control
   function renderHeader() {
     // one line: length · speakers · type, and Details for the rest
     const real = new Set(segments.map((x) => x.speaker).filter((x) => x !== 'Unknown')).size;
-    const chip = ([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`;
-    const primary = [['Length', fmtDuration(row.duration_seconds)], segments.length && ['Speakers', String(real)]].filter(Boolean);
-    $('tMeta').innerHTML = primary.map(chip).join('')
+    const primary = [fmtDuration(row.duration_seconds), segments.length && `${real} speaker${real === 1 ? '' : 's'}`, fmtDate(row.created_at)].filter(Boolean);
+    $('tMeta').innerHTML = primary.map((v) => `<span class="ws-meta-item">${esc(v)}</span>`).join('')
       + '<span class="type-slot" id="typeSlot"></span>'
       + '<button type="button" class="meta-btn details-btn" id="detailsBtn" aria-expanded="false" aria-haspopup="dialog">Details</button>';
+    uiRef?.refreshType(); // the type control lives in this line: redraw it (it was wiped with the line)
     $('detailsBtn').addEventListener('click', (e) => toggleDetails(e.currentTarget, 'Recording details', [
       ['Length', fmtDuration(row.duration_seconds)],
       segments.length && ['Speakers', String(real), segments.some((x) => x.speaker === 'Unknown') ? 'plus some unclear parts' : ''],
@@ -135,7 +138,6 @@ function initials(name) {
   // It is never uploaded. If this device doesn't have it (another device, a cleared browser, an older save), the
   // user can attach the original file; it is then kept here for next time. Clicking a line plays from there.
   const player = $('attachPlayer');
-  const SPEEDS = [1, 1.25, 1.5, 1.75, 2, 0.75];
   let audioSource = null; // 'stored' (on this device) | 'attached' (this visit only) | null
   let following = true;
   let lastUserScroll = 0;
@@ -145,15 +147,17 @@ function initials(name) {
   function paintAudioButton() {
     const b = $('audioBtn');
     b.hidden = false;
+    const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+    const CLIP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5 12.4 19a5 5 0 0 1-7.1-7.1l8-8a3.4 3.4 0 0 1 4.8 4.8l-8 8a1.7 1.7 0 0 1-2.4-2.4L15 7.1"/></svg>';
+    b.classList.toggle('btn-primary', !!audioSource);
     if (!audioSource) {
-      b.textContent = 'Attach original audio';
+      b.innerHTML = `${CLIP}<span>Attach audio</span>`;
       b.title = 'Play along: choose the original recording from this device. It is not uploaded, and it is kept on this device for next time.';
-    } else if ($('attachBar').classList.contains('hidden')) {
-      b.textContent = 'Play audio';
-      b.title = audioSource === 'stored' ? 'The original recording is on this device (never uploaded)' : 'Play the attached recording';
     } else {
-      b.textContent = 'Play audio';
-      b.title = 'Play from the start, or click any line of the transcript';
+      b.innerHTML = `${PLAY}<span>Play</span>`;
+      b.title = $('attachBar').classList.contains('hidden')
+        ? (audioSource === 'stored' ? 'The original recording is on this device (never uploaded)' : 'Play the attached recording')
+        : 'Play from here, or click any line of the transcript';
     }
   }
   function openAudio(blob, source) {
@@ -196,12 +200,7 @@ function initials(name) {
     renderTranscript();
     $('audioBtn').focus();
   });
-  $('attachSpeed').addEventListener('click', () => {
-    const i = (SPEEDS.indexOf(player.playbackRate) + 1) % SPEEDS.length;
-    player.playbackRate = SPEEDS[i];
-    $('attachSpeed').textContent = `${SPEEDS[i]}×`;
-    $('attachSpeed').setAttribute('aria-label', `Playback speed ${SPEEDS[i]}×`);
-  });
+  mountTransport($('attachBar'), player, { duration: () => row.duration_seconds });
   $('attachFollow').addEventListener('click', () => {
     following = !following;
     $('attachFollow').classList.toggle('on', following);
@@ -389,6 +388,7 @@ function initials(name) {
       confirm: (title, text, okLabel, danger) => confirmDialog({ title, bodyHtml: `<p>${esc(text)}</p>`, confirmLabel: okLabel, danger }),
     },
   });
+  uiRef = ui;
   ui.setTranscription();
   renderTranscript();
   // deep link from the study home, e.g. ?tab=create&tool=quiz to retake missed questions
@@ -429,7 +429,18 @@ function initials(name) {
   // transcript, summary, notes, insights and anything created, as PDF / Word / Markdown / text / subtitles
   $('exportBtn').addEventListener('click', () => ui.openExport(view === 'clean' ? 'transcript_clean' : 'transcript'));
 
+  const moreMenu = $('moreMenu');
+  const closeMore = () => { moreMenu.hidden = true; $('moreBtn').setAttribute('aria-expanded', 'false'); };
+  $('moreBtn').addEventListener('click', () => {
+    const open = moreMenu.hidden;
+    moreMenu.hidden = !open;
+    $('moreBtn').setAttribute('aria-expanded', String(open));
+    if (open) moreMenu.querySelector('[role="menuitem"]')?.focus();
+  });
+  document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !e.target.closest('.ws-more')) closeMore(); });
+  moreMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeMore(); $('moreBtn').focus(); } });
   $('deleteBtn').addEventListener('click', async () => {
+    closeMore();
     if (!(await confirmDeleteRecordings(1, row.title))) return;
     $('deleteBtn').disabled = true;
     $('deleteBtn').textContent = 'Deleting…';
@@ -438,29 +449,53 @@ function initials(name) {
       location.replace('/library');
     } catch (err) {
       $('deleteBtn').disabled = false;
-      $('deleteBtn').textContent = 'Delete';
+      $('deleteBtn').textContent = 'Delete recording…';
       toast(err.message || 'Delete failed');
     }
   });
 
   // ---- rename / favorite / folders ----
   $('renameBtn').hidden = false;
-  $('renameBtn').addEventListener('click', async () => {
-    const title = await promptDialog({ title: 'Rename recording', label: 'Name', value: row.title, submit: (v) => renameTranscript(row.id, v) });
-    if (!title) return;
-    row.title = title;
-    showTitle();
-    toast('Renamed');
-  });
+  const renameInline = () => {
+    const h = $('tTitle');
+    if (h.querySelector('input')) return;
+    const input = document.createElement('input');
+    input.className = 'ws-title-input';
+    input.value = row.title;
+    input.maxLength = 300;
+    input.setAttribute('aria-label', 'Recording name');
+    h.textContent = '';
+    h.appendChild(input);
+    input.focus();
+    input.select();
+    let done = false;
+    const finish = async (save) => {
+      if (done) return;
+      done = true;
+      const v = input.value.trim();
+      if (!save || !v || v === row.title) return showTitle();
+      const before = row.title;
+      row.title = v;
+      showTitle();
+      try { await renameTranscript(row.id, v); toast('Renamed'); } catch (err) { row.title = before; showTitle(); toast(err.message || 'Couldn’t rename. The old name is kept.'); }
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+    });
+    input.addEventListener('blur', () => finish(true));
+  };
+  $('renameBtn').addEventListener('click', renameInline);
+  $('tTitle').addEventListener('dblclick', renameInline);
   let meta = { isFavorite: !!row.is_favorite, folderIds: [] };
   let folders = [];
-  const folderIcon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>';
   const renderMeta = () => {
     $('favBtn').classList.toggle('on', meta.isFavorite);
     $('favBtn').setAttribute('aria-pressed', String(meta.isFavorite));
     $('favBtn').title = meta.isFavorite ? 'Remove from favorites' : 'Add to favorites';
+    $('favBtn').setAttribute('aria-label', $('favBtn').title);
     $('tFolders').innerHTML = folders.filter((f) => meta.folderIds.includes(f.id))
-      .map((f) => `<a class="lib-folder" href="/library?folder=${encodeURIComponent(f.id)}">${folderIcon}${esc(f.name)}</a>`).join('');
+      .map((f) => `<a class="lib-course tone-${courseTone(f.id)}" href="/library?folder=${encodeURIComponent(f.id)}">${esc(f.name)}</a>`).join('');
   };
   const loadMeta = async () => {
     try {
@@ -475,6 +510,7 @@ function initials(name) {
   $('favBtn').addEventListener('click', async () => {
     meta.isFavorite = !meta.isFavorite;
     renderMeta();
+    if (meta.isFavorite) { $('favBtn').classList.remove('just-on'); void $('favBtn').offsetWidth; $('favBtn').classList.add('just-on'); }
     try { await setFavorite(row.id, meta.isFavorite); toast(meta.isFavorite ? 'Added to favorites' : 'Removed from favorites'); }
     catch (err) { meta.isFavorite = !meta.isFavorite; renderMeta(); toast(err.message || 'That didn’t work'); }
   });

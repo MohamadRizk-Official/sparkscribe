@@ -10,5 +10,6 @@
 @import url('./electric/home.css') layer(electric);
 @import url('./electric/library.css') layer(electric);
 @import url('./electric/workspace.css') layer(electric);
+@import url('./electric/study.css') layer(electric);
 @import url('./electric/pricing.css') layer(electric);
 @import url('./electric/settings.css') layer(electric);

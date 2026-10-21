@@ -62,10 +62,21 @@ export function mountMascot({ page = 'other' } = {}) {
   // ---------- size & places ----------
   let H = 110, k = 38, S = 175, sc = 1, dpr = 1;
   const vw = () => document.documentElement.clientWidth || innerWidth;
-  const FLOOR = () => innerHeight - (touch ? 6 : 8);
+  // The audio player (fixed to the bottom) is part of the floor: where it sits under the mascot, the mascot stands (or
+  // peeks) on the player's top edge instead of behind or over it, so it never covers a playback control.
+  let playerRect = null;
+  const measurePlayer = () => {
+    const pb = [...document.querySelectorAll('.playerbar')].find((b) => !b.classList.contains('hidden') && b.offsetParent !== null);
+    const r = pb?.getBoundingClientRect();
+    playerRect = r && r.width ? { l: r.left, r: r.right, t: r.top } : null;
+  };
+  setInterval(measurePlayer, 400);
+  addEventListener('resize', measurePlayer, { passive: true });
+  const underPlayer = () => playerRect && X > playerRect.l - 1.6 * k && X < playerRect.r + 1.6 * k;
+  const FLOOR = () => (underPlayer() ? Math.min(innerHeight, playerRect.t) - 6 : innerHeight - (touch ? 6 : 8));
   const standY = () => FLOOR() - DIM.foot * k;
   let away = false;                                         // phones during a quiz: fully below the edge
-  const peekY = () => innerHeight + (away ? 2.4 : 0.08) * k; // only the gem, the top of the body and the speaker's rim show
+  const peekY = () => (underPlayer() ? playerRect.t + 0.5 * k : innerHeight + (away ? 2.4 : 0.08) * k); // only the gem, the top of the body and the speaker's rim show
   const minX = () => 1.3 * k + 4;
   const maxX = () => vw() - 1.3 * k - 4;
   const clampX = (v) => clamp(v, minX(), maxX());

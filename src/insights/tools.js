@@ -51,7 +51,7 @@ const CATALOG = {
   meeting: ['meeting_recap', 'action_plan', 'followup_email'],
   interview: ['interview_qa'],
   podcast: ['episode_notes'],
-  general: ['flashcards', 'action_plan'],
+  general: ['study_guide', 'flashcards', 'quiz'],
   voice_message: ['reply_draft', 'action_plan'],
 };
 // shown next to the recommended tools: a related tab that isn't a Create tool
@@ -74,6 +74,18 @@ const TOOL_CARD = {
   draft: { line: 'An email or a reply, using the recording', c: 'pink', ic: '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>' },
 };
 const EXPORT_IC = '<path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/>';
+// What a tool makes, shown before anything is created: a tiny, made-up example in the tool's real shape.
+const TOOL_SAMPLE = {
+  study_guide: '<b class="sx-h">Cellular respiration</b><span class="sx-l"><i>Key idea</i> Cells turn glucose into usable energy.</span><span class="sx-l"><i>Concept</i> ATP stores energy for the cell.</span><span class="sx-l"><i>Review</i> Why does the cell need ATP?</span>',
+  flashcards: '<span class="sx-card"><span class="sx-front">What is ATP?</span><span class="sx-back">The main energy-carrying molecule cells use.</span></span>',
+  quiz: '<b class="sx-q">What does the mitochondrion do?</b><span class="sx-o">A. Builds proteins</span><span class="sx-o ok">B. Produces energy</span><span class="sx-o">C. Copies DNA</span>',
+  meeting_recap: '<span class="sx-l"><i>Overview</i> Launch moved to May 12.</span><span class="sx-l"><i>Decisions</i> Price stays at $7.99.</span><span class="sx-l"><i>Action items</i> Hadi sends the proposal by Friday.</span><span class="sx-l"><i>Open</i> Yearly plan?</span>',
+  action_plan: '<span class="sx-task"><b>Send revised proposal</b><span>Hadi · by Friday</span></span><span class="sx-task"><b>Check shipping costs</b><span>Lina · next week</span></span>',
+  draft: '<span class="sx-mail"><b>Subject: Next steps from today</b><span>Hi Sam, thanks for the call. As agreed, the price stays at $7.99 and…</span></span>',
+  interview_qa: '<span class="sx-l"><i>Q</i> How did you get started?</span><span class="sx-l"><i>A</i> “I was teaching myself at night, after work.”</span>',
+  episode_notes: '<span class="sx-l"><i>Summary</i> Two founders on pricing for students.</span><span class="sx-l"><i>00:00</i> Intro · <i>12:40</i> The survey</span><span class="sx-l"><i>Takeaway</i> Ask before you price.</span>',
+  export: '<span class="sx-formats"><span>PDF</span><span>Word</span><span>Markdown</span><span>Text</span><span>Subtitles</span></span>',
+};
 const SUMMARY_IC = '<path d="M5 6h14M5 11h14M5 16h9"/>';
 export const toolsFor = (type) => ({ tools: CATALOG[type] || CATALOG.general });
 // Every tool works on any recording; the type only decides which are suggested first. All tools are always one
@@ -302,14 +314,26 @@ export function createToolsUI(api) {
     return ['', SETUP_DIALOG.has(kind) ? 'You say what it’s for' : 'Try it'];
   }
 
-  // The Create landing: a short hero, the recommended tools as large cards, every other tool as a card too
+  // The Create landing: what this recording is good for first (recommended tools, each with an example of what it
+  // makes), then every other tool as a compact row grouped by purpose. A tool appears once. One click starts it.
   function toolCard(kind, big) {
     const info = TOOL_INFO[kind], card = TOOL_CARD[kind];
     const [cls, label] = status(kind);
-    return `<button type="button" class="ctool c-${card.c}${big ? ' big' : ''}" data-tool="${kind}">
-      <span class="ctool-ic" aria-hidden="true">${svg(card.ic)}</span>
+    const ready = cls === 'ok' || cls === 'warn' || cls === 'busy';
+    const go = svg('<path d="M5 12h13m0 0-5-5m5 5-5 5"/>');
+    if (!big) {
+      return `<li class="cr-row-wrap"><button type="button" class="ctool cr-row c-${card.c}" data-tool="${kind}">
+        <span class="ctool-ic" aria-hidden="true">${svg(card.ic)}</span>
+        <span class="ctool-body"><span class="ctool-name">${esc(info.label)}</span><span class="ctool-line">${esc(card.line)}</span></span>
+        <span class="ctool-state ${cls}">${esc(ready ? label : '')}</span><span class="ctool-go" aria-hidden="true">${go}</span>
+      </button><button type="button" class="cr-peek" aria-expanded="false" aria-label="Show an example of ${esc(info.label)}">Example</button>
+      <div class="cr-sample" aria-hidden="true"><span class="cr-sample-tag">Example</span>${TOOL_SAMPLE[kind] || ''}</div></li>`;
+    }
+    return `<button type="button" class="ctool big c-${card.c}" data-tool="${kind}">
+      <span class="ctool-top"><span class="ctool-ic" aria-hidden="true">${svg(card.ic)}</span><span class="ctool-state ${cls}">${esc(label)}</span></span>
       <span class="ctool-body"><span class="ctool-name">${esc(info.label)}</span><span class="ctool-line">${esc(card.line)}</span></span>
-      <span class="ctool-foot"><span class="ctool-state ${cls}">${esc(label)}</span><span class="ctool-go" aria-hidden="true">${svg('<path d="M5 12h13m0 0-5-5m5 5-5 5"/>')}</span></span>
+      <span class="cr-sample" aria-hidden="true"><span class="cr-sample-tag">Example</span>${TOOL_SAMPLE[kind] || ''}</span>
+      <span class="ctool-cta">${ready ? 'Open' : kind === 'draft' ? 'Start a draft' : `Create ${esc(info.label)}`}${go}</span>
     </button>`;
   }
   function renderList() {
@@ -317,35 +341,34 @@ export function createToolsUI(api) {
     const suggested = [...new Set(toolsFor(t).tools.map(cardKind))];
     const related = RELATED_TAB[t];
     const typeName = t === 'general' ? 'recording' : (RECORDING_TYPE_LABEL[t] || 'recording').toLowerCase();
-    return `<div class="create">
-      <header class="create-hero">
-        <span class="create-hero-ic" aria-hidden="true">${ICON.spark}</span>
-        <div><h2 class="create-title">Create something from this recording</h2><p class="create-sub">Turn what was said into something useful.</p></div>
+    const rest = TOOL_GROUPS.map(([name, line, kinds]) => [name, line, kinds.filter((k) => !suggested.includes(k))]).filter(([, , kinds]) => kinds.length);
+    return `<div class="create cr2">
+      <header class="cr-head">
+        <h2 class="create-title">Put this recording to work</h2>
+        <p class="create-sub">Pick a tool and it starts right away. Everything you make is saved with this recording.</p>
       </header>
-      <section class="create-sec" aria-labelledby="crRec">
-        <h3 class="create-h" id="crRec">Recommended for this ${esc(typeName)}</h3>
-        <div class="create-grid rec">${suggested.map((k) => toolCard(k, true)).join('')}${related ? `
-          <button type="button" class="ctool c-blue big" data-goto="${related}">
-            <span class="ctool-ic" aria-hidden="true">${svg(SUMMARY_IC)}</span>
-            <span class="ctool-body"><span class="ctool-name">Summary</span><span class="ctool-line">The short version, key points and chapters</span></span>
-            <span class="ctool-foot"><span class="ctool-state">Summary tab</span><span class="ctool-go" aria-hidden="true">${svg('<path d="M5 12h13m0 0-5-5m5 5-5 5"/>')}</span></span>
-          </button>` : ''}</div>
-      </section>
-      <section class="create-sec" aria-labelledby="crAll">
-        <h3 class="create-h" id="crAll">All tools</h3>
-        ${TOOL_GROUPS.map(([name, line, kinds]) => `<div class="create-group" role="group" aria-label="${esc(name)}">
-          <p class="create-group-h"><b>${esc(name)}</b> <span>${esc(line)}</span></p>
-          <div class="create-grid more">${kinds.map((k) => toolCard(k, false)).join('')}</div>
-        </div>`).join('')}
-        <div class="create-grid more create-export">
-          <button type="button" class="ctool c-plain" data-tool="export">
-            <span class="ctool-ic" aria-hidden="true">${svg(EXPORT_IC)}</span>
-            <span class="ctool-body"><span class="ctool-name">Export</span><span class="ctool-line">PDF, Word, Markdown, text or subtitles</span></span>
-            <span class="ctool-foot"><span class="ctool-state">No AI used</span><span class="ctool-go" aria-hidden="true">${svg('<path d="M5 12h13m0 0-5-5m5 5-5 5"/>')}</span></span>
-          </button>
-        </div>
-      </section>
-      <p class="create-foot">Nothing is created until you choose a tool, and everything you create is saved with the recording. <button type="button" class="tool-note-link" data-goto="notes">Actions, dates and decisions are in Notes →</button></p>
+      <div class="cr-layout">
+        <section class="cr-rec" aria-labelledby="crRec">
+          <h3 class="cr-h" id="crRec">Best for this ${esc(typeName)}</h3>
+          <div class="cr-rec-grid n${suggested.length}">${suggested.map((k) => toolCard(k, true)).join('')}</div>
+          ${related ? `<button type="button" class="cr-related" data-goto="${related}">${svg(SUMMARY_IC)}<span><b>Just need the gist?</b> The Summary tab has the short version, key points and chapters.</span></button>` : ''}
+        </section>
+        <aside class="cr-browser" aria-labelledby="crAll">
+          <h3 class="cr-h" id="crAll">More tools</h3>
+          ${rest.map(([name, line, kinds]) => `<div class="cr-group" role="group" aria-label="${esc(name)}: ${esc(line)}">
+            <p class="cr-group-h">${esc(name)}</p>
+            <ul class="cr-rows">${kinds.map((k) => toolCard(k, false)).join('')}</ul>
+          </div>`).join('')}
+          <div class="cr-group" role="group" aria-label="Export">
+            <p class="cr-group-h">Export</p>
+            <ul class="cr-rows"><li class="cr-row-wrap"><button type="button" class="ctool cr-row c-plain" data-tool="export">
+              <span class="ctool-ic" aria-hidden="true">${svg(EXPORT_IC)}</span>
+              <span class="ctool-body"><span class="ctool-name">Export</span><span class="ctool-line">PDF, Word, Markdown, text or subtitles. No AI used.</span></span>
+              <span class="ctool-state"></span><span class="ctool-go" aria-hidden="true">${svg('<path d="M5 12h13m0 0-5-5m5 5-5 5"/>')}</span></button></li></ul>
+          </div>
+        </aside>
+      </div>
+      <p class="create-foot">${api.privacyLine.replace(/<\/?p[^>]*>/g, '')} <button type="button" class="tool-note-link" data-goto="notes">Actions, dates and decisions are in Notes →</button></p>
     </div>`;
   }
 
@@ -934,7 +957,12 @@ export function createToolsUI(api) {
   // ---------- events ----------
   function bind(p) {
     p.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => api.showTab(b.dataset.goto)));
-    p.querySelectorAll('.ctool.big').forEach((b) => b.addEventListener('pointerenter', (e) => {
+    p.querySelectorAll('.cr-peek').forEach((b) => b.addEventListener('click', () => {
+      const open = !b.parentElement.classList.contains('show');
+      b.parentElement.classList.toggle('show', open);
+      b.setAttribute('aria-expanded', String(open));
+    }));
+    p.querySelectorAll('.ctool.big, .cr-row').forEach((b) => b.addEventListener('pointerenter', (e) => {
       if (e.pointerType !== 'mouse') return;
       const r = b.getBoundingClientRect();
       mascotSignal('look', { x: r.left + r.width / 2, y: r.top + r.height / 2 });
@@ -947,6 +975,13 @@ export function createToolsUI(api) {
       if (ui.tool === 'quiz') resumeSignal(current('quiz').a);
       // a reply / email with nothing created yet: ask what it should do straight away
       if (SETUP_DIALOG.has(ui.tool) && !latest(ui.tool)) { api.refresh(); openSetup(ui.tool); return; }
+      // nothing made yet and nothing to ask: one click is the intent, so it starts now (settings can still be
+      // changed on the next screen and regenerated)
+      const { key: k0, a: a0 } = current(ui.tool);
+      if (!a0?.content && !api.busy(ui.tool, k0) && a0?.status !== 'generating' && !api.error(ui.tool, k0)) {
+        ui.legacyView[ui.tool] = false;
+        api.generate(ui.tool, { ...selOf(ui.tool) }, false);
+      }
       api.refresh();
       p.scrollIntoView({ block: 'start', behavior: 'smooth' });
     }));
