@@ -7,11 +7,12 @@ import { fmtDuration } from '../lib/transcripts.js';
 import { fmtClock, RECORDING_TYPE_LABEL } from '../lib/segments.js';
 import {
   PAGE_SIZE, SEARCH_PAGE_SIZE, listLibrary, searchLibrary, libraryStats, listFolders, renameTranscript, setFavorite,
-  deleteTranscripts, removeFromFolder, renameFolder, deleteFolder, createFolder, highlight, fmtHours,
+  deleteTranscripts, removeFromFolder, renameFolder, deleteFolder, createFolder, highlight, fmtHours, courseLectureIds,
 } from '../lib/library.js';
 import { mountMascot } from '../mascot/mascot.js';
 import { mascotSignal } from '../mascot/bus.js';
-import { makeDialog, promptDialog, confirmDialog, confirmDeleteRecordings, folderPicker, toast } from '../library/dialogs.js';
+import { makeDialog, promptDialog, confirmDialog, confirmDeleteRecordings, folderPicker, toast, addRecordingsDialog } from '../library/dialogs.js';
+import { courseTone } from '../lib/course-tone.js';
 import { myPlan } from '../lib/billing.js';
 
 const $ = (id) => document.getElementById(id);
@@ -21,9 +22,9 @@ const VIEWS = ['recent', 'all', 'favorites', 'folders'];
 const SORTS = ['newest', 'oldest', 'longest', 'shortest', 'az'];
 
 const EMPTY = {
-  library: ['Your library is empty', 'Transcribe a recording while you’re signed in and it’s saved here, searchable and private to you.', true],
-  favorites: ['No favorites yet', 'Tap the star on any recording to keep it here.'],
-  folder: ['This course is empty', 'Open a recording’s ⋯ menu and choose Courses, or use Select to add several at once.'],
+  library: ['Your Library starts with one lecture', 'Upload a recording while you’re signed in and it’s saved here: searchable, and private to you.', true],
+  favorites: ['Keep the good ones close', 'Star any recording and it’ll be right here when you need it.'],
+  folder: ['Let’s give this course something to study', 'Add recordings you’ve already saved, or upload a new lecture.'],
   date: ['Nothing from this period', 'Try a longer time range.'],
   lecture: ['No lectures yet', 'Upload a lecture to start building your study library.', true],
   meeting: ['No meetings yet', 'Transcribe a meeting and its decisions and action items are one click away.', true],
@@ -39,6 +40,17 @@ const ICON = {
   folder: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>',
   plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   back: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg>',
+  upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-5 5m5-5 5 5M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>',
+};
+// one icon per kind of recording (the row's tile), drawn on the same 24px grid and stroke
+const TYPE_ICON = {
+  lecture: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-4 9 4-9 4Z"/><path d="M7 11v4.5c1.5 1.3 3.2 2 5 2s3.5-.7 5-2V11"/></svg>',
+  meeting: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 19c.6-3 2.6-4.6 5-4.6s4.4 1.6 5 4.6M14 15c2.4-.6 4.6.6 5.5 4"/></svg>',
+  voice_message: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3H8l-4 3Z"/><path d="M9 9v3M12 8v5M15 9v3"/></svg>',
+  interview: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
+  podcast: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="11" r="2"/><path d="M8.5 14.5a5 5 0 1 1 7 0M6 17a8.5 8.5 0 1 1 12 0M12 13v8"/></svg>',
+  general: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>',
 };
 
 // ---------- state (mirrored in the URL so Back / reload / sharing a link with yourself work) ----------
@@ -71,6 +83,7 @@ function writeUrl(push = false) {
   if (st.q) p.set('q', st.q);
   const url = `/library${p.toString() ? `?${p}` : ''}`;
   if (url !== location.pathname + location.search) history[push ? 'pushState' : 'replaceState'](null, '', url);
+  dispatchEvent(new Event('sparkscribe:route')); // the header marks Library or Courses (lib/account.js)
 }
 
 const searching = () => st.q.trim().length >= 2;
@@ -92,7 +105,7 @@ function renderStats() {
   if (!s) return;
   const n = Number(s.recordings);
   $('libStats').textContent = n
-    ? [`${n} recording${n === 1 ? '' : 's'}`, `${fmtHours(Number(s.seconds))} transcribed`, `${s.this_month} this month`].join(' · ')
+    ? [`${n} recording${n === 1 ? '' : 's'}`, `${fmtHours(Number(s.seconds))} transcribed`, Number(s.this_month) ? `${s.this_month} this month` : null].filter(Boolean).join(' · ')
     : 'Nothing saved yet';
 }
 function renderTypeChips() {
@@ -100,9 +113,11 @@ function renderTypeChips() {
   const present = TYPES.filter((t) => by[t] > 0);
   // a type filter only helps once there is more than one kind of recording (or one is already chosen)
   if (present.length < 2 && !st.type) { $('typeChips').innerHTML = ''; return; }
-  const chip = (t, label, n) => `<button type="button" class="type-chip${st.type === t ? ' on' : ''}" data-type="${t || ''}" aria-pressed="${st.type === t}">${esc(label)}${n != null ? ` <span>${n}</span>` : ''}</button>`;
-  $('typeChips').innerHTML = chip(null, 'All types') + present.map((t) => chip(t, TYPE_PLURAL[t], by[t])).join('')
-    + (st.type && !present.includes(st.type) ? chip(st.type, TYPE_PLURAL[st.type], 0) : '');
+  // the counts are for the whole Library: shown only when that's what the list is (not inside a course, a time range
+  // or Favorites), so a number never describes something other than the list under it
+  const scoped = !st.folder && !st.date && st.view === 'all';
+  const opt = (t, label, n) => `<option value="${t || ''}"${st.type === t ? ' selected' : ''}>${esc(label)}${scoped && n != null ? ` (${n})` : ''}</option>`;
+  $('typeChips').innerHTML = `<select class="lib-select" id="typeSel" aria-label="Recording type">${opt(null, 'All types')}${present.map((t) => opt(t, TYPE_PLURAL[t], by[t])).join('')}${st.type && !present.includes(st.type) ? opt(st.type, TYPE_PLURAL[st.type], 0) : ''}</select>`;
 }
 
 // ---------- chrome: tabs, toolbar, folder header ----------
@@ -113,6 +128,7 @@ function renderChrome() {
     b.classList.toggle('on', on);
     b.setAttribute('aria-selected', String(on));
   });
+  placeTabIndicator();
   const folderOverview = st.view === 'folders' && !st.folder;
   $('toolbar').hidden = searching() || folderOverview;
   $('sortSel').hidden = st.view === 'recent' && !st.folder; // Recent is always "recently opened"
@@ -124,13 +140,18 @@ function renderChrome() {
   renderTypeChips();
 
   const fh = $('folderHead');
+  document.body.classList.toggle('lib-in-course', !!st.folder && !searching());
   if (st.folder && !searching()) {
-    const name = folderName(st.folder) || 'Course';
+    const f = st.folders.find((x) => x.id === st.folder);
+    const name = f?.name || 'Course';
+    const n = f?.count ?? null;
     fh.hidden = false;
-    fh.innerHTML = `<button class="btn btn-ghost btn-sm" type="button" data-act="folders">${ICON.back}<span>Courses</span></button>
-      <h2 class="folder-title">${ICON.folder}<span>${esc(name)}</span></h2>
-      <div class="folder-actions"><button class="btn btn-ghost btn-sm" type="button" data-act="rename-folder">Rename</button>
-      <button class="btn btn-ghost btn-sm" type="button" data-act="delete-folder">Delete course</button></div>`;
+    fh.className = `folder-head tone-${courseTone(st.folder)}`;
+    fh.innerHTML = `<nav class="crumbs" aria-label="Breadcrumb"><a href="/library">Library</a><span aria-hidden="true">/</span><a href="/library?view=folders" data-act="folders">Courses</a><span aria-hidden="true">/</span><span aria-current="page">${esc(name)}</span></nav>
+      <div class="course-title-row"><span class="course-dot" aria-hidden="true"></span><h2 class="folder-title">${esc(name)}</h2>${n != null ? `<span class="course-count">${n} recording${n === 1 ? '' : 's'}</span>` : ''}</div>
+      <div class="folder-actions"><button class="btn btn-primary" type="button" data-act="add-recordings">${ICON.plus}<span>Add recordings</span></button>
+      <button class="btn btn-ghost" type="button" data-act="rename-folder">${ICON.pencil}<span>Rename</span></button>
+      <button class="btn btn-ghost" type="button" data-act="delete-folder">Delete course</button></div>`;
   } else {
     fh.hidden = true;
     fh.innerHTML = '';
@@ -141,24 +162,28 @@ function renderChrome() {
 // ---------- recordings list ----------
 function cardHtml(r) {
   const sel = st.selected.has(r.id);
-  const meta = [shortDate(r.created_at), fmtDuration(r.duration_seconds), r.speaker_count ? `${r.speaker_count} speaker${r.speaker_count === 1 ? '' : 's'}` : null]
+  const type = TYPES.includes(r.recording_type) ? r.recording_type : 'general';
+  const meta = [shortDate(r.created_at), fmtDuration(r.duration_seconds), r.speaker_count > 1 ? `${r.speaker_count} speakers` : null, type !== 'general' ? RECORDING_TYPE_LABEL[type] : null]
     .filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('');
   const preview = r.summary
     ? `<p class="lib-preview">${esc(r.summary)}</p>`
     : r.preview ? `<p class="lib-preview quote">“${esc(r.preview)}”</p>` : '';
-  const folders = st.folder ? '' : (r.folder_ids || []).map(folderName).filter(Boolean).slice(0, 3)
-    .map((n) => `<span class="lib-folder">${ICON.folder}${esc(n)}</span>`).join('');
-  return `<article class="panel lib-card${sel ? ' selected' : ''}${st.selecting ? ' selecting' : ''}" data-id="${r.id}">
+  const courses = st.folder ? '' : (r.folder_ids || []).map((id) => [id, folderName(id)]).filter(([, n]) => n).slice(0, 3)
+    .map(([id, n]) => `<span class="lib-course tone-${courseTone(id)}">${esc(n)}</span>`).join('');
+  return `<article class="lib-card t-${type}${sel ? ' selected' : ''}${st.selecting ? ' selecting' : ''}${r.is_favorite ? ' is-fav' : ''}" data-id="${r.id}">
     ${st.selecting ? `<label class="lib-check"><input type="checkbox" ${sel ? 'checked' : ''} aria-label="Select ${esc(r.title)}" /></label>` : ''}
-    <a class="lib-card-main" href="${openUrl(r.id)}">
-      <div class="lib-card-top"><span class="lib-title">${esc(r.title)}</span>${badge(r.recording_type)}</div>
-      <div class="lib-meta mono">${meta}${r.status !== 'completed' ? `<span class="warn">${esc(r.status)}</span>` : ''}</div>
+    <a class="lib-card-main" href="${openUrl(r.id)}" aria-label="Open ${esc(r.title)}"></a>
+    <span class="lib-type-ic" aria-hidden="true">${TYPE_ICON[type]}</span>
+    <div class="lib-card-body">
+      <div class="lib-card-top"><span class="lib-title" data-act="title" title="Double-click to rename">${esc(r.title)}</span></div>
+      <div class="lib-meta">${meta}${r.status !== 'completed' ? `<span class="warn">${esc(r.status)}</span>` : ''}</div>
       ${preview}
-      ${folders ? `<div class="lib-folders">${folders}</div>` : ''}
-    </a>
+      ${courses ? `<div class="lib-folders">${courses}</div>` : ''}
+    </div>
     <div class="lib-card-actions">
+      <button class="icon-btn" type="button" data-act="rename" aria-label="Rename ${esc(r.title)}" title="Rename">${ICON.pencil}</button>
       <button class="icon-btn star${r.is_favorite ? ' on' : ''}" type="button" data-act="star" aria-pressed="${r.is_favorite}" aria-label="${r.is_favorite ? 'Remove from favorites' : 'Add to favorites'}" title="${r.is_favorite ? 'Favorite' : 'Add to favorites'}">${ICON.star}</button>
-      <button class="icon-btn" type="button" data-act="menu" aria-label="More actions for ${esc(r.title)}">${ICON.more}</button>
+      <button class="icon-btn" type="button" data-act="menu" aria-label="More actions for ${esc(r.title)}" title="More">${ICON.more}</button>
     </div>
   </article>`;
 }
@@ -170,10 +195,14 @@ function emptyHtml() {
   else if (st.view === 'favorites') key = 'favorites';
   else if (st.date) key = 'date';
   const [title, text, cta] = EMPTY[key];
-  return `<div class="panel lib-empty">
-    <div class="lib-empty-icon" aria-hidden="true">${key === 'favorites' ? ICON.star : key === 'folder' ? ICON.folder : '<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>'}</div>
+  const art = key === 'favorites' ? ICON.star : key === 'folder' ? ICON.folder : TYPE_ICON[TYPES.includes(key) ? key : 'general'];
+  const actions = key === 'folder'
+    ? `<div class="lib-empty-actions"><button class="btn btn-primary" type="button" data-act="add-recordings">${ICON.plus}<span>Add recordings</span></button><a class="btn btn-ghost" href="/#upload">${ICON.upload}<span>Upload a lecture</span></a></div>`
+    : cta ? `<div class="lib-empty-actions"><a class="btn btn-primary" href="/#upload">${ICON.upload}<span>Upload a recording</span></a></div>` : '';
+  return `<div class="lib-empty e-empty k-${key}">
+    <div class="e-empty-art" aria-hidden="true"><span class="e-empty-ring"></span>${art}</div>
     <h2>${esc(title)}</h2><p>${esc(text)}</p>
-    ${cta ? '<a class="btn btn-primary" href="/">Transcribe something</a>' : ''}
+    ${actions}
     ${st.type && st.type !== 'general' ? '<p class="lib-empty-hint">Tip: open a recording and set its type with the Type button at the top.</p>' : ''}
   </div>`;
 }
@@ -228,14 +257,14 @@ async function loadRows(reset = true) {
 
 // ---------- folders overview ----------
 function renderFolders() {
-  const tiles = st.folders.map((f) => `<a class="panel folder-tile" href="/library?folder=${f.id}" data-folder="${f.id}">
+  const tiles = st.folders.map((f) => `<a class="folder-tile tone-${courseTone(f.id)}" href="/library?folder=${f.id}" data-folder="${f.id}">
       <span class="folder-tile-ic">${ICON.folder}</span>
       <span class="folder-tile-name">${esc(f.name)}</span>
-      <span class="folder-tile-n mono">${f.count} recording${f.count === 1 ? '' : 's'}</span></a>`).join('');
+      <span class="folder-tile-n">${f.count ? `${f.count} recording${f.count === 1 ? '' : 's'}` : 'Empty: add recordings'}</span></a>`).join('');
   $('libList').innerHTML = `<div class="folder-grid">
-    <button class="panel folder-tile new" type="button" data-act="new-folder"><span class="folder-tile-ic">${ICON.plus}</span><span class="folder-tile-name">New course</span><span class="folder-tile-n mono">e.g. Biology 101</span></button>
+    <button class="folder-tile new" type="button" data-act="new-folder"><span class="folder-tile-ic">${ICON.plus}</span><span class="folder-tile-name">New course</span><span class="folder-tile-n">e.g. Biology 201</span></button>
     ${tiles}</div>
-    ${st.folders.length ? '' : '<p class="lib-empty-hint center">Folders keep related recordings together — a course, a client, a project. A recording can be in more than one folder, and deleting a folder never deletes recordings.</p>'}`;
+    ${st.folders.length ? '' : '<p class="lib-empty-hint center">Courses keep a class’s recordings together. A recording can be in more than one course, and deleting a course never deletes recordings.</p>'}`;
   $('libMore').innerHTML = '';
 }
 async function loadFolders() {
@@ -398,7 +427,7 @@ function recordingMenu(row) {
     else if (m === 'rename') renameRow(row);
     else if (m === 'star') toggleStar(row);
     else if (m === 'folders') folderPicker({ ids: [row.id], currentIds: row.folder_ids || [], onChange: async (ids) => { row.folder_ids = ids; await loadFolders(); toast('Courses updated'); if (st.folder && !ids.includes(st.folder)) refresh(); else renderList(); } });
-    else if (m === 'unfolder') { try { await removeFromFolder(st.folder, row.id); toast('Removed from folder'); await loadFolders(); refresh(); } catch (ex) { toast(ex.message || 'That didn’t work'); } }
+    else if (m === 'unfolder') { try { await removeFromFolder(st.folder, row.id); toast('Removed from this course'); await loadFolders(); refresh(); } catch (ex) { toast(ex.message || 'That didn’t work'); } }
     else if (m === 'delete') {
       if (!(await confirmDeleteRecordings(1, row.title))) return;
       try { await deleteTranscripts(row.id); toast('Recording deleted'); refreshStats(); refresh(); } catch (ex) { toast(ex.message || 'Delete failed'); }
@@ -406,6 +435,7 @@ function recordingMenu(row) {
   });
 }
 async function renameRow(row) {
+  if ($('libList').querySelector(`.lib-card[data-id="${row.id}"] .lib-title`)) return startRename(row);
   const title = await promptDialog({ title: 'Rename recording', label: 'Name', value: row.title, submit: (v) => renameTranscript(row.id, v) });
   if (!title) return;
   row.title = title;
@@ -416,6 +446,8 @@ async function toggleStar(row) {
   const value = !row.is_favorite;
   row.is_favorite = value;
   renderList();
+  const star = $('libList').querySelector(`.lib-card[data-id="${row.id}"] .star`);
+  if (value) star?.classList.add('just-on'); // a quick charge as it fills (CSS)
   try {
     await setFavorite(row.id, value);
     if (st.stats) st.stats.favorites = Number(st.stats.favorites) + (value ? 1 : -1);
@@ -423,13 +455,71 @@ async function toggleStar(row) {
   } catch (e) { row.is_favorite = !value; renderList(); toast(e.message || 'That didn’t work'); }
 }
 
+// ---------- add recordings to the open course ----------
+async function listAllRecordings() {
+  const all = [];
+  for (let offset = 0; offset < 600; offset += 100) {
+    const { rows } = await listLibrary({ view: 'all', sort: 'newest', offset, limit: 100 });
+    all.push(...rows);
+    if (rows.length < 100) break;
+  }
+  return all;
+}
+async function addRecordings() {
+  const id = st.folder;
+  if (!id) return;
+  const n = await addRecordingsDialog({ folderId: id, folderName: folderName(id) || 'this course', listAll: listAllRecordings, memberIds: () => courseLectureIds(id) });
+  if (!n) return;
+  toast(`Added ${n} recording${n === 1 ? '' : 's'}`);
+  await loadFolders();
+  refresh();
+}
+
+// ---------- inline rename: double-click the title (or the pencil, F2) ----------
+function startRename(row) {
+  const card = $('libList').querySelector(`.lib-card[data-id="${row.id}"]`);
+  const title = card?.querySelector('.lib-title');
+  if (!title || card.classList.contains('renaming')) return;
+  card.classList.add('renaming');
+  const input = document.createElement('input');
+  input.className = 'lib-title-input';
+  input.value = row.title;
+  input.maxLength = 300;
+  input.setAttribute('aria-label', 'Recording name');
+  title.replaceWith(input);
+  input.focus();
+  input.select();
+  let done = false;
+  const finish = async (save) => {
+    if (done) return;
+    done = true;
+    const v = input.value.trim();
+    card.classList.remove('renaming');
+    if (!save || !v || v === row.title) return renderList();
+    const before = row.title;
+    row.title = v;
+    renderList();
+    try { await renameTranscript(row.id, v); toast('Renamed'); } catch (e) { row.title = before; renderList(); toast(e.message || 'Couldn’t rename. The old name is kept.'); }
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(false); }
+  });
+  input.addEventListener('blur', () => finish(true));
+  input.addEventListener('click', (e) => e.stopPropagation());
+}
+
 // ---------- folder actions ----------
 async function newFolder() {
-  const name = await promptDialog({ title: 'New course', label: 'Course name', placeholder: 'e.g. Biology 201', maxLength: 80, confirmLabel: 'Create', submit: createFolder });
+  let created = null;
+  const name = await promptDialog({ title: 'New course', label: 'Course name', placeholder: 'e.g. Biology 201', maxLength: 80, confirmLabel: 'Create', submit: async (v) => { created = await createFolder(v); } });
   if (!name) return;
   toast(`Created “${name}”`);
   await loadFolders();
-  renderFolders();
+  if (!created?.id) return renderFolders();
+  st.folder = created.id; // straight into the new course, with Add recordings one click away
+  st.view = 'folders';
+  refresh({ push: true });
 }
 async function renameCurrentFolder() {
   const id = st.folder;
@@ -437,7 +527,7 @@ async function renameCurrentFolder() {
   if (!name) return;
   await loadFolders();
   renderChrome();
-  toast('Folder renamed');
+  toast('Course renamed');
 }
 async function deleteCurrentFolder() {
   const id = st.folder;
@@ -449,11 +539,25 @@ async function deleteCurrentFolder() {
   });
   if (!ok) return;
   try { await deleteFolder(id); } catch (e) { return toast(e.message || 'Couldn’t delete the course'); }
-  toast('Folder deleted');
+  toast('Course deleted');
   st.folder = null;
   st.view = 'folders';
   await loadFolders();
   refresh({ push: true });
+}
+
+// the Library views' indicator: glides to the chosen tab (transform + width only)
+let titleClick = 0;
+function placeTabIndicator(instant = false) {
+  const ind = $('viewTabs').querySelector('.tab-ind');
+  const on = $('viewTabs').querySelector('.tab.on');
+  if (!ind) return;
+  if (!on) { ind.style.opacity = '0'; return; }
+  if (instant) ind.style.transition = 'none';
+  ind.style.opacity = '1';
+  ind.style.width = `${on.offsetWidth}px`;
+  ind.style.transform = `translateX(${on.offsetLeft}px)`;
+  if (instant) { void ind.offsetWidth; ind.style.transition = ''; }
 }
 
 // ---------- events ----------
@@ -488,12 +592,22 @@ function bind() {
   $('qClear').addEventListener('click', () => { clearSearch(); $('q').focus(); });
   $('q').addEventListener('keydown', (e) => { if (e.key === 'Escape' && st.q) { e.preventDefault(); clearSearch(); } });
 
-  $('typeChips').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-type]');
-    if (!b) return;
-    st.type = b.dataset.type || null;
+  $('typeChips').addEventListener('change', (e) => {
+    if (e.target.id !== 'typeSel') return;
+    st.type = e.target.value || null;
     refresh();
   });
+  // "/" jumps to search (unless you're already typing somewhere); F2 renames the focused recording
+  document.addEventListener('keydown', (e) => {
+    const typing = e.target.closest?.('input, textarea, select, [contenteditable="true"]');
+    if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !document.querySelector('dialog[open]')) { e.preventDefault(); $('q').focus(); }
+    if (e.key === 'F2' && !typing) {
+      const card = document.activeElement?.closest?.('.lib-card');
+      const row = card && st.rows.find((r) => r.id === card.dataset.id);
+      if (row) { e.preventDefault(); startRename(row); }
+    }
+  });
+  addEventListener('resize', () => placeTabIndicator(true), { passive: true });
   $('dateSel').addEventListener('change', () => { st.date = $('dateSel').value; refresh(); });
   $('sortSel').addEventListener('change', () => { st.sort = $('sortSel').value; refresh(); });
   $('selectBtn').addEventListener('click', () => setSelecting(!st.selecting));
@@ -502,8 +616,10 @@ function bind() {
 
   $('folderHead').addEventListener('click', (e) => {
     const a = e.target.closest('[data-act]')?.dataset.act;
+    if (a === 'folders') e.preventDefault();
     if (a === 'folders') { st.folder = null; st.view = 'folders'; refresh({ push: true }); }
     else if (a === 'rename-folder') renameCurrentFolder();
+    else if (a === 'add-recordings') addRecordings();
     else if (a === 'delete-folder') deleteCurrentFolder();
   });
 
@@ -512,6 +628,7 @@ function bind() {
     if (act === 'retry') return refresh();
     if (act === 'clear-search') return clearSearch();
     if (act === 'new-folder') return newFolder();
+    if (act === 'add-recordings') return addRecordings();
     const tile = e.target.closest('[data-folder]');
     if (tile && !e.metaKey && !e.ctrlKey) { e.preventDefault(); st.folder = tile.dataset.folder; st.view = 'folders'; return refresh({ push: true }); }
     const card = e.target.closest('.lib-card');
@@ -519,6 +636,16 @@ function bind() {
     const row = st.rows.find((r) => r.id === card.dataset.id);
     if (!row) return;
     if (act === 'star') { e.preventDefault(); return toggleStar(row); }
+    if (act === 'rename') { e.preventDefault(); return startRename(row); }
+    // the title: one click opens (a moment later, so a double-click can rename instead)
+    if (act === 'title' && !st.selecting) {
+      e.preventDefault();
+      if (e.ctrlKey || e.metaKey) return window.open(openUrl(row.id), '_blank');
+      clearTimeout(titleClick);
+      if (e.detail >= 2) return startRename(row);
+      titleClick = setTimeout(() => { location.href = openUrl(row.id); }, 240);
+      return;
+    }
     if (act === 'menu') { e.preventDefault(); return recordingMenu(row); }
     if (st.selecting) {
       // the checkbox keeps its native toggle (cancelling the click would undo the tick); the card toggles it by hand

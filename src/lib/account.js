@@ -5,6 +5,7 @@ import { getBillingStatus, usageText, deleteAccountOnServer } from './billing.js
 import { mountThemeToggle } from './theme-toggle.js';
 import { clearAllAudio, deleteAudio, PENDING_AUDIO_KEY } from './audio-store.js';
 import { guardRecovery, currentSession } from './recovery.js';
+import { mountAmbient, mountHeaderState, mountNavIndicator } from '../electric/chrome.js';
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -140,6 +141,8 @@ function initialsOf(nameOrEmail) {
 
 // Renders "Sign in" or the avatar menu into `slot`, and keeps it in sync with auth changes.
 export function mountAccountMenu(slot, { onChange } = {}) {
+  mountAmbient(); // the lit canvas + circuit (electric/chrome.js), on every page
+  mountHeaderState();
   mountThemeToggle(slot); // the Light / Dark switch sits in every header, signed in or not
   if (!slot || !isConfigured) return;
   slot.classList.add('account');
@@ -151,7 +154,14 @@ export function mountAccountMenu(slot, { onChange } = {}) {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
 
   // The site navigation, one source for every page: placed right after the logo. Signed out: Features, How it works,
-  // Pricing. Signed in: Home, Library, Pricing. On narrow screens the links fold into a Menu button.
+  // Pricing. Signed in: Home, Library, Courses (the Library's course view), Pricing. On narrow screens the links fold
+  // into a Menu button. One electric line marks the current page (electric/chrome.js).
+  function currentKey() {
+    const path = location.pathname.replace(/\/$/, '') || '/';
+    const q = new URLSearchParams(location.search);
+    if (path === '/library') return q.get('view') === 'folders' || q.get('folder') ? 'courses' : 'library';
+    return { '/': 'home', '/pricing': 'pricing', '/account': 'pricing' }[path] || '';
+  }
   function siteNav(signedIn) {
     const bar = slot.closest('.topbar');
     if (!bar) return;
@@ -163,15 +173,11 @@ export function mountAccountMenu(slot, { onChange } = {}) {
       const brand = bar.querySelector(':scope > .brand');
       brand ? brand.after(nav) : bar.prepend(nav);
     }
-    const here = location.pathname.replace(/\/$/, '') || '/';
     const links = signedIn
-      ? [['/', 'Home'], ['/library', 'Library'], ['/pricing', 'Pricing']]
-      : [['/#features', 'Features'], ['/#how', 'How it works'], ['/pricing', 'Pricing']];
-    const item = ([href, label]) => {
-      const path = href.split('#')[0] || '/';
-      const current = path === here && !href.includes('#') ? ' aria-current="page"' : '';
-      return `<a class="nav-link" href="${href}"${current}>${label}</a>`;
-    };
+      ? [['/', 'Home', 'home'], ['/library', 'Library', 'library'], ['/library?view=folders', 'Courses', 'courses'], ['/pricing', 'Pricing', 'pricing']]
+      : [['/#features', 'Features', ''], ['/#how', 'How it works', ''], ['/pricing', 'Pricing', 'pricing']];
+    const here = currentKey();
+    const item = ([href, label, key]) => `<a class="nav-link" href="${href}" data-nav="${key}"${key && key === here ? ' aria-current="page"' : ''}>${label}</a>`;
     nav.innerHTML = `<button type="button" class="nav-toggle" aria-expanded="false" aria-controls="siteNavLinks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span>Menu</span></button>
       <div class="nav-links" id="siteNavLinks">${links.map(item).join('')}${signedIn ? '' : `<a class="nav-link nav-only-sm" href="/auth?next=${encodeURIComponent(currentPath())}">Sign in</a><a class="nav-link nav-only-sm" href="/settings">Settings</a>`}</div>`;
     const toggle = nav.querySelector('.nav-toggle');
@@ -180,6 +186,14 @@ export function mountAccountMenu(slot, { onChange } = {}) {
       nav.dataset.bound = '1';
       document.addEventListener('pointerdown', (e) => { if (!nav.contains(e.target)) closeNav(); });
       nav.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeNav(); nav.querySelector('.nav-toggle')?.focus(); } });
+      // the Library switches between its views without reloading: keep "Library" / "Courses" in step
+      const sync = () => {
+        const k = currentKey();
+        nav.querySelectorAll('.nav-link[data-nav]').forEach((l) => (l.dataset.nav && l.dataset.nav === k ? l.setAttribute('aria-current', 'page') : l.removeAttribute('aria-current')));
+        nav.querySelector('.nav-links')?.dispatchEvent(new Event('pointerleave'));
+      };
+      addEventListener('popstate', sync);
+      addEventListener('sparkscribe:route', sync);
     }
     toggle.addEventListener('click', () => {
       const open = !nav.classList.contains('open');
@@ -188,6 +202,28 @@ export function mountAccountMenu(slot, { onChange } = {}) {
       if (open) nav.querySelector('.nav-link')?.focus();
     });
     nav.querySelectorAll('.nav-link').forEach((l) => l.addEventListener('click', closeNav));
+    mountNavIndicator(nav);
+    newRecordingButton(signedIn);
+  }
+
+  // The header's one primary action for a signed-in student: start a new recording. On the home page it opens the
+  // file picker right away; elsewhere it goes home to the upload area.
+  function newRecordingButton(signedIn) {
+    const right = slot.parentElement;
+    let btn = right?.querySelector(':scope > .hdr-new');
+    if (!signedIn || !right) { btn?.remove(); return; }
+    if (btn) return;
+    btn = document.createElement('a');
+    btn.className = 'btn btn-primary hdr-new';
+    btn.href = '/#upload';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>New recording</span>';
+    btn.addEventListener('click', (e) => {
+      const input = document.getElementById('fileInput');
+      if (!input || location.pathname !== '/') return;
+      e.preventDefault();
+      input.click();
+    });
+    right.prepend(btn);
   }
 
   async function render(session) {
@@ -218,10 +254,8 @@ export function mountAccountMenu(slot, { onChange } = {}) {
       menu.setAttribute('role', 'menu');
       menu.innerHTML = `
         <div class="acct-head"><span class="acct-avatar" aria-hidden="true">${p.avatar ? `<img src="${esc(p.avatar)}" alt="" referrerpolicy="no-referrer" />` : esc(initialsOf(label))}</span><span class="acct-who">${p.name ? `<b>${esc(p.name)}</b>` : ''}<span>${esc(p.email)}</span></span></div>
-        <a role="menuitem" href="/settings#account"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1-3.6 3.8-5.5 7-5.5s6 1.9 7 5.5"/></svg>Account</a>
-        <a role="menuitem" href="/account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18V9m5 9V5m5 13v-6m5 6V8"/></svg><span class="acct-plan-item">Plan &amp; billing<small data-usage></small></span></a>
-        <a role="menuitem" href="/settings#preferences">${GEAR}Settings</a>
-        <a role="menuitem" href="/library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h6v14H4zM14 5h6v14h-6z"/></svg>My Library</a>
+        <a role="menuitem" href="/account"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 5 14h6l-1 7 8-11h-6z"/></svg><span class="acct-plan-item">Plan &amp; billing<small data-usage></small></span></a>
+        <a role="menuitem" href="/settings">${GEAR}Settings</a>
         <a role="menuitem" href="/help"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3M12 17h.01"/></svg>Help</a>
         <hr />
         <button role="menuitem" type="button" data-signout><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 12H4m0 0 4-4m-4 4 4 4M13 5h6v14h-6"/></svg>Sign out</button>`;

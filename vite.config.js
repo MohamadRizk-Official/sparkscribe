@@ -72,6 +72,10 @@ export default defineConfig(({ mode }) => ({
           .replace('<!-- sparkscribe:brand -->', BRAND_HTML)
           .replaceAll('<!-- sparkscribe:mark -->', MARK_HTML)
           .replace('<!-- sparkscribe:legal -->', LEGAL_HTML)
+          // the Electric design system: one stylesheet entry (src/app.css) and one set of fonts (BRAND_FONT_LINK)
+          // for every page; the pages' older font links are dropped
+          .replace('href="/src/style.css"', 'href="/src/app.css"')
+          .replace(/\s*<link href="https:\/\/fonts\.googleapis\.com\/css2\?family=Space\+Grotesk[^>]*>/, '')
           .replace('</head>', `  ${BRAND_FONT_LINK}\n  </head>`),
       },
     },

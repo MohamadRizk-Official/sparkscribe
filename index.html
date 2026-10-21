@@ -48,10 +48,10 @@
     <main class="app">
       <!-- ===== HOME / DROP ===== -->
       <section class="landing" id="dropPanel">
-      <!-- signed in: the student's study home (src/home/dashboard.js); signed out it stays hidden -->
-      <section class="dash" id="dashboard" hidden aria-labelledby="dashTitle"></section>
-      <h2 class="dash-add-title" id="dashAddTitle">Add a lecture</h2>
-      <div class="hero">
+      <!-- signed in: a short greeting, then the upload (first thing on the page), then the study home
+           (src/home/dashboard.js) below it; signed out these stay hidden -->
+      <div class="home-greet" id="homeGreet" hidden></div>
+      <div class="hero" id="upload">
         <div class="hero-text">
           <p class="hero-eyebrow">For students</p>
           <h1 class="hero-h1">Turn your lectures into something you can <span class="grad">actually study.</span></h1>
@@ -150,6 +150,8 @@
           </details>
         </div>
       </div>
+
+        <section class="dash" id="dashboard" hidden aria-labelledby="dashContinueTitle"></section>
 
         <section class="becomes" id="features" aria-labelledby="becomesTitle">
           <h2 id="becomesTitle" class="home-h2">One lecture. <span class="grad">Ready to study.</span></h2>

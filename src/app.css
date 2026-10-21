@@ -1,0 +1,14 @@
+/* SparkScribe stylesheet entry (every page links this, see vite.config.js).
+   Two cascade layers: `legacy` is the previous design (src/style.css); `electric` is the Electric design system
+   (src/electric/*). A later layer always wins, whatever the selector's specificity, so the new system can restyle a
+   component without fighting the old rules, and old rules nobody restyled keep working underneath. */
+@layer legacy, electric;
+@import url('./style.css') layer(legacy);
+@import url('./electric/tokens.css') layer(electric);
+@import url('./electric/base.css') layer(electric);
+@import url('./electric/chrome.css') layer(electric);
+@import url('./electric/home.css') layer(electric);
+@import url('./electric/library.css') layer(electric);
+@import url('./electric/workspace.css') layer(electric);
+@import url('./electric/pricing.css') layer(electric);
+@import url('./electric/settings.css') layer(electric);

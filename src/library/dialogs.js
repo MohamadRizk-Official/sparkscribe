@@ -158,6 +158,68 @@ export function folderPicker({ ids, currentIds = [], onChange }) {
   load();
 }
 
+// Add recordings to a course from inside the course: one searchable list of the whole library, tick several, add them
+// in one go. Recordings already in the course are shown ticked and can't be added twice. Resolves with the number
+// added (0 when cancelled). Nothing is removed here; removing stays a deliberate per-recording action.
+export function addRecordingsDialog({ folderId, folderName, listAll, memberIds }) {
+  return new Promise((resolve) => {
+    let added = 0;
+    const picked = new Set();
+    let rows = [];
+    let inCourse = new Set();
+    const { dlg, dismiss } = makeDialog('add-rec-dlg', `
+      <div class="ar-head"><h3>Add recordings to “${esc(folderName)}”</h3><p class="dlg-dim">Pick as many as you like. Recordings can be in more than one course.</p></div>
+      <label class="ar-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" placeholder="Filter by title" aria-label="Filter recordings by title" autocomplete="off" /></label>
+      <div class="ar-list" role="group" aria-label="Recordings" aria-busy="true"><div class="lib-skel sm"></div><div class="lib-skel sm"></div></div>
+      <p class="dlg-err" role="alert" hidden></p>
+      <div class="confirm-actions ar-foot"><span class="ar-count" aria-live="polite"></span>
+        <button class="btn btn-ghost" type="button" data-act="cancel">Cancel</button>
+        <button class="btn btn-primary" type="button" data-act="add" disabled>Add recordings</button></div>`, () => resolve(added));
+    const list = dlg.querySelector('.ar-list');
+    const input = dlg.querySelector('.ar-search input');
+    const addBtn = dlg.querySelector('[data-act=add]');
+    const count = dlg.querySelector('.ar-count');
+    const err = dlg.querySelector('.dlg-err');
+    const fmt = (s) => { const m = Math.round((Number(s) || 0) / 60); return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${Math.max(1, m)} min`; };
+    const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    const sync = () => {
+      const n = picked.size;
+      addBtn.disabled = !n;
+      addBtn.textContent = n ? `Add ${n} recording${n === 1 ? '' : 's'}` : 'Add recordings';
+      count.textContent = n ? `${n} selected` : '';
+    };
+    const render = () => {
+      const q = input.value.trim().toLowerCase();
+      const shown = rows.filter((r) => !q || r.title.toLowerCase().includes(q));
+      list.removeAttribute('aria-busy');
+      list.innerHTML = shown.length ? shown.map((r) => {
+        const here = inCourse.has(r.id);
+        return `<label class="ar-row${here ? ' is-member' : ''}"><input type="checkbox" data-id="${r.id}" ${here || picked.has(r.id) ? 'checked' : ''} ${here ? 'disabled' : ''} />
+          <span class="ar-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 12.5 10 17.5 19.5 7"/></svg></span>
+          <span class="ar-title">${esc(r.title)}</span><span class="ar-meta">${here ? 'In this course' : `${day(r.created_at)} · ${fmt(r.duration_seconds)}`}</span></label>`;
+      }).join('') : `<p class="dlg-dim ar-none">${rows.length ? 'No recordings match that.' : 'Your Library is empty. Upload a lecture first.'}</p>`;
+    };
+    list.addEventListener('change', (e) => {
+      const box = e.target.closest('input[data-id]');
+      if (!box) return;
+      if (box.checked) picked.add(box.dataset.id); else picked.delete(box.dataset.id);
+      sync();
+    });
+    input.addEventListener('input', render);
+    dlg.querySelector('[data-act=cancel]').addEventListener('click', dismiss);
+    addBtn.addEventListener('click', async () => {
+      if (!picked.size) return;
+      addBtn.disabled = true;
+      err.hidden = true;
+      try { await addToFolder(folderId, [...picked]); added = picked.size; dismiss(); } catch (ex) { err.textContent = ex.message || 'That didn’t work. Try again.'; err.hidden = false; addBtn.disabled = false; }
+    });
+    Promise.all([listAll(), memberIds()]).then(([all, ids]) => { rows = all; inCourse = new Set(ids); render(); input.focus(); },
+      (ex) => { list.innerHTML = ''; err.textContent = ex.message || 'Couldn’t load your recordings.'; err.hidden = false; });
+    sync();
+  });
+}
+
 let toastEl;
 export function toast(msg, ms = 2200) {
   if (!toastEl) { toastEl = document.createElement('div'); toastEl.className = 'toast'; toastEl.setAttribute('role', 'status'); document.body.appendChild(toastEl); }

@@ -1,0 +1,95 @@
+/* ELECTRIC — base: canvas, type, buttons, focus, inputs. Rules here beat every legacy rule (layer order), so keep
+   selectors specific to the classes they mean; never style bare elements other than html/body. */
+
+/* the canvas colour lives on body only, so it propagates to the viewport and the fixed .bg (z-index -1) shows above it */
+body {
+  font-family: var(--e-sans);
+  font-size: var(--e-fs-md);
+  line-height: 1.55;
+  color: var(--e-ink);
+  background: var(--e-canvas);
+  font-feature-settings: "ss01", "cv11";
+  text-rendering: optimizeLegibility;
+}
+::selection { background: rgba(32, 212, 244, .3); color: inherit; }
+html[data-theme="light"] ::selection { background: rgba(52, 97, 240, .18); }
+
+/* display type: Sora, tight but not cramped; never all-caps tracking */
+h1, h2, h3, .home-h2, .dash-title, .page-title, .hero-h1 { font-family: var(--e-display); letter-spacing: -0.022em; }
+.mono { font-family: var(--e-mono); }
+
+/* ---------- canvas: a lit room, not fog ----------
+   Two light sources (a distant cyan key light top-left, a violet fill low right) + a faint circuit the current runs
+   along (src/electric/ambient.js draws it). Everything is static except one slow current; reduced motion stops it. */
+.bg { background: var(--e-canvas); }
+.bg .bg-grid, .bg .bg-glow-c, .bg .bg-sweep, .bg .bg-motif { display: none; }
+.bg .bg-glow { filter: none; opacity: 1; animation: none; border-radius: 0; }
+.bg .bg-glow-a { left: -20vw; top: -38vh; width: 90vw; height: 90vh; background: radial-gradient(closest-side, rgba(32, 212, 244, .13), rgba(32, 212, 244, .04) 55%, transparent); }
+.bg .bg-glow-b { right: -24vw; left: auto; top: 38vh; width: 80vw; height: 90vh; background: radial-gradient(closest-side, rgba(110, 90, 255, .12), rgba(161, 107, 255, .035) 55%, transparent); }
+.bg .bg-noise { opacity: .035; }
+html[data-theme="light"] .bg .bg-glow-a { background: radial-gradient(closest-side, rgba(14, 181, 214, .16), rgba(14, 181, 214, .05) 55%, transparent); }
+html[data-theme="light"] .bg .bg-glow-b { background: radial-gradient(closest-side, rgba(124, 74, 232, .11), rgba(52, 97, 240, .04) 55%, transparent); }
+html[data-theme="light"] .bg .bg-noise { opacity: .025; }
+.e-circuit { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.e-circuit { -webkit-mask-image: radial-gradient(120% 100% at 50% 50%, transparent 38%, #000 75%); mask-image: radial-gradient(120% 100% at 50% 50%, transparent 38%, #000 75%); }
+.e-circuit .ec-trace { fill: none; stroke: rgba(170, 196, 235, .07); stroke-width: 1; }
+.e-circuit .ec-node { fill: var(--e-canvas); stroke: rgba(170, 196, 235, .14); stroke-width: 1; }
+.e-circuit .ec-current { fill: none; stroke: url(#ecGrad); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 90 1400; stroke-dashoffset: 1490; animation: e-current 9s var(--e-ease) infinite; opacity: .9; }
+.e-circuit .ec-current.b { animation-delay: -4.5s; animation-duration: 11s; }
+@keyframes e-current { 0% { stroke-dashoffset: 1490; opacity: 0; } 8% { opacity: .9; } 70% { opacity: .9; } 85%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+html[data-theme="light"] .e-circuit .ec-trace { stroke: rgba(20, 45, 90, .07); }
+@media (max-width: 760px) { .e-circuit { display: none; } }
+
+/* ---------- buttons: four roles, depth instead of outlines ---------- */
+.btn {
+  font-family: var(--e-sans); font-weight: 600; font-size: 14px; letter-spacing: -0.005em;
+  border: 0; border-radius: var(--e-r-sm); padding: 10px 16px; min-height: 40px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--e-s1); color: var(--e-ink); box-shadow: var(--e-elev-1);
+  transition: transform var(--e-t-press) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease), background-color var(--e-t-hover) var(--e-ease), color var(--e-t-hover) var(--e-ease);
+}
+.btn svg { width: 17px; height: 17px; flex: none; }
+.btn:hover { background: var(--e-s1-hover); box-shadow: var(--e-elev-2); transform: translateY(-1px); border-color: transparent; }
+.btn:active { transform: translateY(0) scale(.98); box-shadow: var(--e-elev-1); transition-duration: 60ms; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; transform: none; box-shadow: var(--e-elev-0); }
+
+/* primary: the charged action. One per view. */
+.btn-primary {
+  color: var(--e-on-accent); background: var(--e-charge); background-size: 160% 100%; background-position: 0% 50%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 1px 2px rgba(0, 0, 0, .25), 0 8px 22px -8px var(--e-glow-blue);
+  text-shadow: none; filter: none;
+  transition: transform var(--e-t-press) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease), background-position 500ms var(--e-ease);
+}
+html[data-theme="light"] .btn-primary { --e-charge: linear-gradient(100deg, #0b78c0 0%, #3461f0 60%, #4a4ee0 100%); color: #fff; }
+.btn-primary:hover {
+  background: var(--e-charge); background-size: 160% 100%; background-position: 70% 50%; transform: translateY(-1px); filter: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 2px 4px rgba(0, 0, 0, .2), 0 14px 30px -10px var(--e-glow-blue), 0 0 0 4px rgba(32, 212, 244, .12);
+}
+html[data-theme="light"] .btn-primary:hover { background: linear-gradient(100deg, #0b78c0 0%, #3461f0 60%, #4a4ee0 100%); background-size: 160% 100%; background-position: 70% 50%; }
+.btn-primary:active { transform: translateY(0) scale(.98); }
+/* the current: one thin streak of light crosses the button on hover (transform only) */
+.btn-primary::after { background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%); opacity: .7; }
+.btn-primary:disabled, .btn-primary.loading { filter: saturate(.6); opacity: .6; }
+
+/* quiet: for secondary actions that sit next to a primary */
+.btn-ghost { background: transparent; box-shadow: none; color: var(--e-ink-2); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--e-ink) 7%, transparent); box-shadow: none; color: var(--e-ink); transform: none; }
+
+/* ---------- focus: one visible ring everywhere (WCAG 2.4.7 / 2.4.11) ---------- */
+:where(a, button, input, select, textarea, summary, [tabindex], [role="button"], [role="tab"], [role="menuitem"]):focus-visible {
+  outline: 2px solid var(--e-focus); outline-offset: 2px;
+}
+
+/* ---------- links in running text ---------- */
+.e-link, .dash-all, .hp-all { color: var(--e-cyan-ink); text-decoration: none; font-weight: 600; }
+.e-link:hover, .dash-all:hover, .hp-all:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* ---------- reduced motion: keep feedback (colour, depth) and drop movement ---------- */
+@media (prefers-reduced-motion: reduce) {
+  .btn, .btn-primary { transition: background-color var(--e-t-hover), box-shadow var(--e-t-hover), color var(--e-t-hover); }
+  .btn:hover, .btn-primary:hover, .btn:active, .btn-primary:active { transform: none; }
+  .e-circuit .ec-current { animation: none; opacity: 0; }
+}
+
+/* a page's own quiet trust line (e.g. Plan & billing: "Payments are handled by Stripe…"), in the text face */
+.foot { font-family: var(--e-sans); font-size: 13px; letter-spacing: 0; color: var(--e-ink-3); text-align: center; }

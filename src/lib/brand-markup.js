@@ -7,8 +7,8 @@
 // lights first, then the inner bars, then the outer bars, each settling back to its color. The light comes
 // from separate highlight shapes laid over each bar, so the energy visibly travels through the waveform.
 //
-// Wordmark: "Spark" in an angular face (Chakra Petch, loaded for those five letters only), cyan → blue;
-// "Scribe" in the site's clean sans (Space Grotesk), purple → pink.
+// Wordmark (Electric design system): "Spark" in Sora Bold carrying the electric gradient (cyan → cobalt), "Scribe"
+// in the same face at a calmer weight in the text colour. Energy and precision, one word. Fonts: BRAND_FONT_LINK.
 
 const BOLT = 'M22.8 1.5 16 21.4h4l-2.8 17.1 6.8-20.9h-4.2z';
 const shapes = (cls) => [
@@ -37,7 +37,7 @@ export const BRAND_HTML = '<a class="brand" href="/" aria-label="SparkScribe hom
 
 export const MARK_HTML = markSvg();
 
-export const BRAND_FONT_LINK = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&amp;text=Spark&amp;display=swap" />';
+export const BRAND_FONT_LINK = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=Geist+Mono:wght@400;500;600&amp;family=Sora:wght@500;600;700;800&amp;display=swap" />';
 
 // Site-wide footer and legal links (<!-- sparkscribe:legal -->).
 export const LEGAL_HTML = '<footer class="site-foot"><nav class="foot-links" aria-label="Footer"><a href="/pricing">Pricing</a><a href="/help">Help</a><a href="mailto:contact.hrstudios@gmail.com">Contact</a><a href="/privacy">Privacy Policy</a><a href="/terms">Terms of Service</a></nav><nav class="foot-topics" aria-label="For students"><a href="/lecture-notes">Lecture notes</a><a href="/flashcards">Flashcards</a><a href="/exam-prep">Exam prep</a></nav><p class="foot-fine">© HRstudios LLC · Your audio is transcribed on your device and never uploaded.</p></footer>';
