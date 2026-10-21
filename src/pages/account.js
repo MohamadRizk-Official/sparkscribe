@@ -87,7 +87,7 @@ function render() {
     ${warn}
     <div class="panel acct-card">
       <div class="ins-label">Current plan</div>
-      <div class="acct-plan"><h2>${esc(plan.name)}</h2><span class="acct-price">${!paid ? 'Free' : yearly && hasYearly(plan) ? `${esc(money(plan.yearly_price_cents))}/year` : `${esc(price(plan))}${esc(perInterval(plan))}`}</span></div>
+      <div class="acct-plan"><h2>${esc(plan.name)}</h2>${!paid ? '' : `<span class="acct-price">${yearly && hasYearly(plan) ? `${esc(money(plan.yearly_price_cents))}/year` : `${esc(price(plan))}${esc(perInterval(plan))}`}</span>`}</div>
       <p class="acct-when">${when}</p>
       <p class="acct-allow"><b>${esc(allowanceLabel(s.monthlySeconds))}</b> of transcription a ${period}</p>
       ${included}

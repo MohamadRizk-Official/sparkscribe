@@ -4,7 +4,8 @@
 import { mountAccountMenu, getSession, signOut, esc, deleteMyAccount } from '../lib/account.js';
 import { makeDialog } from '../library/dialogs.js';
 import { createCaptcha } from '../lib/captcha.js';
-import { getMascotPref, setMascotPref, getThemePref, setThemePref } from '../lib/prefs.js';
+import { getMascotPref, setMascotPref, getThemePref } from '../lib/prefs.js';
+import { switchTheme } from '../lib/theme-toggle.js';
 import { mountMascot } from '../mascot/mascot.js';
 import { getBillingStatus, usageParts, usageLevel, dateText } from '../lib/billing.js';
 import { keepAudioPref, setKeepAudioPref, audioStorageInfo, clearAllAudio, fmtBytes } from '../lib/audio-store.js';
@@ -29,7 +30,7 @@ function renderAccount(session) {
   const u = session.user, meta = u.user_metadata || {};
   const name = meta.full_name || meta.name || '';
   body.innerHTML = `<div class="set-who"><b>${esc(name || u.email || 'Signed in')}</b>${name ? `<span>${esc(u.email || '')}</span>` : ''}</div>
-    <div class="set-actions"><a class="btn btn-ghost" href="/library">My Library</a><button class="btn btn-ghost" type="button" id="signOutBtn">Sign out</button></div>
+    <div class="set-actions"><button class="btn btn-ghost" type="button" id="signOutBtn">Sign out</button></div>
     ${DELETION_ON ? `<div class="set-danger"><div class="set-row-text"><h3>Delete account</h3><p>Permanently delete your account and everything saved in it.</p></div>
       <button class="btn btn-danger" type="button" id="deleteAccountBtn">Delete account…</button></div>` : ''}`;
   $('signOutBtn').addEventListener('click', async () => { await signOut(); location.reload(); });
@@ -200,7 +201,7 @@ function paintTheme(v) {
 }
 function chooseTheme(v, focus) {
   paintTheme(v);
-  setThemePref(v);
+  switchTheme(themeSeg.querySelector(`[data-v="${v}"]`), v); // the new appearance grows out of the button you chose
   showSaved(true);
   if (focus) themeSeg.querySelector(`[data-v="${v}"]`)?.focus();
 }

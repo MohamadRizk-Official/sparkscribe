@@ -661,9 +661,11 @@ const realSpeakers = () => [...state.speakers.keys()].filter((id) => id !== UNKN
 function renderMeta() {
   const words = state.lines.reduce((t, l) => t + l.text.split(/\s+/).filter(Boolean).length, 0);
   const langs = 'English'; // V1 transcribes English only
-  const chip = ([k, v]) => `<span>${esc(k)} <b>${esc(v)}</b></span>`;
-  // primary: what most people want at a glance; the technical rest is one click away under "Details"
-  const primary = [['Length', fmtTime(state.duration)], ['Speakers', String(realSpeakers().length)]];
+  // primary: what most people want at a glance, as one quiet line ("12:08 · 3 speakers · Type"); the technical
+  // rest is one click away under "Details"
+  const chip = (v) => `<span class="ws-meta-item">${esc(v)}</span>`;
+  const nSpk = realSpeakers().length;
+  const primary = [fmtTime(state.duration), `${nSpk} speaker${nSpk === 1 ? '' : 's'}`];
   const unsure = state.lines.filter((l) => l.uncertain).length;
   els.resMeta.innerHTML = primary.map(chip).join('')
     + '<span class="type-slot" id="typeSlot"></span>'
@@ -1394,7 +1396,7 @@ function renderSaveBar() {
     saving: ['busy', CLOUD, 'Saving to My Library…', ''],
     pending: ['busy', CLOUD, 'Saving your changes…', ''],
     syncing: ['busy', CLOUD, 'Saving your changes…', ''],
-    saved: ['ok', CHECK, `Saved to My Library <span class="save-note">· ${save.audioKept ? 'audio kept on this device so you can play along later' : 'transcript text only, audio stays on this device'}</span>`, `<a class="btn btn-ghost btn-sm" href="/transcript?id=${encodeURIComponent(save.id || '')}">Open saved copy</a>`],
+    saved: ['ok', CHECK, `Saved to your Library <span class="save-note">· ${save.audioKept ? 'audio kept on this device so you can play along later' : 'transcript text only, audio stays on this device'}</span>`, `<a class="btn btn-ghost btn-sm" href="/transcript?id=${encodeURIComponent(save.id || '')}">Open saved copy</a>`],
     error: ['bad', WARN, `Couldn't save to your library: ${esc(save.error)}. Your transcript is still here, and you can export it.`, '<button class="btn btn-ghost btn-sm" type="button" data-act="retry">Retry</button>'],
     quota: ['bad', WARN, 'Not saved: this recording is longer than the transcription time left on your plan. It’s still here, and you can export it.', '<a class="btn btn-ghost btn-sm" href="/pricing">See plans</a>'],
     'sync-error': ['bad', WARN, `Couldn't save your latest edits: ${esc(save.error)}`, '<button class="btn btn-ghost btn-sm" type="button" data-act="retry">Retry</button>'],

@@ -6,7 +6,7 @@
 import { isConfigured } from '../lib/supabase.js';
 import { mountAccountMenu, getSession, esc } from '../lib/account.js';
 import { loadPlans, getBillingStatus, startCheckout } from '../lib/billing.js';
-import { allowance, money, times, perHour, priceGap, priceLines, hasYearly, yearlySavings, yearlySavingsPct, yearlyPriceLines } from '../lib/pricing-catalog.js';
+import { allowance, money, times, perHour, priceGap, priceLines, hasYearly, yearlySavings, yearlyPriceLines } from '../lib/pricing-catalog.js';
 
 const $ = (id) => document.getElementById(id);
 // VITE_PAID_PLANS=1 only in the build that launches paid plans; until then nothing here can start a payment.
@@ -35,7 +35,6 @@ const ICON = {
   bolt: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 3 6.5 13h5l-1 8L17.5 11h-5z"/><path d="M4.6 7.5a9 9 0 0 1 3-3.2M19.4 16.5a9 9 0 0 1-3 3.2"/></svg>',
   thunder: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 15.5H6a4 4 0 0 1-.6-7.95A5.5 5.5 0 0 1 16 6.6a4.5 4.5 0 0 1 2 8.9h-1"/><path d="m12.5 11-2.5 4.5h3.5L11 21"/></svg>',
 };
-const CAP = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m2.5 9 9.5-5 9.5 5-9.5 5z"/><path d="M6.5 11.2V16c0 1.5 2.5 3 5.5 3s5.5-1.5 5.5-3v-4.8M21.5 9v5"/></svg>';
 const CHECK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5 10 17.5 19.5 7"/></svg>';
 
 // What each premium capability is, in one line (the plans that include it come from the database)
@@ -49,27 +48,34 @@ const FEATURE = {
 // Each card answers "who is this for, and why choose it". What every plan shares lives once, in "Every plan includes".
 const LOOK = {
   free: {
-    theme: 'free', line: 'Your first step toward smarter notes.', sub: 'No credit card required',
+    theme: 'free', line: 'Try the real app, free.', sub: 'No credit card required',
     who: 'I want to see what SparkScribe can do.',
     items: ['Sign up in seconds with email or Google', 'Summaries, notes, Ask, flashcards and quizzes', 'Keep everything you save'],
     cta: 'Get Started Free',
   },
   flash: {
-    theme: 'flash', ribbon: 'Featured Deal', line: 'Turn your recordings into progress.',
-    who: 'I record an occasional lecture.',
+    theme: 'flash', tag: 'Best low-cost upgrade', line: 'Perfect for the occasional lecture.',
+    who: 'I record a lecture now and then.',
     items: ['{x:free} Free’s transcription time', 'The full AI study workspace', 'Cancel anytime'],
     cta: 'Choose Flash',
   },
   bolt: {
-    theme: 'bolt', badge: 'Best for Students', line: 'Stay ahead of your classes.', who: 'I have classes every week.',
+    theme: 'bolt', tag: 'Great for regular studying', line: 'Built for your weekly lectures.', who: 'I have classes every week.',
     items: ['Focused Review: practise exactly what you missed', 'Room for weekly lectures and revision', 'Cancel anytime'],
     cta: 'Choose Bolt',
   },
   thunder: {
-    theme: 'thunder', line: 'Your recordings, connected.', who: 'I study across many lectures or meetings.',
+    theme: 'thunder', tag: 'Most powerful', line: 'Your entire semester, working together.', who: 'I study across many lectures and courses.',
     items: ['Everything in Bolt', 'Answers and guides saved to your account', 'Lowest price per hour: {ph}'],
     cta: 'Get Thunder',
   },
+};
+// one decorative effect per tier, drawn once and only played on hover/focus (CSS): Flash ignites, Bolt's current
+// runs along a power track, Thunder's arc connects across the card
+const FX = {
+  flash: '<svg class="fx-flash" viewBox="0 0 120 40" aria-hidden="true"><path d="M2 30h22l8-14 9 20 8-26 8 18h61"/></svg>',
+  bolt: '<svg class="fx-bolt" viewBox="0 0 300 6" preserveAspectRatio="none" aria-hidden="true"><path d="M0 3h300"/></svg>',
+  thunder: '<svg class="fx-thunder" viewBox="0 0 300 120" preserveAspectRatio="none" aria-hidden="true"><path d="M-4 86 44 70l18 22 36-50 28 34 30-42 26 30 40-48 26 36 36-26"/><path class="b" d="M-4 96 60 80l26 18 40-36 34 30 40-30 30 22 78-40"/></svg>',
 };
 const lookFor = (p, i, list) => LOOK[p.key] || {
   theme: p.billing_interval ? (i === list.length - 1 ? 'thunder' : 'bolt') : 'free',
@@ -91,7 +97,7 @@ function meter(p) {
     const fill = Math.max(0, Math.min(1, h - i));
     return `<i class="${fill >= 1 ? 'on' : fill > 0 ? 'part' : ''}" style="--i:${i}${fill > 0 && fill < 1 ? `;--p:${Math.round(fill * 100)}%` : ''}"></i>`;
   }).join('');
-  return `<div class="pz-meter" role="img" aria-label="${esc(label)}" style="--n:${Math.ceil(maxH)}">${cells}</div>`;
+  return `<div class="pz-meter cells" role="img" aria-label="${esc(label)}" style="--n:${Math.ceil(maxH)}">${cells}</div>`;
 }
 
 // ---------- buttons ----------
@@ -118,31 +124,31 @@ function card(p, i) {
   const free = plans.find((x) => !x.billing_interval);
   const a = allowance(p.monthly_seconds);
   const pl = yearly() && hasYearly(p) ? yearlyPriceLines(p) : priceLines(sp);
-  const sub = look.sub || (yearly() && hasYearly(p) ? `${pl.note} · save ${money(yearlySavings(p))}` : p.billing_interval && !sp.intro ? 'Billed monthly' : pl.note);
+  const sub = look.sub || (yearly() && hasYearly(p) ? `${pl.note} · you save ${money(yearlySavings(p))} a year` : p.billing_interval && !sp.intro ? 'Billed monthly' : pl.note);
   const items = look.items.map((t) => t.replace('{x:free}', free ? times(p, free) : '').replace('{ph}', perHour(p) || ''));
-  const flash = byKey('flash');
   let callout = '';
-  if (p.key === 'bolt' && flash) {
-    callout = `<div class="pz-x"><span class="pz-x-big">${esc(times(p, flash))}</span><span class="pz-x-text"><b>Flash’s transcription time</b><span>${yearly() && hasYearly(p) && hasYearly(flash) ? `Just ${esc(money(p.yearly_price_cents - flash.yearly_price_cents))} more per year than Flash yearly.` : `Just ${esc(priceGap(p, flash))} more per month than Flash’s regular ${esc(money(flash.price_cents))} price.`}</span></span></div>`;
+  if (p.key === 'bolt' && p.features.includes('focused_review')) {
+    callout = `<div class="pz-x"><span class="pz-x-text"><b>${esc(FEATURE.focused_review.name)}</b><span>${esc(FEATURE.focused_review.text)}</span></span></div>`;
   } else if (p.key === 'thunder' && p.features.includes('across_ask')) {
-    callout = `<div class="pz-x feature"><span class="pz-x-text"><b>${esc(FEATURE.across_ask.name)}</b><span>${esc(FEATURE.across_ask.text)}</span><span class="pz-x-more">Plus combined study guides from up to 10 recordings.</span></span></div>`;
+    callout = `<div class="pz-x feature"><div class="pz-connect" aria-hidden="true"><span>Lecture 4</span><span>Lecture 5</span><span>Lecture 6</span><i></i><b>One study guide</b></div>
+      <span class="pz-x-text"><b>Three lectures. One study guide.</b><span>${esc(FEATURE.across_ask.text)}</span><span class="pz-x-more">Plus combined study guides from up to 10 recordings.</span></span></div>`;
   } else if (p.key === 'flash' && sp.intro) {
-    callout = `<div class="pz-x calm"><span class="pz-x-text"><b>Start for just ${esc(money(sp.intro.price_cents))}</b><span>${esc(allowance(p.monthly_seconds).long)} of transcription and the AI study tools you need.</span></span></div>`;
+    callout = `<div class="pz-x calm"><span class="pz-x-text"><b>Start for just ${esc(money(sp.intro.price_cents))}</b><span>Your first month, for new subscribers. Then ${esc(money(p.price_cents))}/month.</span></span></div>`;
   } else if (p.key === 'free') {
     callout = '<div class="pz-x calm"><span class="pz-x-text"><b>The real app, not a demo</b><span>Transcribe a recording, then try notes, Ask, flashcards and quizzes on it.</span></span></div>';
   }
   const isCurrent = status && status.plan === p.key;
   return `
   <article class="pz-card t-${look.theme}${isCurrent ? ' is-current' : ''}" aria-labelledby="pz-${esc(p.key)}" style="--d:${i}">
-    ${look.ribbon && sp.intro ? `<span class="pz-ribbon">${ICON.flash}${esc(look.ribbon)}</span>` : ''}
-    ${look.badge ? `<span class="pz-badge">${CAP}${esc(look.badge)}</span>` : ''}
+    ${FX[look.theme] ? `<span class="pz-fx">${FX[look.theme]}</span>` : ''}
     <header class="pz-head">
       <span class="pz-ic">${ICON[look.theme] || ICON.bolt}</span>
       <h3 id="pz-${esc(p.key)}">${esc(p.name)}</h3>
+      ${look.tag ? `<span class="pz-tag">${esc(look.tag)}</span>` : ''}
     </header>
     ${look.line ? `<p class="pz-line">${esc(look.line)}</p>` : ''}
     <div class="pz-price">
-      <span class="pz-amt">${esc(pl.amount)}</span><span class="pz-per">${esc(pl.per)}</span>
+      <span class="pz-amt" aria-live="polite">${esc(pl.amount)}</span><span class="pz-per">${esc(pl.per)}</span>
     </div>
     <p class="pz-then${sp.intro ? ' strong' : ''}">${esc(sub || '')}</p>
     <div class="pz-allow">
@@ -150,7 +156,6 @@ function card(p, i) {
       ${meter(p)}
     </div>
     ${callout}
-    ${look.who ? `<p class="pz-who"><span class="sr-only">Who it’s for: </span>“${esc(look.who)}”</p>` : ''}
     ${items.length ? `<ul class="pz-list">${items.map((t) => `<li>${CHECK}<span>${esc(t)}</span></li>`).join('')}</ul>` : ''}
     <div class="pz-cta">${ctaFor(p, look)}</div>
     ${pl.renewal ? `<p class="pz-renew">${esc(pl.renewal)} Cancel anytime.</p>` : '<p class="pz-renew">No payment details needed.</p>'}
@@ -163,8 +168,11 @@ function renderBilling() {
   const box = $('billing');
   box.hidden = !yearlyShown();
   if (box.hidden) return;
-  const pct = Math.min(...plans.filter(hasYearly).map(yearlySavingsPct));
-  $('billingSave').textContent = pct > 0 ? `save ${pct}%+` : '';
+  const saves = plans.filter(hasYearly).map(yearlySavings).filter((x) => x > 0).sort((a, b) => a - b);
+  $('billingNote').textContent = saves.length
+    ? `Pay yearly and save ${money(saves[0])}${saves.length > 1 ? ` to ${money(saves[saves.length - 1])}` : ''} a year, depending on the plan. Your hours still renew every month.`
+    : '';
+  box.dataset.v = interval;
   box.querySelectorAll('[role="radio"]').forEach((b) => { const on = b.dataset.v === interval; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
 }
 function setInterval_(v, focus) {
@@ -173,7 +181,7 @@ function setInterval_(v, focus) {
   const u = new URL(location.href);
   if (v === 'year') u.searchParams.set('billing', 'year'); else u.searchParams.delete('billing');
   history.replaceState(null, '', u);
-  renderBilling(); renderCards(); renderCompare(); renderFaq();
+  renderBilling(); renderCards(true); renderCompare(); renderFaq();
   if (focus) $('billing').querySelector(`[data-v="${v}"]`)?.focus();
 }
 function bindBilling() {
@@ -186,8 +194,10 @@ function bindBilling() {
   });
 }
 
-function renderCards() {
+function renderCards(swap = false) {
   $('plans').innerHTML = plans.map(card).join('');
+  // switching monthly/yearly: the new prices slide in (CSS); the right amount is in place from the first frame
+  if (swap) { $('plans').classList.remove('pz-swap'); void $('plans').offsetWidth; $('plans').classList.add('pz-swap'); }
   $('plans').removeAttribute('aria-busy');
   $('plans').querySelectorAll('[data-plan]').forEach((b) => b.addEventListener('click', () => upgrade(b.dataset.plan)));
   const maxH = Math.max(...plans.map((x) => x.monthly_seconds)) / 3600;
@@ -198,44 +208,27 @@ function renderCards() {
   const billed = yearly()
     ? 'Yearly plans are paid once a year and renew every year until you cancel; your transcription time still renews every month. The $1 Flash first month is for monthly billing only.'
     : 'Paid plans renew every month until you cancel.';
-  $('disclose').innerHTML = `Prices in US dollars. ${intro ? `The ${esc(money(intro.price_cents))} Flash price is for your first month only, for new subscribers; Flash then renews at ${esc(money(flash.price_cents))}/month. ` : ''}${billed} Cancel anytime in Plan &amp; usage and keep your plan until the end of the period you’ve paid for. Any applicable tax is shown at checkout before you pay. Under 18? A parent or guardian must buy a paid plan. <a href="/terms">Terms of Service</a>`;
+  $('disclose').innerHTML = `Prices in US dollars. ${intro ? `The ${esc(money(intro.price_cents))} Flash price is for your first month only, for new subscribers; Flash then renews at ${esc(money(flash.price_cents))}/month. ` : ''}${billed} Cancel anytime in Plan &amp; billing and keep your plan until the end of the period you’ve paid for. Any applicable tax is shown at checkout before you pay. Under 18? A parent or guardian must buy a paid plan. <a href="/terms">Terms of Service</a>`;
 }
 
-// ---------- Flash or Bolt? (the 3× comparison, regular prices only) ----------
+// ---------- Which plan fits your semester? (who each plan is for; the numbers live in the comparison) ----------
 function renderWhy() {
-  const flash = byKey('flash'), bolt = byKey('bolt');
+  const flash = byKey('flash'), bolt = byKey('bolt'), thunder = byKey('thunder');
   const el = $('why');
-  if (!flash || !bolt) { el.hidden = true; return; }
-  const groups = Math.round(bolt.monthly_seconds / flash.monthly_seconds);
-  const hf = flash.monthly_seconds / 3600;
-  const blocks = (n) => Array.from({ length: n }, () => '<i></i>').join('');
-  const group = `<span class="pz-grp">${blocks(hf)}</span>`;
-  const intro = introFor(flash);
-  el.innerHTML = `
-    <div class="pz-why-text">
-      <p class="pz-kicker mono">Flash or Bolt?</p>
-      <h2 id="whyTitle">Bolt gives you <span class="pz-grad-bolt">${esc(times(bolt, flash))}</span> the transcription time of Flash.</h2>
-      <p>${esc(allowance(bolt.monthly_seconds).long)} a month instead of ${esc(allowance(flash.monthly_seconds).long)}, plus Focused Review, for ${esc(priceGap(bolt, flash))} more than Flash’s regular ${esc(money(flash.price_cents))}.</p>
-    </div>
-    <div class="pz-why-vis" role="img" aria-label="${esc(`Flash: ${allowance(flash.monthly_seconds).long} a month for ${money(flash.price_cents)} a month${intro ? ' after the first month' : ''}. Bolt: ${allowance(bolt.monthly_seconds).long} a month for ${money(bolt.price_cents)} a month, ${times(bolt, flash)} as much.`)}">
-      <div class="pz-why-row t-flash">
-        <span class="pz-why-name">Flash</span>
-        <span class="pz-blocks">${group}</span>
-        <span class="pz-why-num"><b>${esc(allowance(flash.monthly_seconds).long)}</b><span>${esc(money(flash.price_cents))}/mo · ${esc(perHour(flash))}/hour</span></span>
-      </div>
-      <div class="pz-why-row t-bolt">
-        <span class="pz-why-name">Bolt</span>
-        <span class="pz-blocks">${Array.from({ length: groups }, () => group).join('')}</span>
-        <span class="pz-why-num"><b>${esc(allowance(bolt.monthly_seconds).long)}</b><span>${esc(money(bolt.price_cents))}/mo · ${esc(perHour(bolt))}/hour</span></span>
-      </div>
-      <p class="pz-why-foot">Regular monthly prices.${intro ? ` Flash’s first month is ${esc(money(intro.price_cents))} for new subscribers.` : ''}</p>
-    </div>`;
+  if (!flash || !bolt || !thunder) { el.hidden = true; return; }
+  const fit = [
+    [flash, 'flash', 'Occasional recordings and quick study sessions', ['A tough lecture you want to revisit', 'Notes and a quiz before a test', 'A guest talk or a group meeting']],
+    [bolt, 'bolt', 'Weekly lectures, deeper review, regular classes', ['Two or three classes recorded every week', 'Focused Review on the questions you miss', 'Steady revision through the term']],
+    [thunder, 'thunder', 'Many courses, connected lectures, advanced study', ['A full course load, lecture after lecture', 'One question asked across a whole unit', 'One study guide from up to 10 recordings']],
+  ];
+  el.innerHTML = `<header class="sec-head pz-sec-head"><h2 id="whyTitle">Which plan fits your semester?</h2><p>Choose by how you study, not by how much you can spend.</p></header>
+    <div class="pz-fit">${fit.map(([p, t, line, ex]) => `<article class="pz-fit-col t-${t}"><span class="pz-fit-ic">${ICON[t]}</span><h3>${esc(p.name)}</h3><p class="pz-fit-line">${esc(line)}</p>
+      <ul>${ex.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><p class="pz-fit-hours"><b>${esc(allowance(p.monthly_seconds).long)}</b> a month</p></article>`).join('')}</div>`;
   el.hidden = false;
 }
 
 // ---------- comparison: the meaningful differences ----------
 function renderCompare() {
-  const flash = byKey('flash');
   const yes = `<span class="pz-yes">${CHECK}<span class="sr-only">Included</span></span>`;
   const dash = '<span class="pz-na"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></span>';
   const has = (cap) => (p) => (p.features.includes(cap) ? yes : dash);
@@ -244,7 +237,6 @@ function renderCompare() {
       ? ['Yearly price', (p) => (hasYearly(p) ? `<b>${esc(money(p.yearly_price_cents))}</b><small>save ${esc(money(yearlySavings(p)))} vs monthly</small>` : `<b>${esc(money(0))}</b>`)]
       : ['Monthly price', (p) => { const i = introFor(p); return i ? `<b>${esc(money(p.price_cents))}</b><small>${esc(money(i.price_cents))} first month</small>` : `<b>${esc(money(p.price_cents))}</b>`; }],
     ['Transcription each month', (p) => `<b>${esc(allowance(p.monthly_seconds).long)}</b>`],
-    ['Compared with Flash', (p) => (flash && p.billing_interval && p.key !== 'flash' ? `<b class="pz-ratio">${esc(times(p, flash))}</b>` : p.key === 'flash' ? '<span class="pz-muted">1×</span>' : dash)],
     ['Price per hour of transcription', (p) => (perHour(p) ? esc(perHour(p)) : dash), 'Regular monthly price'],
     ['Summaries, notes, Ask, flashcards, quizzes, study guides', () => yes, 'On one recording at a time'],
     ...['focused_review', 'across_ask', 'across_guide'].filter((c) => plans.some((p) => p.features.includes(c))).map((c) => [FEATURE[c].name, has(c), FEATURE[c].text]),
@@ -275,7 +267,7 @@ function renderFaq() {
     ax && ['What does asking across recordings do?', `With ${ax}, you choose 2 to 12 saved recordings and ask one question about all of them: what changed between lectures, which decisions came up in several meetings, what every lecture repeated. Each point names the recording it comes from and links to the exact passage; if the recordings don’t answer the question, it says so. You can also make one combined study guide from up to 10 recordings. Answers and guides are saved to your account, so you can reopen them on any device.`],
     yearlyShown() && ['How does yearly billing work?', `You pay once for the year (${plans.filter(hasYearly).map((p) => `${p.name} ${money(p.yearly_price_cents)}`).join(', ')}), which costs less than 12 months at the regular monthly price. Your transcription time still renews every month, so you get the plan’s full monthly time all year. The $1 Flash first month is only for monthly billing. You can cancel anytime: the plan stays until the end of the year you paid for and doesn’t renew.`],
     ['Can I upgrade later?', 'Yes, whenever you like. An upgrade takes effect right away: you get the higher plan’s monthly time and features, and you pay only the prorated difference for the rest of your current billing period.'],
-    ['Can I cancel anytime?', 'Yes, in Plan & usage → Manage billing. Your plan stays active until the end of the period you’ve paid for, then you move to the Free plan. No further payments are taken, and nothing in your library is deleted.'],
+    ['Can I cancel anytime?', 'Yes, in Plan & billing → Manage billing. Your plan stays active until the end of the period you’ve paid for, then you move to the Free plan. No further payments are taken, and nothing in your library is deleted.'],
     intro && [`How does the ${money(intro.price_cents)} Flash offer work?`, `If you’ve never had a paid SparkScribe plan, your first month of Flash costs ${money(intro.price_cents)}. From your second month, Flash renews at ${money(flash.price_cents)} a month until you cancel. Checkout shows both prices before you pay.`],
     intro && [`Will Flash renew at ${money(flash.price_cents)}?`, `Yes. After the first month, Flash renews automatically at ${money(flash.price_cents)} a month until you cancel. If you cancel during your first month, you keep Flash until that month ends and you aren’t charged again.`],
     flash && bolt && ['What’s the difference between Flash and Bolt?', `Flash gives you ${allowance(flash.monthly_seconds).long} of transcription a month and the full AI study workspace. Bolt gives you ${allowance(bolt.monthly_seconds).long}, ${times(bolt, flash)} as much, plus Focused Review, for ${money(bolt.price_cents)} a month: ${priceGap(bolt, flash)} more than Flash’s regular price. Bolt is made for people who record classes every week.`],

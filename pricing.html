@@ -33,9 +33,8 @@
 
     <main class="app bill-app pz">
       <section class="pz-hero">
-        <div class="eyebrow mono"><span class="pulse"></span>pricing</div>
-        <h1 class="page-title">Find your <span class="grad">spark</span>.</h1>
-        <p class="pz-lede">Every plan includes the AI study workspace: summaries, notes, Ask, flashcards, quizzes and study guides. Plans differ in <b>how many hours you transcribe each month</b>; Bolt adds Focused Review, and Thunder connects your recordings.</p>
+        <h1 class="page-title">Pick the plan that fits <span class="grad">your semester</span>.</h1>
+        <p class="pz-lede">Every plan includes the full AI study workspace. Plans differ in <b>how many hours you can transcribe each month</b>, and in what you can do across recordings.</p>
         <p class="bill-privacy"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.4 3.4 8.3 8 9 4.6-.7 8-4.6 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg><span><b>Audio stays on your device.</b> AI features use transcript text, never your audio.</span></p>
       </section>
 
@@ -45,12 +44,14 @@
         <h2 class="sr-only" id="plansTitle">Plans</h2>
         <div class="pz-billing" id="billing" hidden>
           <div class="segctl" role="radiogroup" aria-label="Billing period" id="billingSeg">
+            <span class="segctl-ind" aria-hidden="true"></span>
             <button type="button" role="radio" data-v="month" aria-checked="true">Monthly</button>
-            <button type="button" role="radio" data-v="year" aria-checked="false" tabindex="-1">Yearly <span class="pz-save" id="billingSave"></span></button>
+            <button type="button" role="radio" data-v="year" aria-checked="false" tabindex="-1">Yearly</button>
           </div>
+          <p class="pz-billing-note" id="billingNote"></p>
         </div>
         <div class="pz-grid" id="plans" aria-busy="true"><div class="pz-card skel"></div><div class="pz-card skel"></div><div class="pz-card skel"></div><div class="pz-card skel"></div></div>
-        <p class="pz-legend" id="legend" hidden><span class="pz-legend-item"><span class="pz-legend-blk" aria-hidden="true"></span>Each block is 1 hour of transcription a month.</span> <span class="pz-legend-item"><span class="pz-legend-half" aria-hidden="true"></span>Free’s 30 minutes is half a block.</span></p>
+        <p class="pz-legend" id="legend" hidden><span class="pz-legend-item"><span class="pz-legend-blk" aria-hidden="true"></span>Each cell is 1 hour of transcription a month.</span> <span class="pz-legend-item"><span class="pz-legend-half" aria-hidden="true"></span>Free’s 30 minutes is half a cell.</span></p>
         <p class="pz-disclose" id="disclose" hidden></p>
       </section>
 
@@ -65,34 +66,34 @@
       </section>
 
       <section class="incl" aria-labelledby="inclTitle">
-        <header class="sec-head pz-sec-head"><h2 id="inclTitle">Every plan includes</h2></header>
-        <div class="incl-grid">
-          <article class="incl-card c-cyan">
-            <span class="incl-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h2m3-5v10m3-13v16m3-11v6m3-3h2"/></svg></span>
+        <header class="sec-head pz-sec-head"><h2 id="inclTitle">Every plan includes</h2><p>One lecture, all the way from audio to exam-ready.</p></header>
+        <ol class="flow" aria-label="What happens to a recording">
+          <li class="flow-step c-cyan">
+            <span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 12h2m3-5v10m3-13v16m3-11v6m3-3h2"/></svg></span>
             <h3>Transcribe</h3>
-            <ul class="incl-chips"><li>On-device</li><li>Speakers</li><li>Timestamps</li></ul>
-          </article>
-          <article class="incl-card c-blue">
-            <span class="incl-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg></span>
+            <p>On your device, with speakers and timestamps. Your audio is never uploaded.</p>
+          </li>
+          <li class="flow-step c-blue">
+            <span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.2-4.2"/></svg></span>
             <h3>Understand</h3>
-            <ul class="incl-chips"><li>Summary</li><li>Notes</li><li>Ask</li><li>Search</li></ul>
-          </article>
-          <article class="incl-card c-violet">
-            <span class="incl-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 2.2 5.3L20 9l-4.4 3.8L17 18.5 12 15.6 7 18.5l1.4-5.7L4 9l5.8-.7Z"/></svg></span>
-            <h3>Create</h3>
-            <ul class="incl-chips"><li>Quizzes</li><li>Flashcards</li><li>Study Guides</li><li>Recaps</li><li>Drafts</li></ul>
-          </article>
-          <article class="incl-card c-pink">
-            <span class="incl-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg></span>
+            <p>A summary, organized notes, Ask questions, and search across your Library.</p>
+          </li>
+          <li class="flow-step c-violet">
+            <span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 2.2 5.3L20 9l-4.4 3.8L17 18.5 12 15.6 7 18.5l1.4-5.7L4 9l5.8-.7Z"/></svg></span>
+            <h3>Study</h3>
+            <p>Practice quizzes, flashcards with spaced review, study guides, recaps and drafts.</p>
+          </li>
+          <li class="flow-step c-pink">
+            <span class="flow-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg></span>
             <h3>Export</h3>
-            <ul class="incl-chips"><li>PDF</li><li>Word</li><li>Markdown</li><li>TXT</li><li>Subtitles</li></ul>
-          </article>
-        </div>
+            <p>PDF, Word, Markdown, plain text or subtitles. No AI needed.</p>
+          </li>
+        </ol>
       </section>
 
       <section class="faq" aria-labelledby="faqTitle">
         <header class="faq-head">
-          <h2 id="faqTitle">Frequently asked questions</h2>
+          <h2 id="faqTitle">Questions, answered</h2>
           <p>Plans, time, billing and privacy, in short.</p>
         </header>
         <div class="faq-list" id="faqList"></div>

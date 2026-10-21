@@ -10,9 +10,9 @@ const MOON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 
 // The new theme grows as a circle out of the button (View Transitions). Instant instead when the browser can't
 // do it, when the person prefers reduced motion, or when the page isn't visible. The theme itself is applied
 // synchronously inside the transition, so there is never a frame with the wrong colours.
-function switchTheme(btn, next) {
+export function switchTheme(btn, next) { // next: 'light' | 'dark' | 'system'
   const root = document.documentElement;
-  if (typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches || document.visibilityState !== 'visible') {
+  if (resolvedTheme(next) === resolvedTheme() || typeof document.startViewTransition !== 'function' || matchMedia('(prefers-reduced-motion: reduce)').matches || document.visibilityState !== 'visible') {
     setThemePref(next);
     return;
   }

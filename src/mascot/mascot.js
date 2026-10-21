@@ -70,14 +70,24 @@ export function mountMascot({ page = 'other' } = {}) {
     const r = pb?.getBoundingClientRect();
     playerRect = r && r.width ? { l: r.left, r: r.right, t: r.top } : null;
   };
-  setInterval(measurePlayer, 400);
+  setInterval(() => {
+    const had = !!playerRect;
+    measurePlayer();
+    // the player just opened while the mascot stood where it now shouldn't: walk out of the way
+    if (playerRect && !had && X < minX() - 2 && typeof run === 'function') run((id) => go(X, id));
+  }, 400);
   addEventListener('resize', measurePlayer, { passive: true });
   const underPlayer = () => playerRect && X > playerRect.l - 1.6 * k && X < playerRect.r + 1.6 * k;
   const FLOOR = () => (underPlayer() ? Math.min(innerHeight, playerRect.t) - 6 : innerHeight - (touch ? 6 : 8));
   const standY = () => FLOOR() - DIM.foot * k;
   let away = false;                                         // phones during a quiz: fully below the edge
   const peekY = () => (underPlayer() ? playerRect.t + 0.5 * k : innerHeight + (away ? 2.4 : 0.08) * k); // only the gem, the top of the body and the speaker's rim show
-  const minX = () => 1.3 * k + 4;
+  // while the audio player is open, the mascot keeps to its right (on the floor if there's room there, otherwise on
+  // the player's right end), so it never stands on the content or the controls the player sits under
+  const minX = () => {
+    if (!playerRect) return 1.3 * k + 4;
+    return vw() - playerRect.r >= 2.8 * k ? playerRect.r + 1.3 * k : Math.max(1.3 * k + 4, playerRect.r - 1.6 * k);
+  };
   const maxX = () => vw() - 1.3 * k - 4;
   const clampX = (v) => clamp(v, minX(), maxX());
   // Home is anchored to the page's content (getBoundingClientRect), not to a viewport fraction: at 67 % zoom
