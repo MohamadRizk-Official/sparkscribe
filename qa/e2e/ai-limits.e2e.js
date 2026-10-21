@@ -35,9 +35,9 @@ export async function run() {
       await limits('?perHour=100&budget=1');
       tab('Create');
       const tool = await waitFor(() => $('[data-tool="flashcards"]') || $('[data-tool]:not([data-tool="export"])'), { what: 'a Create tool' });
-      tool.click();
-      const create = await waitFor(() => $('[data-act="create"]'), { what: 'Create button' });
-      create.click();
+      tool.click(); // one click starts a tool that needs no input (a Create button is only there for settings changes)
+      await sleep(300);
+      $('[data-act="create"]')?.click();
       await waitFor(() => MONTHLY.test(pageText()), { timeout: 10000, what: 'monthly message' });
       const box = $$('.ins-msg.warn').find((m) => MONTHLY.test(m.textContent));
       assert(box && !box.querySelector('button'), 'no retry button for the monthly allowance');

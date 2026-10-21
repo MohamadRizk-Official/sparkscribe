@@ -42,7 +42,7 @@
   --e-ink: #f5f8ff;
   --e-ink-2: #bdc9da;
   --e-ink-3: #8a9bb3;
-  --e-ink-4: #64758e;
+  --e-ink-4: #8090a8;   /* faintest text: still ≥4.7:1 on every dark surface */
   --e-rule: rgba(170, 196, 235, .1);
   --e-rule-2: rgba(170, 196, 235, .18);
   --e-hi: rgba(255, 255, 255, .055);   /* the lit top edge of a raised surface (inset, not a border) */
@@ -112,13 +112,13 @@ html[data-theme="light"] {
   --e-s3: #f2f5fa;
   --e-ink: #0b1626;
   --e-ink-2: #3a4a61;
-  --e-ink-3: #5a6b83;
-  --e-ink-4: #7b8aa0;
+  --e-ink-3: #4d5d74;
+  --e-ink-4: #5f6f86;   /* faintest text: still ≥4.5:1 on every light surface */
   --e-rule: rgba(20, 45, 90, .1);
   --e-rule-2: rgba(20, 45, 90, .18);
   --e-hi: rgba(255, 255, 255, .9);
 
-  --e-cyan: #0eb5d6;  --e-cyan-ink: #04799a;
+  --e-cyan: #0eb5d6;  --e-cyan-ink: #036f8d;
   --e-blue: #3461f0;  --e-blue-ink: #2448c4;
   --e-violet: #7c4ae8; --e-violet-ink: #6232cf;
   --e-magenta: #cf3c95; --e-magenta-ink: #ad2777;

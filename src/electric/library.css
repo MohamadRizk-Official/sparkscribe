@@ -237,3 +237,9 @@ body.lib-in-course .lib-head, body.lib-in-course .lib-search { display: none; }
 body.lib-in-course .lib-toolbar:has(+ .lib-list .e-empty) { display: none; }
 body.lib-in-course .lib-app { gap: 14px; }
 .folder-title { flex: none; }
+@media (max-width: 640px) {
+  .lib-toolbar { justify-content: flex-start; }
+  .type-filter, .lib-controls { margin-left: 0; flex-wrap: wrap; }
+  .lib-head-actions { width: 100%; }
+}
+@media (max-width: 640px) { .type-filter, .type-filter .lib-select { width: 100%; } }

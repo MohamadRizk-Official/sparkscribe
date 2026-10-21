@@ -14,7 +14,9 @@ async function open(path) {
   return frame.contentDocument;
 }
 const theme = (d = document) => d.documentElement.dataset.theme;
-const choose = async (v) => { $(`#themeSeg [data-v="${v}"]`).click(); await sleep(150); };
+// the new appearance is applied inside the circular reveal (a View Transition: the next frame, or within 300 ms when
+// the page isn't painting): wait for the preference to land rather than a fixed delay
+const choose = async (v) => { $(`#themeSeg [data-v="${v}"]`).click(); await waitFor(() => document.documentElement.dataset.themePref === v, { timeout: 1500, what: `appearance ${v}` }); };
 
 export async function run() {
   const saved = localStorage.getItem('sparkscribe.theme');
@@ -49,7 +51,7 @@ export async function run() {
         await choose('light');
         $('#themeSeg [data-v="light"]').focus();
         $('#themeSeg').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
-        await sleep(150);
+        await waitFor(() => theme() === 'dark', { timeout: 1500, what: 'dark after ArrowRight' }).catch(() => {});
         eq(theme(), 'dark', 'ArrowRight from Light → Dark');
         assert(document.activeElement === $('#themeSeg [data-v="dark"]'), 'focus moved');
       }],

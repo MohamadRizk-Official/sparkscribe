@@ -38,6 +38,7 @@
 .kp-text { font-size: 16px; line-height: 1.55; color: var(--e-ink); }
 .kp-card .cite { justify-self: start; margin: 4px 0 0 -4px; }
 .chapters.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; position: relative; }
+.chapters.timeline li::before { content: none; }
 .chapters.timeline::before { content: ""; position: absolute; left: 92px; top: 18px; bottom: 18px; width: 2px; border-radius: 2px; background: linear-gradient(var(--e-cyan), var(--e-violet)); opacity: .35; }
 .chapter { position: relative; display: grid; grid-template-columns: 70px minmax(0, 1fr); align-items: start; gap: 34px; width: 100%; padding: 12px 10px; border: 0; border-radius: var(--e-r-md);
   background: none; color: inherit; text-align: left; cursor: pointer; font: inherit; transition: background-color var(--e-t-hover) var(--e-ease); }

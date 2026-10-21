@@ -72,7 +72,8 @@ html[data-theme="light"] .transcript-card { background: #fff; }
 .who svg { width: 14px; height: 14px; opacity: .55; }
 .who:hover { background: color-mix(in srgb, var(--c) 12%, transparent); }
 .who.static { cursor: default; }
-html[data-theme="light"] .who, html[data-theme="light"] .transcript .avatar { color: color-mix(in srgb, var(--c) 72%, #0b1626); }
+/* light page: each speaker's colour is deepened toward the ink so names stay ≥5:1 on white and on their tint */
+html[data-theme="light"] .who, html[data-theme="light"] .transcript .avatar, html[data-theme="light"] .spk .avatar { color: color-mix(in srgb, var(--c) 45%, #0b1626); }
 .grp-time { font: 500 12.5px var(--e-mono); color: var(--e-ink-4); }
 .transcript .seg { position: relative; margin: 0 0 6px; padding: 2px 10px; margin-left: -10px; border-radius: 8px; border: 0;
   font-size: 17px; line-height: 1.72; color: var(--e-ink); letter-spacing: -0.003em; cursor: pointer; transition: background-color 160ms var(--e-ease); }

@@ -15,7 +15,9 @@ export async function pricing() {
       await waitFor(() => $$('.pz-card').length === 4, { what: 'cards' });
       assert(!$('#billing').hidden, 'billing switch shown');
       eq(seg().querySelector('[aria-checked="true"]').dataset.v, 'month', 'monthly selected');
-      assert(/save 17%\+/.test(text(seg())), text(seg()));
+      // the saving in plain words with exact amounts (no single percentage that isn't true for every plan)
+      assert(/Pay yearly and save \$12\.88 to \$30\.88 a year/.test(text($('#billingNote'))), text($('#billingNote')));
+      assert(!/%/.test(text($('#billing'))), 'no percentage badge');
       assert(/\$1 first month/.test(text(cardOf('Flash'))) && /Then \$5\.99\/month/.test(text(cardOf('Flash'))), text(cardOf('Flash')));
     }],
     ['Yearly: $59 / $99 / $149 a year, per-month equivalent and saving, no $1 offer anywhere on Flash', async () => {
@@ -23,10 +25,10 @@ export async function pricing() {
       await waitFor(() => /\/year/.test(text(cardOf('Flash'))), { what: 'yearly prices' });
       assert(new URL(location.href).searchParams.get('billing') === 'year', 'URL remembers yearly');
       const f = text(cardOf('Flash')), b = text(cardOf('Bolt')), t = text(cardOf('Thunder'));
-      assert(/\$59 \/year/.test(f) && /\$4\.92\/month, billed yearly · save \$12\.88/.test(f), f);
+      assert(/\$59 \/year/.test(f) && /\$4\.92\/month, billed yearly · you save \$12\.88 a year/.test(f), f);
       assert(!/\$1\b/.test(f) && !/first month/i.test(f) && !cardOf('Flash').querySelector('.pz-ribbon'), `Flash yearly shows no $1 offer: ${f}`);
-      assert(/\$99 \/year/.test(b) && /\$8\.25\/month/.test(b) && /save \$20\.88/.test(b), b);
-      assert(/\$149 \/year/.test(t) && /\$12\.42\/month/.test(t) && /save \$30\.88/.test(t), t);
+      assert(/\$99 \/year/.test(b) && /\$8\.25\/month/.test(b) && /you save \$20\.88 a year/.test(b), b);
+      assert(/\$149 \/year/.test(t) && /\$12\.42\/month/.test(t) && /you save \$30\.88 a year/.test(t), t);
       assert(/3 hours renew every month/.test(f), 'the monthly allowance is stated');
       assert(/Choose Flash yearly/.test(f), 'CTA says yearly');
       assert(/Free/.test(text(cardOf('Free'))) && /\$0/.test(text(cardOf('Free'))), 'Free unchanged');

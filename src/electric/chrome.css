@@ -114,3 +114,16 @@ html[data-theme="light"] .theme-btn:hover { color: var(--e-violet-ink); box-shad
   .nav-indicator, .theme-btn svg { transition: none; }
   .acct-menu { animation: none; }
 }
+
+/* phones: everything in the header fits on one row (brand, menu, New recording, theme, avatar) */
+@media (max-width: 480px) {
+  .topbar { padding: 10px 12px; gap: 8px; }
+  .topbar-right { gap: 6px; }
+  .brand { gap: 7px; }
+  .brand .spark-mark { width: 26px; height: 26px; }
+  .brand-name { font-size: 18px; }
+  .site-nav { margin-left: auto; margin-right: 0; }
+  .nav-toggle, .theme-btn, .acct-btn, .hdr-new { width: 38px; height: 38px; min-height: 38px; padding: 0; justify-content: center; }
+  .nav-toggle { padding: 0; }
+}
+@media (max-width: 360px) { .bn-scribe { display: none; } }

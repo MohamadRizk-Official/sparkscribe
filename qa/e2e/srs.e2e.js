@@ -54,6 +54,8 @@ export async function run() {
       btn(/Easy/).click();
       await waitFor(() => deck()?.querySelector('.deck-done'), { what: 'done' });
       assert(/You’ve been through every card/.test(text()) && /1 card you didn’t know is due again today/.test(text()), text());
+      // the rating is shown at once and saved in the background: wait for the save, then check it
+      await waitFor(async () => (await stored())?.progress?.srs?.['2'], { what: 'saved rating of card 3' });
       const s = (await stored()).progress.srs;
       eq(JSON.stringify(s[2]), JSON.stringify([DAY + 3, 1]), 'easy on a new card -> step 1');
     }],

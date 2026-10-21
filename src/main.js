@@ -1529,8 +1529,9 @@ async function renderHomePlans() {
   if (!plans.length) { box.closest('section')?.classList.add('hidden'); return; }
   const money = (c) => (c % 100 ? `$${(c / 100).toFixed(2)}` : `$${c / 100}`);
   const hours = (s) => (s < 3600 ? `${Math.round(s / 60)} minutes` : `${Math.round((s / 3600) * 10) / 10} hours`);
-  box.innerHTML = plans.map((pl) => `<a class="hp-plan${pl.tier === 2 ? ' is-popular' : ''}" href="/pricing#${escHtml(pl.key)}">
-      <span class="hp-name">${escHtml(pl.name)}${pl.tier === 2 ? '<span class="hp-pop">Popular</span>' : ''}</span>
+  // each plan in its own tone (as on /pricing); no "popular" claim: nothing here is based on sales data
+  box.innerHTML = plans.map((pl) => `<a class="hp-plan t-${escHtml(pl.key)}" href="/pricing#${escHtml(pl.key)}">
+      <span class="hp-name">${escHtml(pl.name)}</span>
       <span class="hp-price">${pl.price_cents ? `${money(pl.price_cents)}<small>/month</small>` : 'Free'}</span>
       <span class="hp-allow">${hours(pl.monthly_seconds)} of lectures a month</span>
       ${pl.intro ? `<span class="hp-intro">${money(pl.intro.price_cents)} for your first month</span>` : ''}

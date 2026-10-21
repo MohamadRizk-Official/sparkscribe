@@ -42,12 +42,20 @@ export async function run() {
       await waitFor(() => /No matches/.test($('#libList').innerText), { what: 'no matches' });
       $('[data-act="clear-search"]').click(); await waitFor(() => cards().length >= 4, { what: 'list back' });
     }],
-    ['rename a recording', async () => {
+    ['rename a recording (inline: from the menu, Escape keeps the name, Enter saves)', async () => {
+      const inline = async (open, value, key) => {
+        open();
+        const input = await waitFor(() => $('#libList .lib-title-input'), { what: 'inline title field' });
+        input.value = value;
+        input.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+        await waitFor(() => !$('#libList .lib-title-input'), { what: 'field closed' });
+      };
       await openMenu('Voice note from Sam');
-      document.querySelector('dialog[open] [data-m="rename"]').click();
-      await prompt('Voice note from Sam — renamed ✓');
+      await inline(() => document.querySelector('dialog[open] [data-m="rename"]').click(), 'not this', 'Escape');
+      eq(dbRows().find((r) => r.id.startsWith('cccc')).title, 'Voice note from Sam', 'Escape keeps the name');
+      await inline(() => cardOf('Voice note from Sam').querySelector('[data-act="rename"]').click(), 'Voice note from Sam — renamed ✓', 'Enter');
       await waitFor(() => titles().includes('Voice note from Sam — renamed ✓'), { what: 'renamed card' });
-      eq(dbRows().find((r) => r.id.startsWith('cccc')).title, 'Voice note from Sam — renamed ✓', 'stored title');
+      await waitFor(() => dbRows().find((r) => r.id.startsWith('cccc')).title === 'Voice note from Sam — renamed ✓', { what: 'stored title' });
     }],
     ['favorite: optimistic star, stored; failure rolls back with a message', async () => {
       const t = 'Biology lecture 7';

@@ -1,0 +1,50 @@
+/* ELECTRIC — the signed-out home, the student landing pages, sign-in, Help and the legal pages. */
+
+/* ---------- hero ---------- */
+.hero-eyebrow, .seo-hero .hero-eyebrow { margin: 0 0 14px; font: 600 15px/1.2 var(--e-sans); letter-spacing: 0; text-transform: none; color: var(--e-cyan-ink); }
+.hero-h1 { font-size: var(--e-fs-hero); font-weight: 800; letter-spacing: -0.045em; line-height: 1.02; color: var(--e-ink); }
+.hero-lead { font-size: 18.5px; line-height: 1.55; color: var(--e-ink-2); max-width: 48ch; }
+.hero-ctas .btn { min-height: 48px; padding: 12px 22px; font-size: 15.5px; }
+.hero-fine { font-size: 14px; color: var(--e-ink-3); }
+.home-h2 { font-family: var(--e-display); font-weight: 700; letter-spacing: -0.035em; color: var(--e-ink); }
+.demo-tag { padding: 0; border: 0; border-radius: 0; background: none; font: 600 14px var(--e-sans); letter-spacing: 0; text-transform: none; color: var(--e-ink-2); }
+.demo-tag::after { content: ":"; }
+
+/* ---------- one lecture → everything: the source and the tiles are raised, not outlined ---------- */
+.pack-src { border: 0; background: var(--e-s1); box-shadow: var(--e-elev-2); }
+.pack-tile { border: 0; background: var(--e-s1); box-shadow: var(--e-elev-1); border-radius: var(--e-r-lg); }
+.pack-tile:hover { border: 0; background: var(--e-s1-hover); box-shadow: var(--e-elev-2), 0 26px 50px -28px var(--c); }
+.pack-tile > b { font-family: var(--e-display); font-weight: 700; letter-spacing: -0.02em; }
+
+/* ---------- how it works / private by design / plans preview ---------- */
+.how-steps li, .trust-list li { border: 0; background: var(--e-s1); box-shadow: var(--e-elev-1); border-radius: var(--e-r-lg); }
+.how-steps b, .trust-list b { font-family: var(--e-display); letter-spacing: -0.02em; }
+.how-n { font: 700 14px/1 var(--e-sans); color: var(--e-on-accent); background: var(--e-charge); border: 0; border-radius: 10px; }
+html[data-theme="light"] .how-n { color: #fff; }
+.hp-plan { --tc: var(--e-cyan); position: relative; overflow: hidden; border: 0; background: var(--e-s1); box-shadow: var(--e-elev-1); border-radius: var(--e-r-lg);
+  transition: transform var(--e-t-hover) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease); }
+.hp-plan::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--tc); opacity: .85; }
+.hp-plan.t-flash { --tc: var(--e-amber); } .hp-plan.t-bolt { --tc: var(--e-blue); } .hp-plan.t-thunder { --tc: var(--e-violet); }
+.hp-plan:hover, .hp-plan:focus-visible { border: 0; transform: translateY(-3px); box-shadow: var(--e-elev-2), 0 20px 36px -24px var(--tc); }
+.hp-price { font-family: var(--e-display); letter-spacing: -0.03em; }
+.hp-intro { color: var(--e-amber-ink); font-weight: 600; }
+.hp-pop { display: none; }
+.final-cta { border: 0; background: radial-gradient(80% 120% at 50% 0%, color-mix(in srgb, var(--e-cyan) 14%, transparent), transparent 70%), var(--e-s1); box-shadow: var(--e-elev-2); border-radius: var(--e-r-xl); }
+
+/* ---------- student landing pages (/lecture-notes, /flashcards, /exam-prep) ---------- */
+.seo-page .panel, .seo-page article { border: 0; }
+
+/* ---------- sign in ---------- */
+.auth-card { width: min(460px, 100%); padding: clamp(24px, 4vw, 36px); border-radius: var(--e-r-xl); background: var(--e-s1); box-shadow: var(--e-elev-3); }
+.auth-card h1, .auth-card h2 { font-family: var(--e-display); letter-spacing: -0.03em; }
+.auth-card input[type="email"], .auth-card input[type="password"], .auth-card input[type="text"] {
+  border: 0; background: var(--e-s3); box-shadow: var(--e-inset); border-radius: var(--e-r-sm); color: var(--e-ink); font: 500 15.5px var(--e-sans); min-height: 46px;
+}
+.auth-card input:focus { outline: none; box-shadow: inset 0 0 0 1.5px var(--e-cyan), 0 0 0 4px color-mix(in srgb, var(--e-cyan) 14%, transparent); }
+
+/* ---------- Help and legal: documents ---------- */
+.help-page { max-width: 860px; width: 100%; min-width: 0; margin: 0 auto; overflow-wrap: anywhere; }
+.help-title { font-family: var(--e-display); font-size: var(--e-fs-h1); font-weight: 700; letter-spacing: -0.035em; }
+.legal-doc { width: 100%; min-width: 0; overflow-wrap: anywhere; border: 0; border-radius: var(--e-r-xl); background: var(--e-s0); box-shadow: var(--e-elev-1); font-size: 16px; line-height: 1.7; max-width: 860px; margin: 0 auto; }
+html[data-theme="light"] .legal-doc { background: #fff; }
+.legal-doc h1, .legal-doc h2 { font-family: var(--e-display); letter-spacing: -0.02em; }

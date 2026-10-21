@@ -83,7 +83,8 @@ export async function run() {
     ['A quiz with every answer wrong ends on "Review N concepts", listing concepts (not questions)', async () => {
       await openQuiz();
       if (btn(/End quiz/)) { btn(/End quiz/).click(); await sleep(200); }
-      btn(/Start Quiz/).click();
+      // opening the tool already starts writing the quiz (one click); Start Quiz appears when it's ready
+      (await waitFor(() => btn(/Start Quiz/), { what: 'Start Quiz', timeout: 30000 })).click();
       await waitFor(() => document.querySelector('#qText'), { what: 'first question (quiz written by mock engine 3)', timeout: 30000 });
       await playAll(false);
       await waitFor(() => /Quiz complete/i.test(text()), { what: 'result' });
@@ -157,7 +158,8 @@ export async function run2() {
     ['Existing quiz features still work from the setup screen', async () => {
       await openQuiz();
       if (btn(/End quiz/)) { btn(/End quiz/).click(); await sleep(200); }
-      btn(/Start Quiz/).click();
+      // opening the tool already starts writing the quiz (one click); Start Quiz appears when it's ready
+      (await waitFor(() => btn(/Start Quiz/), { what: 'Start Quiz', timeout: 30000 })).click();
       await waitFor(() => document.querySelector('#qText'), { what: 'a normal run' });
       btn(/End quiz/).click();
       await sleep(200);

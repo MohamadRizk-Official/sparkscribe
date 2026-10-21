@@ -17,19 +17,27 @@ const landing = async () => {
 
 export async function run() {
   return runTests([
-    ['All tools are grouped as Study / Work / Specialized, with Export', async () => {
+    ['Every tool is offered exactly once: recommended first, the rest grouped (Study / Work / Specialized), plus Export', async () => {
       await landing();
-      const groups = [...panel().querySelectorAll('.create-group')].map((g) => [g.getAttribute('aria-label'), [...g.querySelectorAll('.ctool-name')].map((n) => n.textContent)]);
-      assert(JSON.stringify(groups) === JSON.stringify([['Study', ['Study Guide', 'Flashcards', 'Practice Quiz']], ['Work', ['Meeting Recap', 'Action Plan', 'Draft']], ['Specialized', ['Interview Q&A', 'Episode Notes']]]), `groups: ${JSON.stringify(groups)}`);
-      assert(panel().querySelector('[data-tool="export"]'), 'Export is still offered');
+      const groups = [...panel().querySelectorAll('.cr-browser .cr-group')].map((g) => [g.querySelector('.cr-group-h').textContent, [...g.querySelectorAll('.ctool-name')].map((n) => n.textContent)]);
+      assert(JSON.stringify(groups) === JSON.stringify([['Study', ['Study Guide', 'Flashcards', 'Practice Quiz']], ['Specialized', ['Interview Q&A', 'Episode Notes']], ['Export', ['Export']]]), `groups: ${JSON.stringify(groups)}`);
+      const names = [...panel().querySelectorAll('[data-tool]')].map((b) => b.dataset.tool);
+      assert(new Set(names).size === names.length, `no tool appears twice: ${names}`);
       assert(!panel().querySelector('[data-tool="followup_email"], [data-tool="reply_draft"]'), 'the two draft tools are one Draft entry');
+      assert([...panel().querySelectorAll('.cr-sample-tag')].every((t) => /Example/i.test(t.textContent)), 'every preview is labelled as an example');
     }],
     ['A meeting recommends Meeting Recap, Action Plan and Draft', async () => {
-      const rec = [...panel().querySelectorAll('.create-grid.rec .ctool-name')].map((n) => n.textContent);
+      const rec = [...panel().querySelectorAll('.cr-rec .ctool-name')].map((n) => n.textContent);
       assert(rec.join() === 'Meeting Recap,Action Plan,Draft', `recommended: ${rec}`);
     }],
+    ['One click starts a tool that needs no input', async () => {
+      panel().querySelector('.cr-rec [data-tool="meeting_recap"]').click();
+      await waitFor(() => panel().querySelector('.tool-view') && /Meeting Recap/.test(text()), { what: 'tool view' });
+      await waitFor(() => panel().querySelector('.tool-body'), { timeout: 15000, what: 'recap generated without a second click' });
+      await landing();
+    }],
     ['Draft asks what to draft, keeps both kinds, and can switch between them', async () => {
-      panel().querySelector('.create-grid.rec [data-tool="draft"]').click();
+      panel().querySelector('.cr-rec [data-tool="draft"]').click();
       const dlg = await waitFor(() => document.querySelector('dialog[open].draft-dlg'), { what: 'draft chooser' });
       const picks = [...dlg.querySelectorAll('.draft-pick b')].map((b) => b.textContent);
       assert(picks.join() === 'A follow-up email,A reply', `choices: ${picks} (a meeting suggests the email first)`);
