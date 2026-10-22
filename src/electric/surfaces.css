@@ -27,3 +27,22 @@ html[data-theme="light"] .ns-step { box-shadow: var(--e-card); }
    background or anything under them changed. */
 .lib-views, .ax-tabs, .set-nav a { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .lib-card::before { filter: none; }
+
+/* the plan cards: a 3px edge in the plan's own colour and the light it gives off; on hover the edge brightens and the
+   light grows (box-shadow swaps at once; only the lift is animated, see pricing.css) */
+.pz-grid .pz-card { --edge: #20d4f4; }
+.pz-grid .pz-card.t-flash { --edge: #ffc531; }
+.pz-grid .pz-card.t-bolt { --edge: #3f7dff; }
+.pz-grid .pz-card.t-thunder { --edge: #a46bff; }
+.pz-grid .pz-card, .pz-grid .pz-card.t-thunder { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 3px var(--edge), 0 0 38px -6px color-mix(in srgb, var(--edge) 65%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
+.pz-grid .pz-card.t-bolt, .pz-grid .pz-card.t-thunder { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 3px var(--edge), 0 0 48px -4px color-mix(in srgb, var(--edge) 75%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
+.pz-grid .pz-card:hover, .pz-grid .pz-card:focus-within, .pz-grid .pz-card.t-thunder:hover, .pz-grid .pz-card.t-thunder:focus-within {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 0 0 3px color-mix(in srgb, var(--edge) 75%, #fff), 0 0 70px -2px color-mix(in srgb, var(--edge) 85%, transparent), 0 40px 70px -30px rgba(0, 0, 0, .9); }
+.pz-grid .pz-card.is-current, .pz-grid .pz-card.is-selected { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 0 0 4px var(--edge), 0 0 54px -4px color-mix(in srgb, var(--edge) 80%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
+html[data-theme="light"] .pz-grid .pz-card { --edge: #0aa3c4; }
+html[data-theme="light"] .pz-grid .pz-card.t-flash { --edge: #e0a100; }
+html[data-theme="light"] .pz-grid .pz-card.t-bolt { --edge: #2563ff; }
+html[data-theme="light"] .pz-grid .pz-card.t-thunder { --edge: #7c4ae8; }
+html[data-theme="light"] .pz-grid .pz-card, html[data-theme="light"] .pz-grid .pz-card.t-thunder, html[data-theme="light"] .pz-grid .pz-card.t-bolt { box-shadow: 0 0 0 3px var(--edge), 0 0 34px -8px color-mix(in srgb, var(--edge) 55%, transparent), 0 24px 46px -24px rgba(15, 23, 42, .3); }
+html[data-theme="light"] .pz-grid .pz-card:hover, html[data-theme="light"] .pz-grid .pz-card:focus-within, html[data-theme="light"] .pz-grid .pz-card.t-thunder:hover { box-shadow: 0 0 0 3px var(--edge), 0 0 56px -6px color-mix(in srgb, var(--edge) 70%, transparent), 0 32px 56px -24px rgba(15, 23, 42, .36); }
+html[data-theme="light"] .pz-grid .pz-card.is-current, html[data-theme="light"] .pz-grid .pz-card.is-selected { box-shadow: 0 0 0 4px var(--edge), 0 0 40px -8px color-mix(in srgb, var(--edge) 60%, transparent), 0 24px 46px -24px rgba(15, 23, 42, .3); }

@@ -76,20 +76,30 @@ html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-
 .pz-fx { position: absolute; z-index: -1; pointer-events: none; }
 .pz-fx svg { display: block; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .t-flash .pz-fx { top: 26px; left: 70px; width: 120px; height: 40px; }
-.fx-flash path { stroke: var(--e-amber); stroke-width: 2; stroke-dasharray: 22 200; stroke-dashoffset: 22; opacity: 0; }
+.fx-flash path { stroke: var(--e-amber); stroke-width: 2.6; stroke-dasharray: 22 200; stroke-dashoffset: 22; opacity: 0; }
+.fx-flash path.g { stroke-width: 8; stroke-opacity: .35; }
 .t-flash:hover .fx-flash path, .t-flash:focus-within .fx-flash path { animation: fx-ignite 900ms var(--e-ease) 1 both; }
 @keyframes fx-ignite { 0% { stroke-dashoffset: 22; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { stroke-dashoffset: -190; opacity: 0; } }
-.t-bolt .pz-fx { top: 0; left: 0; right: 0; height: 3px; }
-.t-bolt .pz-fx svg { width: 100%; height: 3px; }
-.fx-bolt path { stroke: var(--e-blue); stroke-width: 6; opacity: .25; }
-.t-bolt .pz-fx, .t-thunder .pz-fx { overflow: hidden; }
-.t-bolt .pz-fx::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(90deg, transparent, #8fd1ff, var(--e-blue), transparent); transform: translateX(-100%); opacity: 0; }
+/* Bolt: a bright power track across the top, and a current that races along it */
+.t-bolt .pz-fx { top: 0; left: 0; right: 0; height: 5px; overflow: hidden; }
+.t-bolt .pz-fx svg { width: 100%; height: 5px; }
+.fx-bolt path { stroke: #3f7dff; stroke-width: 10; opacity: .75; }
+.t-bolt .pz-fx::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(90deg, transparent, #c9ecff, #6fb4ff, #3f7dff, transparent); transform: translateX(-100%); opacity: 0; }
 .t-bolt:hover .pz-fx::after, .t-bolt:focus-within .pz-fx::after { animation: fx-current 800ms var(--e-ease) 1 both; }
 @keyframes fx-current { 0% { transform: translateX(-100%); opacity: 1; } 100% { transform: translateX(250%); opacity: 1; } }
-.t-thunder .pz-fx { top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #8a5cff, #a16bff 60%, #c38bff); opacity: .9; }
-.t-thunder .pz-fx svg { display: none; }
-.t-thunder .pz-fx::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 30%; background: linear-gradient(90deg, transparent, #f3e9ff, #c9a6ff, transparent); transform: translateX(-100%); opacity: 0; }
-.t-thunder:hover .pz-fx::after, .t-thunder:focus-within .pz-fx::after { animation: fx-current 700ms cubic-bezier(.55, .05, .35, 1) 1 both; }
+/* Thunder: two arcs across the top of the card, faint at rest; on hover they strike, flare and settle brighter */
+.t-thunder .pz-fx { top: 0; left: 0; right: 0; height: 120px; }
+.t-thunder .pz-fx svg { width: 100%; height: 120px; }
+.fx-thunder path { stroke: #b389ff; stroke-width: 2.2; opacity: .4; stroke-dasharray: 600; stroke-dashoffset: 0; vector-effect: non-scaling-stroke; }
+.fx-thunder path.b { stroke: var(--e-cyan); opacity: .28; }
+.fx-thunder path.g { stroke-width: 9; opacity: 0; }
+.t-thunder:hover .fx-thunder path, .t-thunder:focus-within .fx-thunder path { animation: fx-arc 1100ms var(--e-ease) 1 both; }
+.t-thunder:hover .fx-thunder path.g, .t-thunder:focus-within .fx-thunder path.g { animation: fx-arc-glow 1100ms var(--e-ease) 1 both; }
+.t-thunder:hover .fx-thunder path.b, .t-thunder:focus-within .fx-thunder path.b { animation-delay: 140ms; }
+@keyframes fx-arc { 0% { stroke-dashoffset: 600; opacity: .15; } 55% { opacity: 1; } 100% { stroke-dashoffset: 0; opacity: .55; } }
+@keyframes fx-arc-glow { 0% { stroke-dashoffset: 600; opacity: 0; } 55% { opacity: .35; } 100% { stroke-dashoffset: 0; opacity: .1; } }
+html[data-theme="light"] .fx-thunder path { stroke: #7c4ae8; }
+html[data-theme="light"] .fx-thunder path.b { stroke: #0b8fb0; }
 
 .pz-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pz-ic { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 14px; border: 0; color: var(--tc-ink); background: color-mix(in srgb, var(--tc) 15%, transparent); box-shadow: none; transition: transform 420ms var(--e-ease-snap); }
@@ -261,7 +271,7 @@ html[data-theme="light"] .pz-fit-col:hover, html[data-theme="light"] .pz-fit-col
 @media (prefers-reduced-motion: reduce) {
   .pz-card, .flow-ic { transition: box-shadow var(--e-t-hover); }
   .pz-card:hover, .pz-card:focus-within, .pz-card.t-thunder:hover, .flow-step:hover .flow-ic { transform: none; }
-  .fx-flash path, .t-thunder .pz-fx::after, .t-bolt .pz-fx::after, .pz-swap .pz-amt, .pz-swap .pz-per, .pz-swap .pz-then { animation: none !important; }
+  .fx-flash path, .fx-thunder path, .t-bolt .pz-fx::after, .pz-swap .pz-amt, .pz-swap .pz-per, .pz-swap .pz-then { animation: none !important; }
   .pz-card:hover .pz-ic { transform: none; }
   .segctl-ind { transition: none; }
 }
