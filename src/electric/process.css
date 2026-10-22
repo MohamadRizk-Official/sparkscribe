@@ -9,7 +9,7 @@
 .file-sub { font: 500 13.5px var(--e-sans); letter-spacing: 0; color: var(--e-ink-3); }
 #cancelBtn { margin-left: auto; }
 /* the signal: the recording's waveform, read left to right as transcription advances */
-.wave-wrap { border: 0; border-radius: var(--e-r-lg); background: var(--e-s0); box-shadow: inset 0 0 0 1px var(--e-rule); }
+.wave-wrap { border: 0; border-radius: var(--e-r-lg); background: var(--e-s0); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .3); }
 html[data-theme="light"] .wave-wrap { background: var(--e-s3); }
 /* main.js drawWave draws both layers at this real size (× devicePixelRatio): calm bars underneath, the read part in
    vivid cyan on top, revealed up to the edge of real progress (a thin lit line marks it) */

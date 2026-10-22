@@ -114,7 +114,7 @@
 
 /* selecting several */
 .lib-card.selecting { grid-template-columns: auto 44px minmax(0, 1fr) auto; cursor: pointer; }
-.lib-card.selected { background: color-mix(in srgb, var(--e-cyan) 8%, var(--e-s1)); box-shadow: var(--e-elev-1), inset 0 0 0 1.5px color-mix(in srgb, var(--e-cyan) 65%, transparent); }
+.lib-card.selected { background: color-mix(in srgb, var(--e-cyan) 8%, var(--e-s1)); box-shadow: var(--e-elev-1), inset 0 0 0 2px color-mix(in srgb, var(--e-cyan) 65%, transparent); }
 .lib-check { align-self: center; }
 .lib-check input { width: 20px; height: 20px; accent-color: var(--e-cyan); }
 .bulk-bar { border: 0; border-radius: var(--e-r-lg); background: var(--e-s2); box-shadow: var(--e-elev-3); }
@@ -177,8 +177,8 @@ body.lib-in-course .lib-views { display: none; } /* inside a course the breadcru
 .folder-tile-ic svg { width: 20px; height: 20px; }
 .folder-tile-name { font: 600 17px var(--e-sans); letter-spacing: -0.01em; }
 .folder-tile-n { font: 500 13.5px var(--e-sans); color: var(--e-ink-3); }
-.folder-tile.new { border: 0; background: transparent; box-shadow: inset 0 0 0 1.5px var(--e-rule-2); }
-.folder-tile.new:hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--e-cyan) 50%, transparent), var(--e-elev-1); }
+.folder-tile.new { border: 0; background: transparent; box-shadow: inset 0 0 0 2px var(--e-rule-2); }
+.folder-tile.new:hover { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--e-cyan) 50%, transparent), var(--e-elev-1); }
 .folder-tile.new .folder-tile-ic { color: var(--e-cyan-ink); background: color-mix(in srgb, var(--e-cyan) 12%, transparent); border: 0; }
 
 /* ---------- search results ---------- */
@@ -213,7 +213,7 @@ dialog.confirm h3 { font-family: var(--e-display); font-size: 21px; font-weight:
 .ar-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 11px 10px; border-radius: var(--e-r-sm); cursor: pointer; transition: background-color 120ms var(--e-ease); }
 .ar-row:hover { background: color-mix(in srgb, var(--e-ink) 6%, transparent); }
 .ar-row input { position: absolute; opacity: 0; pointer-events: none; }
-.ar-box { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; box-shadow: inset 0 0 0 1.5px var(--e-rule-2); color: transparent; transition: background-color 140ms var(--e-ease), box-shadow 140ms var(--e-ease), color 140ms; }
+.ar-box { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; box-shadow: inset 0 0 0 2px var(--e-rule-2); color: transparent; transition: background-color 140ms var(--e-ease), box-shadow 140ms var(--e-ease), color 140ms; }
 .ar-box svg { width: 15px; height: 15px; stroke-width: 2.6; }
 .ar-row input:checked + .ar-box { background: var(--e-charge); box-shadow: none; color: var(--e-on-accent); }
 html[data-theme="light"] .ar-row input:checked + .ar-box { color: #fff; }

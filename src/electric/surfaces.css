@@ -14,7 +14,9 @@ html[data-theme="light"] :is(.transcript-card, .speakers-card, .timeline-card, .
 /* feature: the recommended tools and the plans — more depth, a brighter edge, stronger on hover */
 .ctool.big, .pz-card { background: var(--e-feature-bg); box-shadow: var(--e-feature); }
 .ctool.big:hover, .ctool.big:focus-visible { box-shadow: var(--e-feature-hover), 0 22px 40px -24px color-mix(in srgb, var(--tc) 80%, transparent); }
-.pz-card:hover, .pz-card:focus-within { box-shadow: var(--e-feature-hover), 0 26px 50px -28px color-mix(in srgb, var(--tc) 85%, transparent); }
+/* a plan you point at takes its own colour: a solid 2px edge in the tier colour */
+.pz-card:hover, .pz-card:focus-within { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 2px var(--tc), 0 6px 14px rgba(0, 0, 0, .35), 0 30px 60px -28px color-mix(in srgb, var(--tc) 75%, transparent); }
+html[data-theme="light"] .pz-card:hover, html[data-theme="light"] .pz-card:focus-within { box-shadow: 0 0 0 2px var(--tc), 0 4px 8px rgba(15, 23, 42, .08), 0 26px 50px -24px color-mix(in srgb, var(--tc) 55%, transparent); }
 
 /* card: list items people click — soft shadow and surface contrast; their hover rules stay where they are */
 .lib-card, .folder-tile, .sr-item { box-shadow: var(--e-card); }

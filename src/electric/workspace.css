@@ -51,8 +51,8 @@
    style, the selected line crisp along its bottom; it stays itself while it sticks under the header */
 #resTabs.tabs { position: sticky; top: 60px; z-index: 20; display: flex; width: 100%; gap: 4px; padding: 0 12px; margin: 0; border: 0; border-radius: 12px; overflow-x: auto; scrollbar-width: none;
   background: #12223a; -webkit-backdrop-filter: none; backdrop-filter: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 0 0 1px rgba(150, 190, 240, .16), 0 10px 26px -16px rgba(0, 0, 0, .8); }
-html[data-theme="light"] #resTabs.tabs { background: #fff; box-shadow: 0 0 0 1px rgba(15, 23, 42, .32), 0 8px 22px -16px rgba(15, 23, 42, .3); }
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 0 0 2px rgba(205, 222, 255, .3), 0 10px 26px -16px rgba(0, 0, 0, .8); }
+html[data-theme="light"] #resTabs.tabs { background: #fff; box-shadow: 0 0 0 2px rgba(15, 23, 42, .32), 0 8px 22px -16px rgba(15, 23, 42, .3); }
 #resTabs .tab { flex: none; position: relative; z-index: 1; padding: 14px 8px 15px; margin-right: 18px; border: 0; border-radius: 0; background: none; box-shadow: none;
   font: 500 16px var(--e-sans); letter-spacing: -0.01em; text-transform: none; color: var(--e-ink-3); transition: color var(--e-t-hover) var(--e-ease); }
 #resTabs .tab:hover { color: var(--e-ink); background: none; }

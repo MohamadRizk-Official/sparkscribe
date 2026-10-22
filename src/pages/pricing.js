@@ -220,6 +220,8 @@ function renderCards(swap = false) {
 }
 
 // ---------- Which plan fits your semester? (who each plan is for; the numbers live in the comparison) ----------
+// the strike across the top of a "Which plan fits" card on hover (pricing.css): a straight run with one sharp zigzag
+const FIT_ZAP = '<svg class="fit-zap" viewBox="0 0 300 24" preserveAspectRatio="none" aria-hidden="true"><path pathLength="100" d="M0 2H80l15 18 11-13 13 16 11-21H300"/><path class="hot" pathLength="100" d="M0 2H80l15 18 11-13 13 16 11-21H300"/></svg>';
 function renderWhy() {
   const flash = byKey('flash'), bolt = byKey('bolt'), thunder = byKey('thunder');
   const el = $('why');
@@ -230,7 +232,7 @@ function renderWhy() {
     [thunder, 'thunder', 'Many courses, connected lectures, advanced study', ['A full course load, lecture after lecture', 'One question asked across a whole unit', 'One study guide from up to 10 recordings']],
   ];
   el.innerHTML = `<header class="sec-head pz-sec-head"><h2 id="whyTitle">Which plan fits your semester?</h2><p>Choose by how you study, not by how much you can spend.</p></header>
-    <div class="pz-fit">${fit.map(([p, t, line, ex]) => `<article class="pz-fit-col t-${t}"><span class="pz-fit-ic">${ICON[t]}</span><h3>${esc(p.name)}</h3><p class="pz-fit-line">${esc(line)}</p>
+    <div class="pz-fit">${fit.map(([p, t, line, ex]) => `<article class="pz-fit-col t-${t}">${FIT_ZAP}<span class="pz-fit-ic">${ICON[t]}</span><h3>${esc(p.name)}</h3><p class="pz-fit-line">${esc(line)}</p>
       <ul>${ex.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><p class="pz-fit-hours"><b>${esc(allowance(p.monthly_seconds).long)}</b> a month</p></article>`).join('')}</div>`;
   el.hidden = false;
 }

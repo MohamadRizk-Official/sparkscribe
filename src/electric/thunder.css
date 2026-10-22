@@ -41,7 +41,7 @@ html[data-theme="light"] .thunder-mark .tm-arc { background: linear-gradient(100
 html[data-theme="light"] .btn.th-cta, html[data-theme="light"] .btn.th-cta:hover { background: linear-gradient(100deg, #6232cf 0%, #7c4ae8 60%, #8d5cf0 100%); }
 
 /* an example of what Thunder does: a question, then the recordings that answer it */
-.th-example { display: grid; gap: 8px; padding: 14px 16px; border-radius: var(--e-r-md); background: var(--e-s0); box-shadow: inset 0 0 0 1px var(--e-rule); }
+.th-example { display: grid; gap: 8px; padding: 14px 16px; border-radius: var(--e-r-md); background: var(--e-s0); box-shadow: none; }
 html[data-theme="light"] .th-example { background: var(--e-s3); }
 .th-example .cr-sample-tag { margin: 0; }
 .th-q { margin: 0; font: 600 15px/1.45 var(--e-sans); color: var(--e-ink); }

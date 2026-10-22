@@ -60,15 +60,15 @@ html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color
    accent band across the top that a current runs along on hover (.pz-fx below). */
 .pz-card.t-thunder { --tc: var(--e-violet); --tc-ink: var(--e-violet-ink);
   background: radial-gradient(110% 70% at 100% 0%, rgba(161, 107, 255, .26), transparent 58%), radial-gradient(80% 50% at 0% 100%, rgba(234, 98, 186, .08), transparent 70%), linear-gradient(180deg, #1c1a44 0%, #151b36 50%, #121d31 100%);
-  box-shadow: inset 0 1px 0 rgba(230, 215, 255, .14), 0 0 0 1px rgba(185, 175, 255, .2), 0 4px 10px rgba(0, 0, 0, .35), 0 36px 80px -32px rgba(161, 107, 255, .7), 0 30px 64px -26px rgba(0, 0, 0, .9); }
+  box-shadow: inset 0 1px 0 rgba(230, 215, 255, .14), 0 0 0 2px rgba(220, 205, 255, .62), 0 4px 10px rgba(0, 0, 0, .35), 0 36px 80px -32px rgba(161, 107, 255, .7), 0 30px 64px -26px rgba(0, 0, 0, .9); }
 html[data-theme="light"] .pz-card.t-thunder { background: radial-gradient(110% 70% at 100% 0%, rgba(124, 74, 232, .12), transparent 58%), linear-gradient(180deg, #fbf9ff, #fff 60%);
-  box-shadow: 0 0 0 1px rgba(40, 20, 90, .32), 0 2px 4px rgba(15, 23, 42, .07), 0 30px 60px -26px rgba(124, 74, 232, .45); }
+  box-shadow: 0 0 0 2px rgba(60, 30, 130, .6), 0 2px 4px rgba(15, 23, 42, .07), 0 30px 60px -26px rgba(124, 74, 232, .45); }
 .pz-card.t-thunder:hover, .pz-card.t-thunder:focus-within { transform: translateY(-8px);
-  box-shadow: inset 0 1px 0 rgba(230, 215, 255, .18), 0 0 0 1px rgba(195, 185, 255, .32), 0 8px 16px rgba(0, 0, 0, .35), 0 46px 90px -30px rgba(161, 107, 255, .85), 0 40px 74px -28px rgba(0, 0, 0, .95); }
-html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-card.t-thunder:focus-within { box-shadow: 0 0 0 1px rgba(40, 20, 90, .42), 0 4px 8px rgba(15, 23, 42, .08), 0 40px 72px -26px rgba(124, 74, 232, .55); }
+  box-shadow: inset 0 1px 0 rgba(230, 215, 255, .18), 0 0 0 2px var(--e-violet), 0 8px 16px rgba(0, 0, 0, .35), 0 46px 90px -30px rgba(161, 107, 255, .85), 0 40px 74px -28px rgba(0, 0, 0, .95); }
+html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-card.t-thunder:focus-within { box-shadow: 0 0 0 2px var(--e-violet), 0 4px 8px rgba(15, 23, 42, .08), 0 40px 72px -26px rgba(124, 74, 232, .55); }
 .t-thunder:hover .pz-btn, .t-thunder:focus-within .pz-btn { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .34), 0 16px 32px -12px rgba(161, 107, 255, 1); filter: brightness(1.07); }
-.pz-card.is-current { box-shadow: var(--e-elev-1), inset 0 0 0 2px color-mix(in srgb, var(--tc) 60%, transparent); }
-.pz-card.is-selected { box-shadow: var(--e-elev-2), inset 0 0 0 2px var(--tc); }
+.pz-card.is-current { box-shadow: 0 0 0 3px var(--tc), var(--e-elev-2); }
+.pz-card.is-selected { box-shadow: 0 0 0 3px var(--tc), var(--e-elev-2); }
 .pz-card { scroll-margin-top: 92px; }
 .pz-ribbon, .pz-badge { display: none; }
 
@@ -108,7 +108,7 @@ html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-
 @keyframes pz-swap { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 /* allowance: big plain number first, the power cells second (they charge one after another on hover) */
-.pz-allow { display: grid; gap: 10px; padding: 14px; border: 0; border-radius: var(--e-r-md); background: var(--e-s0); box-shadow: inset 0 0 0 1px var(--e-rule); }
+.pz-allow { display: grid; gap: 10px; padding: 14px; border: 0; border-radius: var(--e-r-md); background: var(--e-s0); box-shadow: inset 0 1px 3px rgba(0, 0, 0, .3); }
 html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 .pz-allow-top { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 6px; margin: 0; }
 .pz-num { font-family: var(--e-display); font-size: 28px; font-weight: 700; letter-spacing: -0.03em; color: var(--tc-ink); }
@@ -140,9 +140,9 @@ html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 .pz-list svg { width: 18px; height: 18px; color: var(--tc-ink); stroke-width: 2.2; margin-top: 1px; }
 .pz-cta { margin-top: auto; padding-top: 6px; }
 .pz-btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; padding: 12px 16px; border: 0; border-radius: var(--e-r-md); cursor: pointer; text-decoration: none;
-  font: 700 15.5px var(--e-sans); letter-spacing: -0.005em; color: var(--e-ink); background: color-mix(in srgb, var(--tc) 16%, var(--e-s1)); box-shadow: var(--e-elev-1), inset 0 0 0 1px color-mix(in srgb, var(--tc) 30%, transparent);
+  font: 700 15.5px var(--e-sans); letter-spacing: -0.005em; color: var(--e-ink); background: color-mix(in srgb, var(--tc) 16%, var(--e-s1)); box-shadow: var(--e-elev-1), inset 0 0 0 2px color-mix(in srgb, var(--tc) 50%, transparent);
   transition: transform var(--e-t-press) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease), background-color var(--e-t-hover); }
-.pz-btn:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--tc) 24%, var(--e-s1)); box-shadow: var(--e-elev-2), inset 0 0 0 1px color-mix(in srgb, var(--tc) 55%, transparent); }
+.pz-btn:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--tc) 24%, var(--e-s1)); box-shadow: var(--e-elev-2), inset 0 0 0 2px var(--tc); }
 .pz-btn:active { transform: scale(.98); }
 .pz-btn:disabled { opacity: .6; cursor: progress; }
 .t-flash .pz-btn { color: #1b1300; background: linear-gradient(100deg, #ffd977, #ffb938); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 10px 22px -12px rgba(255, 185, 56, .8); }
@@ -166,12 +166,29 @@ html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 
 /* ---------- which plan fits your semester ---------- */
 .pz-fit { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.pz-fit-col { --tc: var(--e-cyan); --tc-ink: var(--e-cyan-ink); display: grid; align-content: start; gap: 8px; padding: 22px; border-radius: var(--e-r-lg); background: var(--e-s1); box-shadow: var(--e-elev-1); position: relative; overflow: hidden; }
-.pz-fit-col::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 3px; background: var(--tc); opacity: .8; }
+/* "Which plan fits": three cards with a solid white edge (charcoal in light). Pointing at one lifts it, its edge takes the
+   plan's colour, and a crisp lightning line strikes across the top where the colour bar sits (drawn once per hover,
+   no blur, transform/stroke only). */
+.pz-fit-col { --tc: var(--e-cyan); --tc-ink: var(--e-cyan-ink); display: grid; align-content: start; gap: 8px; padding: 22px; border-radius: var(--e-r-lg); position: relative; overflow: hidden;
+  background: var(--e-feature-bg); box-shadow: var(--e-feature); will-change: transform; transition: transform var(--e-t-panel) var(--e-ease); }
+.pz-fit-col::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 4px; background: var(--tc); transition: opacity 160ms var(--e-ease); }
+.pz-fit-col:hover, .pz-fit-col:focus-within { transform: translateY(-5px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 2px var(--tc), 0 6px 14px rgba(0, 0, 0, .35), 0 30px 56px -26px color-mix(in srgb, var(--tc) 75%, transparent); }
+html[data-theme="light"] .pz-fit-col:hover, html[data-theme="light"] .pz-fit-col:focus-within { box-shadow: 0 0 0 2px var(--tc), 0 4px 8px rgba(15, 23, 42, .08), 0 24px 46px -22px color-mix(in srgb, var(--tc) 55%, transparent); }
+.pz-fit-col:hover::before, .pz-fit-col:focus-within::before { opacity: 0; }
+.fit-zap { position: absolute; left: 0; top: 0; width: 100%; height: 24px; overflow: visible; pointer-events: none; }
+.fit-zap path { fill: none; stroke: var(--tc); stroke-width: 3; stroke-linejoin: miter; stroke-linecap: square; vector-effect: non-scaling-stroke; stroke-dasharray: 100 100; stroke-dashoffset: 100; }
+.fit-zap path.hot { stroke: #fff; stroke-width: 1.5; opacity: 0; }
+.pz-fit-col:hover .fit-zap path, .pz-fit-col:focus-within .fit-zap path { animation: e-fit-zap 420ms cubic-bezier(.55, .05, .35, 1) both; }
+.pz-fit-col:hover .fit-zap path.hot, .pz-fit-col:focus-within .fit-zap path.hot { animation: e-fit-zap 420ms cubic-bezier(.55, .05, .35, 1) both, e-fit-hot 700ms ease-out 380ms both; }
+@keyframes e-fit-zap { from { stroke-dashoffset: 100; } to { stroke-dashoffset: 0; } }
+@keyframes e-fit-hot { 0% { opacity: 1; } 100% { opacity: 0; } }
+.pz-fit-col:hover .pz-fit-ic, .pz-fit-col:focus-within .pz-fit-ic { background: var(--tc); color: #fff; }
+.pz-fit-ic { transition: background-color var(--e-t-hover), color var(--e-t-hover); }
+@media (prefers-reduced-motion: reduce) { .pz-fit-col:hover, .pz-fit-col:focus-within { transform: none; } .pz-fit-col .fit-zap path { animation: none !important; stroke-dashoffset: 0; } .fit-zap path.hot { display: none; } }
 .pz-fit-col.t-flash { --tc: var(--e-amber); --tc-ink: var(--e-amber-ink); }
 .pz-fit-col.t-bolt { --tc: var(--e-blue); --tc-ink: var(--e-blue-ink); }
 .pz-fit-col.t-thunder { --tc: var(--e-violet); --tc-ink: var(--e-violet-ink); }
-.pz-fit-ic { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: var(--tc-ink); background: color-mix(in srgb, var(--tc) 15%, transparent); }
+.pz-fit-ic { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: var(--tc-ink); background: color-mix(in srgb, var(--tc) 15%, transparent); }
 .pz-fit-ic svg { width: 20px; height: 20px; }
 .pz-fit-col h3 { margin: 4px 0 0; font-family: var(--e-display); font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
 .pz-fit-line { margin: 0; font: 600 15px var(--e-sans); color: var(--e-ink-2); }
