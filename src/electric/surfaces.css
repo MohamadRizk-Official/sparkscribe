@@ -6,10 +6,15 @@
 
 /* main: a lifted blue-charcoal body with one crisp cool edge (graphite in light) and a deep, soft shadow */
 .transcript-card, .speakers-card, .timeline-card, .ins-card, .cr-browser, .next-steps, .progress.panel,
-.set-card, .acct-card, .pz-table-wrap, .sum-detail {
+.set-card, .acct-card, .pz-table-wrap, .sum-detail, .auth-card,
+.dash-continue, .dash-next, .dash-recent, .dash-courses, .dash-exam {
   background: var(--e-main-bg); box-shadow: var(--e-main);
+  transition: box-shadow 340ms cubic-bezier(.22, .61, .36, 1);
 }
-html[data-theme="light"] :is(.transcript-card, .speakers-card, .timeline-card, .ins-card, .cr-browser, .next-steps, .progress.panel, .set-card, .acct-card, .pz-table-wrap, .sum-detail) { background: var(--e-main-bg); }
+/* panels you act in light their edge a little more on hover; the big reading areas (transcript, study panels) keep a
+   steady edge so nothing flickers while reading */
+:is(.acct-card, .set-card, .auth-card, .dash-continue, .dash-next, .dash-recent, .dash-courses, .dash-exam, .cr-browser):is(:hover, :focus-within) { box-shadow: var(--e-main-hover); }
+html[data-theme="light"] :is(.transcript-card, .speakers-card, .timeline-card, .ins-card, .cr-browser, .next-steps, .progress.panel, .set-card, .acct-card, .pz-table-wrap, .sum-detail, .auth-card, .dash-continue, .dash-next, .dash-recent, .dash-courses, .dash-exam) { background: var(--e-main-bg); }
 
 /* feature: the recommended tools and the plans — more depth, a brighter edge, stronger on hover */
 .ctool.big, .pz-card { background: var(--e-feature-bg); box-shadow: var(--e-feature); }
@@ -59,3 +64,23 @@ html[data-theme="light"] .pz-grid .pz-card.t-free.is-current { box-shadow: 0 0 0
 .pz-grid .pz-card.t-free::before { display: none; }
 .pz-grid .pz-card.t-thunder { --lift: -7px; }
 @media (prefers-reduced-motion: reduce) { .pz-grid .pz-card { transition: box-shadow 200ms linear; } }
+
+/* info banners (Plan & billing status, Pricing notices): a cool-blue lit surface with a clear blue edge, a bright
+   title and a fitted icon tile; informative, never alarming, never green */
+.bill-alert.is-ending, .bill-notice:not(.bad) {
+  background: linear-gradient(135deg, rgba(74, 123, 255, .2), rgba(32, 212, 244, .08) 70%), #102036;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 0 0 2px rgba(98, 160, 255, .55), 0 0 30px -10px rgba(74, 123, 255, .5), 0 14px 30px -18px rgba(0, 0, 0, .8);
+  color: #d8e4f5; }
+.bill-alert.is-ending .ba-title { font: 650 17px var(--e-sans); letter-spacing: -0.01em; color: #fff; }
+.bill-alert.is-ending p { color: #c9d6ea; }
+.bill-alert.is-ending .ba-next { color: #9fb2cc; }
+.bill-alert.is-ending .ba-ic { width: 40px; height: 40px; border-radius: 12px; color: #dbe7ff; background: linear-gradient(160deg, rgba(98, 160, 255, .55), rgba(74, 123, 255, .3)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 6px 14px -6px rgba(74, 123, 255, .7); }
+.bill-notice:not(.bad) b { color: #fff; }
+html[data-theme="light"] .bill-alert.is-ending, html[data-theme="light"] .bill-notice:not(.bad) {
+  background: linear-gradient(135deg, #e6efff, #f2f8ff 70%); color: #22344f;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .55), 0 10px 24px -16px rgba(30, 58, 138, .35); }
+html[data-theme="light"] .bill-alert.is-ending .ba-title { color: #0f2350; }
+html[data-theme="light"] .bill-alert.is-ending p { color: #33476a; }
+html[data-theme="light"] .bill-alert.is-ending .ba-next { color: #4a5f80; }
+html[data-theme="light"] .bill-alert.is-ending .ba-ic { color: #fff; background: linear-gradient(160deg, #3b82f6, #2563eb); box-shadow: 0 6px 14px -6px rgba(37, 99, 235, .6); }
+html[data-theme="light"] .bill-notice:not(.bad) b { color: #0f2350; }
