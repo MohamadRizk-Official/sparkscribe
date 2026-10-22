@@ -24,7 +24,15 @@ export async function run() {
       const names = [...panel().querySelectorAll('[data-tool]')].map((b) => b.dataset.tool);
       assert(new Set(names).size === names.length, `no tool appears twice: ${names}`);
       assert(!panel().querySelector('[data-tool="followup_email"], [data-tool="reply_draft"]'), 'the two draft tools are one Draft entry');
-      assert([...panel().querySelectorAll('.cr-sample-tag')].every((t) => /Example/i.test(t.textContent)), 'every preview is labelled as an example');
+      const big = [...panel().querySelectorAll('.cr-rec .ctool.big')];
+      assert(big.length && big.every((c) => /Example/i.test(c.querySelector('.cr-doc-bar em')?.textContent || '')), 'every recommended preview is labelled as an example');
+      assert(!panel().querySelector('.cr-browser .cr-sample, .cr-browser .cr-doc, .cr-peek'), 'More tools: compact rows, no example previews');
+      // every arrow has room for its hover move (+4px) inside its row (2026-10-22: a 30px circle in an 18px column was clipped)
+      for (const row of panel().querySelectorAll('.cr-row')) {
+        const r = row.getBoundingClientRect(), g = row.querySelector('.ctool-go').getBoundingClientRect(), a = row.querySelector('.ctool-go svg').getBoundingClientRect();
+        assert(g.right <= r.right && a.right + 4 <= g.right, `${row.dataset.tool}: arrow ${Math.round(a.right)} / area ${Math.round(g.right)} / row ${Math.round(r.right)}`);
+      }
+      assert(getComputedStyle(document.getElementById('resTabs')).borderBottomLeftRadius === getComputedStyle(document.getElementById('resTabs')).borderTopLeftRadius, 'tab bar: all four corners match');
     }],
     ['A meeting recommends Meeting Recap, Action Plan and Draft', async () => {
       const rec = [...panel().querySelectorAll('.cr-rec .ctool-name')].map((n) => n.textContent);

@@ -22,27 +22,34 @@ h1, h2, h3, .home-h2, .dash-title, .page-title, .hero-h1 { font-family: var(--e-
    Two light sources (a distant cyan key light top-left, a violet fill low right) + a faint circuit the current runs
    along (src/electric/ambient.js draws it). Everything is static except one slow current; reduced motion stops it. */
 .bg { background: var(--e-canvas); }
-.bg .bg-grid, .bg .bg-glow-c, .bg .bg-sweep, .bg .bg-motif { display: none; }
+.bg .bg-grid, .bg .bg-sweep, .bg .bg-motif { display: none; }
 .bg .bg-glow { filter: none; opacity: 1; animation: none; border-radius: 0; }
-.bg .bg-glow-a { left: -20vw; top: -38vh; width: 90vw; height: 90vh; background: radial-gradient(closest-side, rgba(32, 212, 244, .13), rgba(32, 212, 244, .04) 55%, transparent); }
+.bg .bg-glow-a { left: -20vw; top: -38vh; width: 90vw; height: 90vh; background: radial-gradient(closest-side, rgba(32, 212, 244, .16), rgba(32, 212, 244, .05) 55%, transparent); }
 .bg .bg-glow-b { right: -24vw; left: auto; top: 38vh; width: 80vw; height: 90vh; background: radial-gradient(closest-side, rgba(110, 90, 255, .12), rgba(161, 107, 255, .035) 55%, transparent); }
 .bg .bg-noise { opacity: .035; }
+/* a third, central light: a soft blue-cyan pool behind the working column, so the workspace sits in light and the
+   edges of the room fall into shadow (static; nothing here moves) */
+.bg .bg-glow-c { display: block; left: 50%; right: auto; top: -18vh; bottom: auto; width: 96vw; height: 78vh; transform: translateX(-50%);
+  background: radial-gradient(closest-side, rgba(74, 123, 255, .11), rgba(32, 212, 244, .045) 55%, transparent); }
+.bg::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(130% 95% at 50% 25%, transparent 52%, rgba(2, 6, 12, .5) 100%); }
+html[data-theme="light"] .bg .bg-glow-c { background: radial-gradient(closest-side, rgba(52, 97, 240, .07), rgba(14, 181, 214, .03) 55%, transparent); }
+html[data-theme="light"] .bg::after { background: radial-gradient(130% 95% at 50% 25%, transparent 60%, rgba(40, 60, 100, .06) 100%); }
 html[data-theme="light"] .bg .bg-glow-a { background: radial-gradient(closest-side, rgba(14, 181, 214, .16), rgba(14, 181, 214, .05) 55%, transparent); }
 html[data-theme="light"] .bg .bg-glow-b { background: radial-gradient(closest-side, rgba(124, 74, 232, .11), rgba(52, 97, 240, .04) 55%, transparent); }
 html[data-theme="light"] .bg .bg-noise { opacity: .025; }
-.e-circuit { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.e-circuit { -webkit-mask-image: radial-gradient(120% 100% at 50% 50%, transparent 38%, #000 75%); mask-image: radial-gradient(120% 100% at 50% 50%, transparent 38%, #000 75%); }
+.e-circuit { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
+/* no mask and no filters: a full-viewport masked or filtered layer is repainted on every frame the current runs */
 .e-circuit .ec-trace { fill: none; stroke: rgba(170, 196, 235, .07); stroke-width: 1; }
 .e-circuit .ec-node { fill: var(--e-canvas); stroke: rgba(170, 196, 235, .14); stroke-width: 1; }
 /* the current (electric/chrome.js runCurrents): a crisp bright core over a controlled cyan glow, and a spark at the
    node it reaches. Dash and timing are set per run from the trace's real length. */
 .e-circuit .ec-glow, .e-circuit .ec-core { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 16 100; stroke-dashoffset: 16; opacity: 0; }
-.e-circuit .ec-glow { stroke: #20d4f4; stroke-width: 7; filter: blur(3px); }
-.e-circuit .ec-core { stroke: #dffbff; stroke-width: 1.8; filter: drop-shadow(0 0 2px #20d4f4); }
-.e-circuit .ec-spark { fill: #dffbff; opacity: 0; transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 6px #20d4f4) drop-shadow(0 0 12px rgba(32, 212, 244, .6)); }
+.e-circuit .ec-glow { stroke: #20d4f4; stroke-opacity: .28; stroke-width: 7; }
+.e-circuit .ec-core { stroke: #dffbff; stroke-width: 1.8; }
+.e-circuit .ec-spark { fill: #dffbff; stroke: rgba(32, 212, 244, .45); stroke-width: 8; opacity: 0; transform-box: fill-box; transform-origin: center; }
 html[data-theme="light"] .e-circuit .ec-glow { stroke: rgba(14, 181, 214, .45); stroke-width: 5; }
 html[data-theme="light"] .e-circuit .ec-core { stroke: #0b8fb0; filter: none; }
-html[data-theme="light"] .e-circuit .ec-spark { fill: #0eb5d6; filter: drop-shadow(0 0 6px rgba(14, 181, 214, .6)); }
+html[data-theme="light"] .e-circuit .ec-spark { fill: #0eb5d6; stroke: rgba(14, 181, 214, .3); }
 html[data-theme="light"] .e-circuit .ec-trace { stroke: rgba(20, 45, 90, .07); }
 @media (max-width: 760px) { .e-circuit { display: none; } }
 

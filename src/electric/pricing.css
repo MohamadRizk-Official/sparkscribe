@@ -51,11 +51,18 @@ html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color
 .pz-card.t-free { --tc: var(--e-cyan); --tc-ink: var(--e-cyan-ink); }
 .pz-card.t-flash { --tc: var(--e-amber); --tc-ink: var(--e-amber-ink); }
 .pz-card.t-bolt { --tc: var(--e-blue); --tc-ink: var(--e-blue-ink); }
+/* Thunder: the strongest plan, carried by its material rather than an outline. A violet-graphite body lit from the top
+   right, the same neutral edge as every plan, a violet light cast beneath the card (offset, never a ring), and a solid
+   accent band across the top that a current runs along on hover (.pz-fx below). */
 .pz-card.t-thunder { --tc: var(--e-violet); --tc-ink: var(--e-violet-ink);
-  background: radial-gradient(120% 80% at 100% 0%, color-mix(in srgb, var(--e-violet) 22%, transparent), transparent 60%), radial-gradient(90% 60% at 0% 100%, color-mix(in srgb, var(--e-magenta) 12%, transparent), transparent 70%), var(--e-s1);
-  box-shadow: var(--e-elev-2), inset 0 0 0 1px color-mix(in srgb, var(--e-violet) 28%, transparent); }
-html[data-theme="light"] .pz-card.t-thunder { background: radial-gradient(120% 80% at 100% 0%, rgba(124, 74, 232, .1), transparent 60%), radial-gradient(90% 60% at 0% 100%, rgba(207, 60, 149, .06), transparent 70%), #fff; }
-.pz-card.t-thunder:hover, .pz-card.t-thunder:focus-within { transform: translateY(-8px); box-shadow: var(--e-elev-3), inset 0 0 0 1px color-mix(in srgb, var(--e-violet) 45%, transparent), 0 30px 60px -26px color-mix(in srgb, var(--e-violet) 90%, transparent); }
+  background: radial-gradient(110% 70% at 100% 0%, rgba(161, 107, 255, .26), transparent 58%), radial-gradient(80% 50% at 0% 100%, rgba(234, 98, 186, .08), transparent 70%), linear-gradient(180deg, #1c1a44 0%, #151b36 50%, #121d31 100%);
+  box-shadow: inset 0 1px 0 rgba(230, 215, 255, .14), 0 0 0 1px rgba(185, 175, 255, .2), 0 4px 10px rgba(0, 0, 0, .35), 0 36px 80px -32px rgba(161, 107, 255, .7), 0 30px 64px -26px rgba(0, 0, 0, .9); }
+html[data-theme="light"] .pz-card.t-thunder { background: radial-gradient(110% 70% at 100% 0%, rgba(124, 74, 232, .12), transparent 58%), linear-gradient(180deg, #fbf9ff, #fff 60%);
+  box-shadow: 0 0 0 1px rgba(40, 20, 90, .32), 0 2px 4px rgba(15, 23, 42, .07), 0 30px 60px -26px rgba(124, 74, 232, .45); }
+.pz-card.t-thunder:hover, .pz-card.t-thunder:focus-within { transform: translateY(-8px);
+  box-shadow: inset 0 1px 0 rgba(230, 215, 255, .18), 0 0 0 1px rgba(195, 185, 255, .32), 0 8px 16px rgba(0, 0, 0, .35), 0 46px 90px -30px rgba(161, 107, 255, .85), 0 40px 74px -28px rgba(0, 0, 0, .95); }
+html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-card.t-thunder:focus-within { box-shadow: 0 0 0 1px rgba(40, 20, 90, .42), 0 4px 8px rgba(15, 23, 42, .08), 0 40px 72px -26px rgba(124, 74, 232, .55); }
+.t-thunder:hover .pz-btn, .t-thunder:focus-within .pz-btn { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .34), 0 16px 32px -12px rgba(161, 107, 255, 1); filter: brightness(1.07); }
 .pz-card.is-current { box-shadow: var(--e-elev-1), inset 0 0 0 2px color-mix(in srgb, var(--tc) 60%, transparent); }
 .pz-card.is-selected { box-shadow: var(--e-elev-2), inset 0 0 0 2px var(--tc); }
 .pz-card { scroll-margin-top: 92px; }
@@ -74,13 +81,10 @@ html[data-theme="light"] .pz-card.t-thunder { background: radial-gradient(120% 8
 .t-bolt .pz-fx::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, #8fd1ff, var(--e-blue), transparent); background-size: 40% 100%; background-repeat: no-repeat; background-position: -40% 0; opacity: 0; }
 .t-bolt:hover .pz-fx::after, .t-bolt:focus-within .pz-fx::after { animation: fx-current 800ms var(--e-ease) 1 both; }
 @keyframes fx-current { 0% { background-position: -40% 0; opacity: 1; } 100% { background-position: 140% 0; opacity: 1; } }
-.t-thunder .pz-fx { top: 0; left: 0; right: 0; height: 120px; }
-.t-thunder .pz-fx svg { width: 100%; height: 120px; }
-.fx-thunder path { stroke: var(--e-violet); stroke-width: 1.4; opacity: .28; stroke-dasharray: 600; stroke-dashoffset: 0; }
-.fx-thunder path.b { stroke: var(--e-cyan); opacity: .16; }
-.t-thunder:hover .fx-thunder path, .t-thunder:focus-within .fx-thunder path { animation: fx-arc 1100ms var(--e-ease) 1 both; }
-.t-thunder:hover .fx-thunder path.b, .t-thunder:focus-within .fx-thunder path.b { animation-delay: 140ms; }
-@keyframes fx-arc { 0% { stroke-dashoffset: 600; opacity: .1; filter: none; } 55% { opacity: .95; filter: drop-shadow(0 0 5px var(--e-violet)); } 100% { stroke-dashoffset: 0; opacity: .32; filter: none; } }
+.t-thunder .pz-fx { top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #8a5cff, #a16bff 60%, #c38bff); opacity: .9; }
+.t-thunder .pz-fx svg { display: none; }
+.t-thunder .pz-fx::after { content: ""; position: absolute; inset: -1px 0; background: linear-gradient(90deg, transparent, #f3e9ff, #c9a6ff, transparent); background-size: 30% 100%; background-repeat: no-repeat; background-position: -30% 0; opacity: 0; filter: drop-shadow(0 0 4px #c39bff); }
+.t-thunder:hover .pz-fx::after, .t-thunder:focus-within .pz-fx::after { animation: fx-current 700ms cubic-bezier(.55, .05, .35, 1) 1 both; }
 
 .pz-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .pz-ic { display: grid; place-items: center; width: 44px; height: 44px; flex: none; border-radius: 14px; border: 0; color: var(--tc-ink); background: color-mix(in srgb, var(--tc) 15%, transparent); box-shadow: none; transition: transform 420ms var(--e-ease-snap); }
@@ -235,7 +239,7 @@ html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 @media (prefers-reduced-motion: reduce) {
   .pz-card, .flow-ic { transition: box-shadow var(--e-t-hover); }
   .pz-card:hover, .pz-card:focus-within, .pz-card.t-thunder:hover, .flow-step:hover .flow-ic { transform: none; }
-  .fx-flash path, .fx-thunder path, .t-bolt .pz-fx::after, .pz-swap .pz-amt, .pz-swap .pz-per, .pz-swap .pz-then { animation: none !important; }
+  .fx-flash path, .t-thunder .pz-fx::after, .t-bolt .pz-fx::after, .pz-swap .pz-amt, .pz-swap .pz-per, .pz-swap .pz-then { animation: none !important; }
   .pz-card:hover .pz-ic { transform: none; }
   .segctl-ind { transition: none; }
 }

@@ -79,13 +79,15 @@ const TOOL_SAMPLE = {
   study_guide: '<b class="sx-h">Cellular respiration</b><span class="sx-l"><i>Key idea</i> Cells turn glucose into usable energy.</span><span class="sx-l"><i>Concept</i> ATP stores energy for the cell.</span><span class="sx-l"><i>Review</i> Why does the cell need ATP?</span>',
   flashcards: '<span class="sx-card"><span class="sx-front">What is ATP?</span><span class="sx-back">The main energy-carrying molecule cells use.</span></span>',
   quiz: '<b class="sx-q">What does the mitochondrion do?</b><span class="sx-o">A. Builds proteins</span><span class="sx-o ok">B. Produces energy</span><span class="sx-o">C. Copies DNA</span>',
-  meeting_recap: '<span class="sx-l"><i>Overview</i> Launch moved to May 12.</span><span class="sx-l"><i>Decisions</i> Price stays at $7.99.</span><span class="sx-l"><i>Action items</i> Hadi sends the proposal by Friday.</span><span class="sx-l"><i>Open</i> Yearly plan?</span>',
-  action_plan: '<span class="sx-task"><b>Send revised proposal</b><span>Hadi · by Friday</span></span><span class="sx-task"><b>Check shipping costs</b><span>Lina · next week</span></span>',
-  draft: '<span class="sx-mail"><b>Subject: Next steps from today</b><span>Hi Sam, thanks for the call. As agreed, the price stays at $7.99 and…</span></span>',
+  meeting_recap: '<span class="sx-sec"><i>Highlights</i><span>Launch moves to May 12.</span></span><span class="sx-sec"><i>Decisions made</i><span>Price stays at $7.99.</span></span><span class="sx-sec"><i>Tasks</i><span>Hadi sends the proposal by Friday.</span></span><span class="sx-sec"><i>Next steps</i><span>Review the yearly plan.</span></span>',
+  action_plan: '<span class="sx-task"><b>Confirm project scope</b><span>Lina · today</span></span><span class="sx-task"><b>Send design proposal</b><span>Hadi · by Friday</span></span><span class="sx-task"><b>Schedule follow-up</b><span>Sam · next week</span></span>',
+  draft: '<span class="sx-mail"><span class="sx-mail-to">To: Sam</span><b>Subject: Following up</b><span>Hi Sam, thanks again for meeting with us. As agreed, the price stays at $7.99 and…</span></span>',
   interview_qa: '<span class="sx-l"><i>Q</i> How did you get started?</span><span class="sx-l"><i>A</i> “I was teaching myself at night, after work.”</span>',
   episode_notes: '<span class="sx-l"><i>Summary</i> Two founders on pricing for students.</span><span class="sx-l"><i>00:00</i> Intro · <i>12:40</i> The survey</span><span class="sx-l"><i>Takeaway</i> Ask before you price.</span>',
   export: '<span class="sx-formats"><span>PDF</span><span>Word</span><span>Markdown</span><span>Text</span><span>Subtitles</span></span>',
 };
+// the title on a recommended tool's miniature document
+const SAMPLE_TITLE = { study_guide: 'Study guide', flashcards: 'Flashcard', quiz: 'Practice quiz', meeting_recap: 'Meeting recap', action_plan: 'Action plan', draft: 'Email draft', interview_qa: 'Interview Q&A', episode_notes: 'Episode notes' };
 const SUMMARY_IC = '<path d="M5 6h14M5 11h14M5 16h9"/>';
 export const toolsFor = (type) => ({ tools: CATALOG[type] || CATALOG.general });
 // Every tool works on any recording; the type only decides which are suggested first. All tools are always one
@@ -322,17 +324,17 @@ export function createToolsUI(api) {
     const ready = cls === 'ok' || cls === 'warn' || cls === 'busy';
     const go = svg('<path d="M5 12h13m0 0-5-5m5 5-5 5"/>');
     if (!big) {
+      // More tools: one compact row per tool (no example underneath: the recommended tools carry those)
       return `<li class="cr-row-wrap"><button type="button" class="ctool cr-row c-${card.c}" data-tool="${kind}">
         <span class="ctool-ic" aria-hidden="true">${svg(card.ic)}</span>
         <span class="ctool-body"><span class="ctool-name">${esc(info.label)}</span><span class="ctool-line">${esc(card.line)}</span></span>
         <span class="ctool-state ${cls}">${esc(ready ? label : '')}</span><span class="ctool-go" aria-hidden="true">${go}</span>
-      </button><button type="button" class="cr-peek" aria-expanded="false" aria-label="Show an example of ${esc(info.label)}">Example</button>
-      <div class="cr-sample" aria-hidden="true"><span class="cr-sample-tag">Example</span>${TOOL_SAMPLE[kind] || ''}</div></li>`;
+      </button></li>`;
     }
     return `<button type="button" class="ctool big c-${card.c}" data-tool="${kind}">
       <span class="ctool-top"><span class="ctool-ic" aria-hidden="true">${svg(card.ic)}</span><span class="ctool-state ${cls}">${esc(label)}</span></span>
       <span class="ctool-body"><span class="ctool-name">${esc(info.label)}</span><span class="ctool-line">${esc(card.line)}</span></span>
-      <span class="cr-sample" aria-hidden="true"><span class="cr-sample-tag">Example</span>${TOOL_SAMPLE[kind] || ''}</span>
+      <span class="cr-doc" aria-hidden="true"><span class="cr-doc-bar"><i></i><b>${esc(SAMPLE_TITLE[kind] || info.label)}</b><em>Example</em></span><span class="cr-sample">${TOOL_SAMPLE[kind] || ''}</span></span>
       <span class="ctool-cta">${ready ? 'Open' : kind === 'draft' ? 'Start a draft' : `Create ${esc(info.label)}`}${go}</span>
     </button>`;
   }
@@ -987,11 +989,6 @@ export function createToolsUI(api) {
   // ---------- events ----------
   function bind(p) {
     p.querySelectorAll('[data-goto]').forEach((b) => b.addEventListener('click', () => api.showTab(b.dataset.goto)));
-    p.querySelectorAll('.cr-peek').forEach((b) => b.addEventListener('click', () => {
-      const open = !b.parentElement.classList.contains('show');
-      b.parentElement.classList.toggle('show', open);
-      b.setAttribute('aria-expanded', String(open));
-    }));
     p.querySelectorAll('.ctool.big, .cr-row').forEach((b) => b.addEventListener('pointerenter', (e) => {
       if (e.pointerType !== 'mouse') return;
       const r = b.getBoundingClientRect();

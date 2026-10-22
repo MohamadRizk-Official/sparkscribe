@@ -98,7 +98,7 @@ html[data-theme="light"] .bill-alert.is-ending { background: #edf2f9; box-shadow
 @media (max-width: 860px) {
   .set-app { grid-template-columns: minmax(0, 1fr); }
   .set-nav { grid-column: 1; grid-row: auto; position: sticky; top: 64px; z-index: 5; display: flex; gap: 4px; overflow-x: auto; padding: 8px 0; margin: 0 -4px;
-    background: color-mix(in srgb, var(--e-canvas) 90%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); scrollbar-width: none; }
+    background: var(--e-canvas); -webkit-backdrop-filter: none; backdrop-filter: none; scrollbar-width: none; }
   .set-nav a { flex: none; white-space: nowrap; }
   .set-nav a[aria-current]::before { left: 12px; right: 12px; top: auto; bottom: 2px; width: auto; height: 2px; }
   .set-card { grid-column: 1; }

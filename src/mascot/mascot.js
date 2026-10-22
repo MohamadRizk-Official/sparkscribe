@@ -110,7 +110,7 @@ export function mountMascot({ page = 'other' } = {}) {
     k = H / (DIM.foot + DIM.top);
     sc = k / 38;
     S = Math.ceil(VIEW * k);
-    dpr = Math.min(window.devicePixelRatio || 1, touch ? 1.5 : 2);
+    dpr = Math.min(window.devicePixelRatio || 1, 1.5); // antialiased 3D at 2× cost 4× the pixels for no visible gain at this size
     stageEl.style.width = stageEl.style.height = `${S}px`;
     hit.style.width = hit.style.height = `${(2.25 * k).toFixed(0)}px`;
     shadowEl.style.width = `${(1.9 * k).toFixed(0)}px`; shadowEl.style.height = `${(0.34 * k).toFixed(0)}px`;
@@ -301,6 +301,9 @@ export function mountMascot({ page = 'other' } = {}) {
     raf = 0;
     if (!running) return;
     raf = requestAnimationFrame(frame);
+    // at most ~60 steps a second whatever the display's refresh rate (on 144/240 Hz screens the 3D scene ran 2–4× as
+    // often as needed and kept the GPU busy: measured 128 draws/s while idle on a 240 Hz display)
+    if (ts - lastTs < 15) return;
     const dt = Math.min(0.05, Math.max(0.001, (ts - lastTs) / 1000)) * devSlow;
     lastTs = ts;
     clock += dt;
@@ -323,14 +326,15 @@ export function mountMascot({ page = 'other' } = {}) {
       const A = perchAnchor();
       if (!A) perchWanted = false; else if (A.visible) { perchWanted = false; run(perchOn); }
     }
-    // standing still and just breathing: 30 frames a second is plenty (saves battery)
+    // standing still and just breathing: 24 draws a second is plenty (by time, not every other frame, which still
+    // meant 72–120 draws a second on fast displays)
     const still = mode === 'stand' && !loco && speed < 1 && !yawTw && !anim.playing && Math.abs(spr.sqV) + Math.abs(spr.leanV) + Math.abs(spr.gemV) < 0.02;
     drawDt += dt;
-    if (still && (frameN++ & 1)) return;
+    if (still && drawDt < 1 / 24) return;
     draw(drawDt);
     drawDt = 0;
   }
-  let frameN = 0, drawDt = 0;
+  let drawDt = 0;
   // reduce motion: no movement at all; the speaker and gem still show state with light, drawn ~10× a second
   function calmFrame(dt) {
     calmTick += dt;

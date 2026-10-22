@@ -76,11 +76,11 @@ const LOOK = {
   },
 };
 // one decorative effect per tier, drawn once and only played on hover/focus (CSS): Flash ignites, Bolt's current
-// runs along a power track, Thunder's arc connects across the card
+// runs along a power track, a current runs along Thunder's accent band
 const FX = {
   flash: '<svg class="fx-flash" viewBox="0 0 120 40" aria-hidden="true"><path d="M2 30h22l8-14 9 20 8-26 8 18h61"/></svg>',
   bolt: '<svg class="fx-bolt" viewBox="0 0 300 6" preserveAspectRatio="none" aria-hidden="true"><path d="M0 3h300"/></svg>',
-  thunder: '<svg class="fx-thunder" viewBox="0 0 300 120" preserveAspectRatio="none" aria-hidden="true"><path d="M-4 86 44 70l18 22 36-50 28 34 30-42 26 30 40-48 26 36 36-26"/><path class="b" d="M-4 96 60 80l26 18 40-36 34 30 40-30 30 22 78-40"/></svg>',
+  thunder: '<i aria-hidden="true"></i>', // the accent band itself is the effect (pricing.css)
 };
 const lookFor = (p, i, list) => LOOK[p.key] || {
   theme: p.billing_interval ? (i === list.length - 1 ? 'thunder' : 'bolt') : 'free',

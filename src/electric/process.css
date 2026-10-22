@@ -84,7 +84,12 @@ html[data-theme="light"] .ns-step:hover { background: #fff; }
 .timeline-card { padding: 16px 20px 18px; border-radius: var(--e-r-lg); background: var(--e-s1); box-shadow: var(--e-elev-1); border: 0; animation: none; }
 .card-label { font: 600 13px var(--e-sans); letter-spacing: 0; text-transform: none; color: var(--e-ink-3); }
 .card-label span { font: 500 12.5px var(--e-sans); color: var(--e-ink-4); }
-.playhead { background: var(--e-ink); }
+/* the playback position (main.js updatePlayhead; 0:00 until audio plays): a cyan line with a round knob, so at rest it
+   reads as the player's position, not as a stray border */
+.playhead { top: -6px; bottom: -2px; width: 2px; margin-left: -1px; border-radius: 2px; background: linear-gradient(180deg, var(--e-cyan), color-mix(in srgb, var(--e-cyan) 35%, transparent)); box-shadow: 0 0 8px color-mix(in srgb, var(--e-cyan) 45%, transparent); transition: left 120ms linear; }
+.playhead::before { top: -5px; width: 10px; height: 10px; background: var(--e-cyan); box-shadow: 0 0 0 3px color-mix(in srgb, var(--e-cyan) 22%, transparent), 0 0 10px var(--e-glow-cyan); }
+html[data-theme="light"] .playhead { background: linear-gradient(180deg, #0b8fb0, rgba(11, 143, 176, .35)); box-shadow: none; }
+html[data-theme="light"] .playhead::before { background: #0b8fb0; box-shadow: 0 0 0 3px rgba(14, 181, 214, .2); }
 .tl-hover { font-family: var(--e-sans); border: 0; background: var(--e-s2); box-shadow: var(--e-elev-3); border-radius: 8px; }
 
 /* speakers: compact rows with a share bar, same colours as the transcript */

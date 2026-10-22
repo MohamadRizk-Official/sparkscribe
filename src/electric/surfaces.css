@@ -1,0 +1,21 @@
+/* ELECTRIC — surface hierarchy. One place decides which role a large surface plays (tokens.css: --e-main,
+   --e-feature, --e-card), so the canvas, the working areas, the featured cards and the list items read as separate
+   layers in both themes. Small controls (buttons, inputs, chips) are left to base.css: they get no edges here.
+
+   canvas → main (working areas) → feature (recommended / premium) → overlays (menus, player: elev-3) */
+
+/* main: a lifted blue-charcoal body with one crisp cool edge (graphite in light) and a deep, soft shadow */
+.transcript-card, .speakers-card, .timeline-card, .ins-card, .cr-browser, .next-steps, .progress.panel,
+.set-card, .acct-card, .pz-table-wrap, .sum-detail {
+  background: var(--e-main-bg); box-shadow: var(--e-main);
+}
+html[data-theme="light"] :is(.transcript-card, .speakers-card, .timeline-card, .ins-card, .cr-browser, .next-steps, .progress.panel, .set-card, .acct-card, .pz-table-wrap, .sum-detail) { background: var(--e-main-bg); }
+
+/* feature: the recommended tools and the plans — more depth, a brighter edge, stronger on hover */
+.ctool.big, .pz-card { background: var(--e-feature-bg); box-shadow: var(--e-feature); }
+.ctool.big:hover, .ctool.big:focus-visible { box-shadow: var(--e-feature-hover), 0 22px 40px -24px color-mix(in srgb, var(--tc) 80%, transparent); }
+.pz-card:hover, .pz-card:focus-within { box-shadow: var(--e-feature-hover), 0 26px 50px -28px color-mix(in srgb, var(--tc) 85%, transparent); }
+
+/* card: list items people click — soft shadow and surface contrast; their hover rules stay where they are */
+.lib-card, .folder-tile, .sr-item { box-shadow: var(--e-card); }
+html[data-theme="light"] .ns-step { box-shadow: var(--e-card); }

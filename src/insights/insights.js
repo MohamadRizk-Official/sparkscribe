@@ -592,7 +592,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
         const sections = NOTES_INTRO[t].replace(/\.$/, '').split(/, (?:and )?| and /).slice(0, 5);
         html += `<div class="notes-empty"><div class="ne-text"><h3>Your notes, organized</h3><p>${esc(NOTES_INTRO[t])} Only what was said in this recording, nothing added.</p>
           <button class="btn btn-primary ne-make" type="button" data-act="notes-make">${ICON.spark}<span>${t === 'lecture' ? 'Make lecture notes' : t === 'meeting' ? 'Make meeting notes' : 'Make notes'}</span></button>${privacyLine}</div>
-          <div class="ne-preview" aria-hidden="true"><span class="cr-sample-tag">What you'll get</span>${sections.map((x, i) => `<span class="ne-sec"><b>${esc(x.charAt(0).toUpperCase() + x.slice(1))}</b><i style="--w:${[82, 64, 74, 58, 70][i]}%"></i><i style="--w:${[56, 70, 48, 66, 52][i]}%"></i></span>`).join('')}</div></div>`;
+          <div class="ne-preview" aria-hidden="true"><span class="cr-sample-tag">What you'll get</span>${sections.map((x, i) => `<span class="ne-sec" style="--i:${i}"><b>${esc(x.charAt(0).toUpperCase() + x.slice(1))}</b><i style="--w:${[82, 64, 74, 58, 70][i]}%"></i><i style="--w:${[56, 70, 48, 66, 52][i]}%"></i></span>`).join('')}</div></div>`;
       }
     } else {
       if (stale.length && !busy) html += `<div class="ins-msg warn">${ICON.refresh}<span>The transcript changed after these notes were made (for example, a speaker was renamed), so they may be out of date.</span><button class="btn btn-ghost btn-sm" type="button" data-act="notes-update">Update</button></div>`;

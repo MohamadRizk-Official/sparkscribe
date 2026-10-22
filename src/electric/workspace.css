@@ -47,11 +47,12 @@
 .ws-menu .danger { color: var(--e-red-ink); }
 
 /* ---------- workspace tabs: text, one electric line, sticky under the header on long documents ---------- */
-/* the strip is a surface with softly rounded top corners (not a pill; the bottom stays square where it meets the
-   rule), so it reads as the top of the workspace, also while it sticks under the header */
-#resTabs.tabs { position: sticky; top: 60px; z-index: 20; display: flex; width: 100%; gap: 4px; padding: 0 12px; margin: 0; border: 0; border-radius: 12px 12px 0 0; overflow-x: auto; scrollbar-width: none;
-  background: color-mix(in srgb, var(--e-s1) 78%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 var(--e-hi), inset 0 -1px 0 var(--e-rule); }
-html[data-theme="light"] #resTabs.tabs { background: color-mix(in srgb, #fff 82%, transparent); box-shadow: inset 0 0 0 1px var(--e-rule); }
+/* the strip is one navigation surface: all four corners rounded (12px, not a pill), one edge in the main-surface
+   style, the selected line crisp along its bottom; it stays itself while it sticks under the header */
+#resTabs.tabs { position: sticky; top: 60px; z-index: 20; display: flex; width: 100%; gap: 4px; padding: 0 12px; margin: 0; border: 0; border-radius: 12px; overflow-x: auto; scrollbar-width: none;
+  background: #12223a; -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 0 0 1px rgba(150, 190, 240, .16), 0 10px 26px -16px rgba(0, 0, 0, .8); }
+html[data-theme="light"] #resTabs.tabs { background: #fff; box-shadow: 0 0 0 1px rgba(15, 23, 42, .32), 0 8px 22px -16px rgba(15, 23, 42, .3); }
 #resTabs .tab { flex: none; position: relative; z-index: 1; padding: 14px 8px 15px; margin-right: 18px; border: 0; border-radius: 0; background: none; box-shadow: none;
   font: 500 16px var(--e-sans); letter-spacing: -0.01em; text-transform: none; color: var(--e-ink-3); transition: color var(--e-t-hover) var(--e-ease); }
 #resTabs .tab:hover { color: var(--e-ink); background: none; }
@@ -94,8 +95,8 @@ html[data-theme="light"] .who, html[data-theme="light"] .transcript .avatar, htm
 .playerbar {
   position: fixed; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 50;
   width: min(920px, calc(100vw - 24px)); display: flex; align-items: center; gap: 8px; padding: 10px 14px 10px 10px;
-  border: 0; border-radius: var(--e-r-lg); background: color-mix(in srgb, var(--e-s2) 94%, transparent);
-  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%); box-shadow: var(--e-elev-3);
+  border: 0; border-radius: var(--e-r-lg); background: var(--e-s2);
+  -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: var(--e-elev-3);
 }
 .playerbar.hidden { display: none; }
 .pb-btn { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border: 0; border-radius: 12px; background: none; color: var(--e-ink-2); cursor: pointer;

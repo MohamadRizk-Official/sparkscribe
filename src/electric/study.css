@@ -62,19 +62,40 @@
 .note-list li { font-size: 15.5px; line-height: 1.6; color: var(--e-ink-2); }
 /* Notes before they exist: the heading starts at the top of the card, the one action leads, the AI disclosure follows
    it in small print; the preview on the right shows the sections this kind of recording gets */
-.notes-empty { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 32px; align-items: start; padding: 0; }
-.ne-text { display: grid; gap: 10px; justify-items: start; }
+/* Notes before they exist. Left: heading, one sentence, the action; the AI disclosure sits at the bottom of the
+   column (margin-top: auto), away from the button. Right: the preview of what the notes look like. Pointing at (or
+   focusing) the button lifts the preview like a page being picked up: it rises, its shadow grows, it brightens, a
+   short current runs down its sections and they settle one after another. It stays up while the button is hovered
+   and comes back down when the pointer leaves; nothing loops. */
+.notes-empty { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 32px; align-items: stretch; padding: 0; }
+.ne-text { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 .notes-empty h3 { margin: 0; font-size: clamp(23px, 2.2vw, 27px); }
 .ne-text p { margin: 0; color: var(--e-ink-2); font-size: 15.5px; line-height: 1.6; max-width: 54ch; }
-.ne-text .btn.ne-make { margin-top: 10px; min-height: 48px; padding: 12px 22px; font-size: 15.5px; border-radius: var(--e-r-md); }
+.ne-text .btn.ne-make { margin-top: 12px; min-height: 48px; padding: 12px 22px; font-size: 15.5px; border-radius: var(--e-r-md); }
 .ne-make svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-.ne-text .ins-privacy { margin-top: 4px; max-width: 54ch; font-size: 12.5px; }
-.ne-preview { position: relative; display: grid; gap: 14px; padding: 20px 20px 18px; border-radius: var(--e-r-lg); background: var(--e-s0); box-shadow: var(--e-elev-0); }
-html[data-theme="light"] .ne-preview { background: var(--e-s3); box-shadow: none; }
-.ne-sec { display: grid; gap: 6px; padding-left: 12px; position: relative; }
-.ne-sec::before { content: ""; position: absolute; left: 0; top: 5px; width: 4px; height: 10px; border-radius: 2px; background: var(--e-charge); opacity: .85; }
+.ne-text .ins-privacy { margin-top: auto; padding-top: 20px; max-width: 54ch; font-size: 13px; line-height: 1.55; color: var(--e-ink-3); }
+.ne-preview { position: relative; display: grid; gap: 14px; padding: 20px 20px 18px; border-radius: var(--e-r-lg); overflow: hidden;
+  background: linear-gradient(180deg, #13284a, #0e1d33); box-shadow: inset 0 1px 0 rgba(190, 220, 255, .1), 0 0 0 1px rgba(130, 175, 240, .18), 0 8px 18px -12px rgba(0, 0, 0, .6);
+  transition: transform 340ms var(--e-ease), box-shadow 340ms var(--e-ease), filter 340ms var(--e-ease); }
+html[data-theme="light"] .ne-preview { background: #f8fafd; box-shadow: 0 0 0 1px rgba(15, 23, 42, .18), 0 8px 18px -12px rgba(15, 23, 42, .26); }
+.ne-sec { --i: 0; display: grid; gap: 6px; padding-left: 12px; position: relative; transition: transform 260ms var(--e-ease) calc(var(--i) * 45ms); }
+.ne-sec::before { content: ""; position: absolute; left: 0; top: 5px; width: 4px; height: 10px; border-radius: 2px; background: var(--e-charge); opacity: .85; transition: box-shadow 260ms var(--e-ease) calc(var(--i) * 45ms); }
 .ne-sec b { font: 600 13.5px var(--e-sans); color: var(--e-ink-2); }
 .ne-sec i { display: block; height: 6px; width: var(--w); border-radius: 4px; background: color-mix(in srgb, var(--e-ink) 10%, transparent); }
+/* the current: one bright segment runs once down the section markers when the preview is picked up */
+.ne-preview::after { content: ""; position: absolute; left: 21px; top: 0; width: 4px; height: 60px; border-radius: 2px; pointer-events: none; opacity: 0;
+  background: linear-gradient(180deg, transparent, #bff6ff 45%, #20d4f4 60%, transparent); transform: translateY(-70px); }
+.notes-empty:has(.ne-make:hover, .ne-make:focus-visible) .ne-preview { transform: translateY(-7px); filter: brightness(1.08);
+  box-shadow: inset 0 1px 0 rgba(190, 220, 255, .16), 0 0 0 1px rgba(150, 200, 255, .32), 0 26px 44px -18px rgba(0, 0, 0, .8), 0 0 40px -18px var(--e-glow-cyan); }
+html[data-theme="light"] .notes-empty:has(.ne-make:hover, .ne-make:focus-visible) .ne-preview { filter: none; box-shadow: 0 0 0 1px rgba(15, 23, 42, .26), 0 24px 40px -18px rgba(15, 23, 42, .34), 0 0 0 4px rgba(14, 181, 214, .1); }
+.notes-empty:has(.ne-make:hover, .ne-make:focus-visible) .ne-sec { transform: translateY(-2px); }
+.notes-empty:has(.ne-make:hover, .ne-make:focus-visible) .ne-sec::before { box-shadow: 0 0 8px var(--e-glow-cyan); }
+.notes-empty:has(.ne-make:hover, .ne-make:focus-visible) .ne-preview::after { animation: e-ne-current 720ms cubic-bezier(.55, .05, .35, 1) 120ms 1 both; }
+@keyframes e-ne-current { 0% { opacity: 0; transform: translateY(-70px); } 15% { opacity: 1; } 85% { opacity: 1; } 100% { opacity: 0; transform: translateY(330px); } }
+@media (prefers-reduced-motion: reduce) {
+  .notes-empty:has(.ne-make:hover, .ne-make:focus-visible) .ne-preview, .notes-empty:has(.ne-make:hover, .ne-make:focus-visible) .ne-sec { transform: none; }
+  .ne-preview::after { display: none; }
+}
 
 /* ---------- Ask: a grounded conversation ---------- */
 .ask-card { display: grid; gap: 14px; }
@@ -145,51 +166,69 @@ html[data-theme="light"] .ask-across { background: linear-gradient(100deg, color
 .ctool-cta { display: inline-flex; align-items: center; gap: 6px; font: 600 14.5px var(--e-sans); color: var(--e-cyan-ink); }
 .ctool-cta svg { width: 16px; height: 16px; transition: transform var(--e-t-hover) var(--e-ease); }
 .ctool.big:hover .ctool-cta svg { transform: translateX(4px); }
-/* the example: what this tool makes, in its real shape (made up, and labelled so) */
-.cr-sample { position: relative; display: grid; gap: 5px; padding: 12px 12px 11px; border-radius: var(--e-r-sm); background: var(--e-s0); box-shadow: inset 0 0 0 1px var(--e-rule);
-  font-size: 12.5px; line-height: 1.4; color: var(--e-ink-2); text-align: left; }
-html[data-theme="light"] .cr-sample { background: var(--e-s3); }
+/* the example on a recommended tool: a miniature of the document it makes (made up, and labelled so) — a title bar
+   and a page, not a box inside a box. It never expands; hover lifts the card and sharpens the page. */
+.ctool.big { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 20px 20px 22px; }
+.cr-doc { display: grid; border-radius: 12px; overflow: hidden; text-align: left;
+  background: linear-gradient(180deg, #13284a, #0e1d33); box-shadow: inset 0 1px 0 rgba(190, 220, 255, .1), 0 0 0 1px rgba(130, 175, 240, .2), 0 10px 22px -14px rgba(0, 0, 0, .7);
+  transition: transform var(--e-t-hover) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease); }
+html[data-theme="light"] .cr-doc { background: #f8fafd; box-shadow: 0 0 0 1px rgba(15, 23, 42, .18), 0 8px 18px -12px rgba(15, 23, 42, .3); }
+.cr-doc-bar { display: flex; align-items: center; gap: 7px; padding: 8px 12px; background: rgba(140, 185, 250, .07); box-shadow: inset 0 -1px 0 rgba(140, 185, 250, .1); }
+html[data-theme="light"] .cr-doc-bar { background: #eef2f8; box-shadow: inset 0 -1px 0 rgba(15, 23, 42, .1); }
+.cr-doc-bar i { width: 8px; height: 8px; border-radius: 50%; background: var(--tc); box-shadow: 0 0 6px color-mix(in srgb, var(--tc) 70%, transparent); flex: none; }
+.cr-doc-bar b { font: 600 12px var(--e-sans); color: var(--e-ink-2); }
+.cr-doc-bar em { margin-left: auto; font: 600 10.5px var(--e-sans); font-style: normal; letter-spacing: .04em; text-transform: uppercase; color: var(--e-ink-4); }
+.ctool.big:hover .cr-doc, .ctool.big:focus-visible .cr-doc { transform: translateY(-2px); box-shadow: inset 0 1px 0 rgba(190, 220, 255, .14), 0 0 0 1px rgba(150, 195, 255, .32), 0 16px 28px -14px rgba(0, 0, 0, .75); }
+html[data-theme="light"] .ctool.big:hover .cr-doc { box-shadow: 0 0 0 1px rgba(15, 23, 42, .26), 0 14px 26px -14px rgba(15, 23, 42, .36); }
+.cr-sample { position: relative; display: grid; gap: 7px; padding: 12px 14px 14px; font-size: 12.5px; line-height: 1.45; color: var(--e-ink-2); text-align: left; }
 .cr-sample-tag { justify-self: start; font: 600 10.5px var(--e-sans); letter-spacing: .04em; text-transform: uppercase; color: var(--e-ink-4); margin-bottom: 2px; }
 .cr-sample .sx-h { font-size: 13px; color: var(--e-ink); }
 .cr-sample .sx-l i { font-style: normal; font-weight: 600; color: var(--tc); margin-right: 5px; }
+.cr-sample .sx-sec { display: grid; gap: 1px; }
+.cr-sample .sx-sec i { font: 600 10.5px var(--e-sans); font-style: normal; letter-spacing: .03em; text-transform: uppercase; color: var(--tc); }
+html[data-theme="light"] .cr-sample .sx-sec i, html[data-theme="light"] .cr-sample .sx-l i { color: color-mix(in srgb, var(--tc) 70%, #0b1626); }
+.cr-sample .sx-sec span { color: var(--e-ink); }
 .cr-sample .sx-card { display: grid; gap: 4px; padding: 8px 10px; border-radius: 9px; background: var(--e-s1); box-shadow: var(--e-elev-1); }
 .cr-sample .sx-front { font-weight: 600; color: var(--e-ink); }
 .cr-sample .sx-back { color: var(--e-ink-3); }
 .cr-sample .sx-q { color: var(--e-ink); font-size: 13px; }
-.cr-sample .sx-o { padding: 4px 8px; border-radius: 7px; box-shadow: inset 0 0 0 1px var(--e-rule); }
-.cr-sample .sx-o.ok { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--e-green) 60%, transparent); color: var(--e-green-ink); background: color-mix(in srgb, var(--e-green) 9%, transparent); }
-.cr-sample .sx-task { display: grid; gap: 1px; padding: 5px 0 5px 10px; box-shadow: inset 2px 0 0 var(--tc); }
+.cr-sample .sx-o { padding: 4px 8px; border-radius: 7px; background: color-mix(in srgb, var(--e-ink) 5%, transparent); }
+.cr-sample .sx-o.ok { color: var(--e-green-ink); background: color-mix(in srgb, var(--e-green) 14%, transparent); font-weight: 600; }
+.cr-sample .sx-task { display: grid; grid-template-columns: 14px 1fr; column-gap: 8px; }
+.cr-sample .sx-task::before { content: ""; grid-row: 1 / 3; width: 12px; height: 12px; margin-top: 2px; border-radius: 4px; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tc) 75%, transparent); }
 .cr-sample .sx-task b { color: var(--e-ink); font-size: 12.5px; }
-.cr-sample .sx-task span { color: var(--e-ink-3); }
-.cr-sample .sx-mail { display: grid; gap: 3px; }
-.cr-sample .sx-mail b { color: var(--e-ink); }
+.cr-sample .sx-task span { color: var(--e-ink-3); font-size: 11.5px; }
+.cr-sample .sx-mail { display: grid; gap: 4px; }
+.cr-sample .sx-mail-to { color: var(--e-ink-3); font-size: 11.5px; }
+.cr-sample .sx-mail b { color: var(--e-ink); padding-bottom: 5px; box-shadow: inset 0 -1px 0 var(--e-rule); }
 .cr-sample .sx-formats { display: flex; flex-wrap: wrap; gap: 5px; }
 .cr-sample .sx-formats span { padding: 2px 8px; border-radius: 6px; background: color-mix(in srgb, var(--e-ink) 7%, transparent); }
-/* more tools: compact rows; the example opens under the row (hover/focus with a pointer, or "Example" on touch) */
-.cr-browser { display: grid; gap: 14px; padding: 18px; border-radius: var(--e-r-lg); background: var(--e-s1); box-shadow: var(--e-elev-1); }
+.ctool.big .ctool-cta { margin-top: 4px; }
+/* more tools: compact rows. The row keeps its size; hover lifts it, lights it, nudges the icon and moves the arrow
+   inside its own 28px action area. (Before: the older 30px arrow circle sat in an 18px column of a row with
+   overflow: hidden, so its right side was cut off.) */
+.cr-browser { display: grid; gap: 14px; padding: 18px; border-radius: var(--e-r-lg); }
 .cr-browser .cr-h { margin-bottom: 0; }
 .cr-group { display: grid; gap: 4px; }
 .cr-group-h { margin: 0 0 2px; font: 600 12.5px var(--e-sans); letter-spacing: .04em; text-transform: uppercase; color: var(--e-ink-4); }
-.cr-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.cr-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .cr-row-wrap { position: relative; display: grid; }
-.cr-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto 18px; grid-template-rows: auto; grid-template-areas: none; min-height: 0; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: var(--e-r-sm);
-  background: none; box-shadow: none; text-align: left; font: inherit; color: var(--e-ink); cursor: pointer; transition: background-color var(--e-t-hover) var(--e-ease); }
-.cr-row:hover, .cr-row:focus-visible { background: color-mix(in srgb, var(--e-ink) 6%, transparent); border: 0; transform: none; box-shadow: none; }
-.cr-row .ctool-ic { width: 36px; height: 36px; border-radius: 11px; }
+.cr-row { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto 28px; grid-template-rows: auto; grid-template-areas: none; min-height: 0; align-items: center; gap: 12px; width: 100%; padding: 10px; border: 0; border-radius: var(--e-r-sm);
+  overflow: visible; background: none; box-shadow: none; text-align: left; font: inherit; color: var(--e-ink); cursor: pointer;
+  transition: transform var(--e-t-hover) var(--e-ease), background-color var(--e-t-hover) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease); }
+.cr-row:hover, .cr-row:focus-visible { transform: translateY(-2px); background: var(--e-s1-hover); box-shadow: var(--e-elev-2); border: 0; }
+html[data-theme="light"] .cr-row:hover, html[data-theme="light"] .cr-row:focus-visible { background: #fff; box-shadow: var(--e-card), 0 10px 22px -12px rgba(15, 23, 42, .28); }
+.cr-row:active { transform: translateY(0); box-shadow: var(--e-elev-1); transition-duration: 60ms; }
+.cr-row .ctool-ic { width: 38px; height: 38px; border-radius: 11px; transition: background-color var(--e-t-hover); }
 .cr-row .ctool-ic svg { width: 18px; height: 18px; }
+.cr-row:hover .ctool-ic { background: color-mix(in srgb, var(--tc) 22%, transparent); }
+.cr-row:hover .ctool-ic svg { animation: e-nudge 520ms var(--e-ease-snap) 1; }
 .cr-row .ctool-name { font-size: 15px; }
 .cr-row .ctool-line { font-size: 13px; }
-.cr-row .ctool-go { color: var(--e-ink-4); transition: transform var(--e-t-hover) var(--e-ease), color var(--e-t-hover); }
-.cr-row .ctool-go svg { width: 16px; height: 16px; }
-.cr-row:hover .ctool-go { transform: translateX(3px); color: var(--e-ink); }
-.cr-peek { display: none; justify-self: start; margin: 0 0 4px 58px; padding: 2px 8px; border: 0; border-radius: 6px; background: none; color: var(--e-ink-3); font: 600 12.5px var(--e-sans); cursor: pointer; }
-.cr-row-wrap .cr-sample { margin: 0 6px 6px 58px; display: none; }
-@media (hover: hover) and (pointer: fine) {
-  .cr-row-wrap:hover .cr-sample, .cr-row-wrap:has(.cr-row:focus-visible) .cr-sample { display: grid; animation: e-reveal var(--e-t-panel) var(--e-ease) both; }
-}
-@media (hover: none), (pointer: coarse) { .cr-peek { display: inline-block; } }
-.cr-row-wrap.show .cr-sample { display: grid; }
-@keyframes e-reveal { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+.cr-row .ctool-go { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 8px; background: none; box-shadow: none; color: var(--e-ink-4); transition: color var(--e-t-hover), background-color var(--e-t-hover); }
+.cr-row .ctool-go svg { width: 16px; height: 16px; transition: transform var(--e-t-hover) var(--e-ease); }
+.cr-row:hover .ctool-go, .cr-row:focus-visible .ctool-go { color: var(--tc); background: color-mix(in srgb, var(--tc) 12%, transparent); }
+.cr-row:hover .ctool-go svg, .cr-row:focus-visible .ctool-go svg { transform: translateX(4px); }
 .cr-related { display: flex; align-items: center; gap: 12px; margin-top: 14px; width: 100%; padding: 12px 14px; border: 0; border-radius: var(--e-r-md); background: none; box-shadow: inset 0 0 0 1px var(--e-rule);
   font: inherit; font-size: 14px; color: var(--e-ink-3); text-align: left; cursor: pointer; transition: box-shadow var(--e-t-hover), color var(--e-t-hover); }
 .cr-related svg { width: 20px; height: 20px; flex: none; color: var(--e-blue-ink); }
@@ -213,8 +252,9 @@ html[data-theme="light"] .cr-sample { background: var(--e-s3); }
   .notes-empty { grid-template-columns: minmax(0, 1fr); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ctool.big, .starter, .ask-across { transition: box-shadow var(--e-t-hover), background-color var(--e-t-hover); }
-  .ctool.big:hover, .starter:hover, .ask-across:hover { transform: none; }
+  .ctool.big, .starter, .ask-across, .cr-row, .cr-doc, .ne-preview, .ne-sec { transition: box-shadow var(--e-t-hover), background-color var(--e-t-hover); }
+  .ctool.big:hover, .starter:hover, .ask-across:hover, .cr-row:hover, .ctool.big:hover .cr-doc { transform: none; }
+  .cr-row:hover .ctool-ic svg, .ctool.big:hover .ctool-ic svg { animation: none; }
   .ctool.big:hover .ctool-ic svg, .cr-row-wrap .cr-sample { animation: none !important; }
 }
 

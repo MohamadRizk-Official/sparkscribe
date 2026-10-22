@@ -992,12 +992,15 @@ function drawTimeline() {
     roundRect(ctx, labelW, y, span, lane, 4);
     ctx.fill();
     if (labelW) {
+      // the speaker's colour as a dot, the name in readable ink (cyan or violet text on white was ~2:1)
       ctx.fillStyle = s.color;
-      ctx.font = '600 11.5px "Space Grotesk", system-ui, sans-serif';
+      ctx.beginPath(); ctx.arc(4, y + lane / 2, 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = document.documentElement.dataset.theme === 'light' ? '#3a4a61' : '#bdc9da';
+      ctx.font = '600 11.5px Geist, system-ui, sans-serif';
       ctx.textBaseline = 'middle';
       let name = s.name;
-      while (name.length > 3 && ctx.measureText(name).width > labelW - 16) name = name.slice(0, -2) + '…';
-      ctx.fillText(name, 0, y + lane / 2 + 1);
+      while (name.length > 3 && ctx.measureText(name).width > labelW - 28) name = name.slice(0, -2) + '…';
+      ctx.fillText(name, 13, y + lane / 2 + 1);
     }
     // clean colored segments, no glow: positions must read precisely
     ctx.fillStyle = s.color;

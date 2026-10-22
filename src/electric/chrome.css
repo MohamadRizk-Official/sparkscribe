@@ -13,8 +13,8 @@
 }
 .topbar.is-scrolled {
   padding-top: 10px; padding-bottom: 10px;
-  background: color-mix(in srgb, var(--e-canvas) 78%, transparent);
-  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+  background: color-mix(in srgb, var(--e-canvas) 96%, transparent);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
   box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .55);
 }
 html[data-theme="light"] .topbar.is-scrolled { box-shadow: 0 10px 30px -20px rgba(20, 40, 90, .35); }
@@ -127,3 +127,7 @@ html[data-theme="light"] .theme-btn:hover { color: var(--e-violet-ink); box-shad
   .nav-toggle { padding: 0; }
 }
 @media (max-width: 360px) { .bn-scribe { display: none; } }
+
+/* the logo's idle ignite: three times after the page opens, then it rests (an endless SVG animation repaints the
+   header on every frame for as long as the page is open) */
+.brand .spark-mark .sl, .brand .spark-mark .sm { animation-iteration-count: 3; }
