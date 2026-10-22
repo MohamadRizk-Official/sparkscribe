@@ -16,6 +16,7 @@ import { listLibrary, searchLibrary } from '../lib/library.js';
 import { myPlan } from '../lib/billing.js';
 import { renderAcrossStreaming } from '../lib/across-refs.js';
 import { toast } from '../library/dialogs.js';
+import { thunderMark, thunderPricingUrl } from '../electric/thunder.js';
 import { acrossStatus, acrossGuide, askAcross, acrossHistory, acrossThread, acrossDelete, requestInsight, requestTool } from '../insights/api.js';
 
 const $ = (id) => document.getElementById(id);
@@ -203,16 +204,22 @@ const when = (iso) => new Date(iso).toLocaleString(undefined, { month: 'short', 
 
 // ---------- the plan ----------
 function lockedHtml(kind) {
-  const what = kind === 'guide'
+  const guideKind = kind === 'guide';
+  const what = guideKind
     ? 'One study guide from up to 10 of your recordings: the themes they share, where each was taught, how they differ, and questions to check yourself.'
     : 'Ask one question across up to 12 of your recordings. Each point names the recording it comes from and links to the exact passage; if the recordings don’t answer it, SparkScribe says so.';
-  const back = `/across?ids=${st.ids.join(',')}${kind === 'guide' ? '&tab=guide' : ''}`;
+  const ex = guideKind
+    ? { q: 'Unit 2 review guide', a: ['Shared themes', 'Lecture 4 + 5', 'Lecture 6'] }
+    : { q: 'Which ideas came up in all three biology lectures?', a: ['Cell respiration', 'Lecture 4 · 12:30', 'Lecture 6 · 21:45'] };
+  const back = `/across${st.ids.length ? `?ids=${st.ids.join(',')}` : ''}${guideKind ? `${st.ids.length ? '&' : '?'}tab=guide` : ''}`;
   return `<div class="panel ax-locked" role="region" aria-label="Included with Thunder">
-    <span class="ax-locked-badge mono">Thunder</span>
-    <h2>${kind === 'guide' ? 'Combined study guides' : 'Ask across recordings'}</h2>
+    ${thunderMark()}
+    <h2>${guideKind ? 'Three lectures. One study guide.' : 'Connect the dots across your lectures'}</h2>
     <p>${what}</p>
+    <div class="th-example" aria-label="Example"><span class="cr-sample-tag">Example</span><p class="th-q">${ex.q}</p>
+      <div class="th-links"><span>${ex.a[0]}</span><i aria-hidden="true"></i><span>${ex.a[1]}</span><span>${ex.a[2]}</span></div></div>
     <p class="ax-fine">Included with Thunder${st.plan?.planName ? `. You’re on ${esc(st.plan.planName)}` : ''}. Your selection is kept, and everything you’ve saved stays available on every plan.</p>
-    <div class="ax-empty-actions"><a class="btn btn-primary" href="/pricing?plan=thunder&next=${encodeURIComponent(back)}">See Thunder</a><a class="btn btn-ghost" href="/library">Back to My Library</a></div>
+    <div class="ax-empty-actions"><a class="btn th-cta" href="${thunderPricingUrl(back)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.2 2.5 5.5 13.4h5.2l-1.4 8.1 7.7-11h-5.2z"/></svg><span>Explore Thunder</span></a><a class="btn btn-ghost" href="/library">Back to My Library</a></div>
   </div>`;
 }
 
@@ -233,6 +240,8 @@ function qaHtml(qa) {
 function renderAsk() {
   const p = $('askPanel');
   const recs = ordered();
+  // on another plan, explain Thunder whatever is selected (saved answers for a selection still show under it, below)
+  if (recs.length < MIN && st.plan && !can('across_ask')) { p.innerHTML = lockedHtml('ask'); return; }
   if (recs.length < MIN) {
     p.innerHTML = `<div class="panel ax-empty"><h2>Choose recordings to ask about</h2><p>Select at least two recordings. You can add them here, or select them in My Library and choose <b>Ask across</b>.${st.history?.length ? ' Or reopen something you saved: it’s listed on the left.' : ''}</p>
       <div class="ax-empty-actions"><button class="btn btn-primary" type="button" data-act="open-add">Add recordings</button><a class="btn btn-ghost" href="/library">Open My Library</a></div></div>`;
@@ -249,7 +258,7 @@ function renderAsk() {
       <p class="ax-fine">Answers use your saved transcripts (never audio), cite the passages they come from, and are saved to your account. Each question uses a small amount of your AI allowance.</p>
     </form>`;
   p.innerHTML = `${form}
-    ${st.askErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.askErr)}</span>${st.askPlan ? `<a class="btn btn-ghost btn-sm" href="/pricing?plan=${esc(st.askPlan)}">See plans</a>` : ''}</div>` : ''}
+    ${st.askErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.askErr)}</span>${st.askPlan ? `<a class="btn btn-ghost btn-sm" href="${thunderPricingUrl(location.pathname + location.search)}">Explore Thunder</a>` : ''}</div>` : ''}
     ${st.loadErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.loadErr)}</span><button class="btn btn-ghost btn-sm" type="button" data-act="reload">Try again</button></div>` : ''}
     <div class="ax-thread" aria-live="polite" aria-busy="${st.loading}">
       ${pend ? `<article class="panel ax-qa pending"><p class="ax-q">${esc(pend.question)}</p>
@@ -334,6 +343,7 @@ function guideHtml(g) {
 function renderGuide() {
   const p = $('guidePanel');
   const recs = ordered();
+  if (st.plan && !can('across_guide') && !guide()) { p.innerHTML = lockedHtml('guide'); return; }
   if (recs.length < MIN) { p.innerHTML = '<div class="panel ax-empty"><h2>Choose recordings first</h2><p>A combined study guide needs at least two recordings.</p><div class="ax-empty-actions"><button class="btn btn-primary" type="button" data-act="open-add">Add recordings</button></div></div>'; return; }
   const g = guide();
   const locked = st.plan && !can('across_guide');
@@ -346,7 +356,7 @@ function renderGuide() {
       ${busy ? `<p class="ax-status" role="status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span>${esc(busy)}</p>` : `<button class="btn btn-primary" type="button" data-act="guide">${g ? 'Create a new version' : 'Create combined study guide'}</button>`}
       <p class="ax-fine">Built from each recording’s study map. Recordings without one get their own study guide first (saved with the recording, as if you had made it there). The guide is saved to your account.</p>
     </div>`;
-  p.innerHTML = `${st.guideErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.guideErr)}</span></div>` : ''}${locked && !g ? lockedHtml('guide') : ''}${showSetup ? intro : ''}${g && !busy ? guideHtml(g) : ''}${locked && g ? `<p class="ax-fine ax-locked-line">Making new combined guides is included with Thunder. <a href="/pricing?plan=thunder">See Thunder</a></p>` : ''}`;
+  p.innerHTML = `${st.guideErr ? `<div class="ins-msg warn ax-err" role="alert"><span>${esc(st.guideErr)}</span></div>` : ''}${locked && !g ? lockedHtml('guide') : ''}${showSetup ? intro : ''}${g && !busy ? guideHtml(g) : ''}${locked && g ? `<p class="ax-fine ax-locked-line">Making new combined guides is included with Thunder. <a href="${thunderPricingUrl(`/across?ids=${st.ids.join(',')}&tab=guide`)}">Explore Thunder</a></p>` : ''}`;
 }
 async function makeGuide() {
   if (st.guideBusy) return;

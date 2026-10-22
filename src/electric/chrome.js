@@ -29,11 +29,53 @@ export function mountAmbient() {
   svg.setAttribute('class', 'e-circuit');
   svg.setAttribute('viewBox', '0 0 1440 900');
   svg.setAttribute('preserveAspectRatio', 'xMidYMid slice');
-  svg.innerHTML = '<defs><linearGradient id="ecGrad" x1="0" x2="1"><stop offset="0" stop-color="#20d4f4" stop-opacity="0"/><stop offset=".6" stop-color="#20d4f4"/><stop offset="1" stop-color="#8fb3ff"/></linearGradient></defs>'
-    + TRACES.map((d) => `<path class="ec-trace" d="${d}"/>`).join('')
+  svg.innerHTML = TRACES.map((d) => `<path class="ec-trace" d="${d}"/>`).join('')
     + NODES.map(([x, y]) => `<circle class="ec-node" cx="${x}" cy="${y}" r="3"/>`).join('')
-    + `<path class="ec-current" d="${TRACES[0]}"/><path class="ec-current b" d="${TRACES[2]}"/>`;
+    + '<g class="ec-live"></g>';
   bg.appendChild(svg);
+  runCurrents(svg);
+}
+
+// The current: now and then one trace carries a pulse of energy from the edge of the room to its node. It ignites,
+// accelerates, runs the WHOLE trace in one quick move (duration from the trace's measured length, ~450–800 ms), flashes
+// at the node and dissipates; then the circuit rests for a few seconds. Dash lengths are normalised with pathLength, so
+// every trace is covered completely whatever its geometry. (Before: a fixed 1490-unit dash pattern on ~400-unit traces
+// crawled a third of the way over 9 s and faded out mid-path.) Nothing runs with reduced motion, in a hidden tab, or
+// while the circuit isn't displayed (phones).
+function runCurrents(svg) {
+  const live = svg.querySelector('.ec-live');
+  const traces = [...svg.querySelectorAll('.ec-trace')];
+  const calm = matchMedia('(prefers-reduced-motion: reduce)');
+  let last = -1;
+  const wait = (ms) => setTimeout(fire, ms);
+  function fire() {
+    if (calm.matches || document.hidden || !svg.isConnected || getComputedStyle(svg).display === 'none' || typeof live.animate !== 'function') return wait(4000);
+    let i = Math.floor(Math.random() * traces.length);
+    if (i === last) i = (i + 1) % traces.length;
+    last = i;
+    const d = traces[i].getAttribute('d');
+    const len = traces[i].getTotalLength();
+    const ms = Math.round(Math.min(800, Math.max(450, 300 + len * 1.1)));
+    const end = traces[i].getPointAtLength(len);
+    live.innerHTML = `<path class="ec-glow" d="${d}" pathLength="100"/><path class="ec-core" d="${d}" pathLength="100"/>`
+      + `<circle class="ec-spark" cx="${end.x}" cy="${end.y}" r="7"/>`;
+    // the dash is 16% of the trace; it enters from before the start and leaves past the end, so it crosses all of it
+    const run = [
+      { strokeDashoffset: 16, opacity: 0 },
+      { strokeDashoffset: 10, opacity: 1, offset: 0.08 },
+      { strokeDashoffset: -94, opacity: 1, offset: 0.9 },
+      { strokeDashoffset: -100, opacity: 0 },
+    ];
+    const timing = { duration: ms, easing: 'cubic-bezier(.55, .05, .35, 1)', fill: 'forwards' };
+    live.querySelectorAll('path').forEach((p) => p.animate(run, timing));
+    live.querySelector('.ec-spark').animate([
+      { opacity: 0, transform: 'scale(.3)' },
+      { opacity: 1, transform: 'scale(1)', offset: 0.35 },
+      { opacity: 0, transform: 'scale(1.9)' },
+    ], { duration: 420, delay: ms * 0.82, easing: 'cubic-bezier(.2, .8, .2, 1)', fill: 'both' });
+    wait(ms + 420 + 2600 + Math.random() * 2600);
+  }
+  wait(1800);
 }
 
 export function mountHeaderState() {

@@ -60,13 +60,19 @@
 .note-sec { border: 0; background: none; padding: 0 0 14px; margin-bottom: 14px; box-shadow: inset 0 -1px 0 var(--e-rule); }
 .note-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font: 600 16.5px var(--e-sans); color: var(--e-ink); margin: 0 0 6px; }
 .note-list li { font-size: 15.5px; line-height: 1.6; color: var(--e-ink-2); }
-.notes-empty { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 28px; align-items: center; padding: 10px 4px; }
-.ne-text { display: grid; gap: 8px; justify-items: start; }
-.ne-text p { margin: 0; color: var(--e-ink-3); font-size: 15.5px; line-height: 1.55; max-width: 52ch; }
-.ne-text .btn { margin-top: 6px; }
-.ne-preview { position: relative; display: grid; gap: 12px; padding: 20px 20px 18px; border-radius: var(--e-r-lg); background: var(--e-s0); box-shadow: inset 0 0 0 1px var(--e-rule); }
-html[data-theme="light"] .ne-preview { background: var(--e-s3); }
-.ne-sec { display: grid; gap: 5px; }
+/* Notes before they exist: the heading starts at the top of the card, the one action leads, the AI disclosure follows
+   it in small print; the preview on the right shows the sections this kind of recording gets */
+.notes-empty { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 32px; align-items: start; padding: 0; }
+.ne-text { display: grid; gap: 10px; justify-items: start; }
+.notes-empty h3 { margin: 0; font-size: clamp(23px, 2.2vw, 27px); }
+.ne-text p { margin: 0; color: var(--e-ink-2); font-size: 15.5px; line-height: 1.6; max-width: 54ch; }
+.ne-text .btn.ne-make { margin-top: 10px; min-height: 48px; padding: 12px 22px; font-size: 15.5px; border-radius: var(--e-r-md); }
+.ne-make svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.ne-text .ins-privacy { margin-top: 4px; max-width: 54ch; font-size: 12.5px; }
+.ne-preview { position: relative; display: grid; gap: 14px; padding: 20px 20px 18px; border-radius: var(--e-r-lg); background: var(--e-s0); box-shadow: var(--e-elev-0); }
+html[data-theme="light"] .ne-preview { background: var(--e-s3); box-shadow: none; }
+.ne-sec { display: grid; gap: 6px; padding-left: 12px; position: relative; }
+.ne-sec::before { content: ""; position: absolute; left: 0; top: 5px; width: 4px; height: 10px; border-radius: 2px; background: var(--e-charge); opacity: .85; }
 .ne-sec b { font: 600 13.5px var(--e-sans); color: var(--e-ink-2); }
 .ne-sec i { display: block; height: 6px; width: var(--w); border-radius: 4px; background: color-mix(in srgb, var(--e-ink) 10%, transparent); }
 
@@ -76,12 +82,20 @@ html[data-theme="light"] .ne-preview { background: var(--e-s3); }
 .ask-empty p { margin: 0; color: var(--e-ink-3); font-size: 15.5px; }
 .ask-try { margin: 6px 0 0; font: 600 13px var(--e-sans); letter-spacing: 0; text-transform: none; color: var(--e-ink-3); text-align: center; }
 .ask-starters { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
-.starter { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 0; border-radius: var(--e-r-sm); background: var(--e-s0); box-shadow: inset 0 0 0 1px var(--e-rule);
+/* suggested questions: a raised surface, no outline. Hover lifts it and moves the arrow; pressing settles it; the one
+   just sent stays lit while its answer is written (the others wait, dimmed); keyboard focus gets the global ring */
+.starter { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border: 0; border-radius: var(--e-r-sm); background: var(--e-s0); box-shadow: var(--e-elev-0);
   font: 500 14.5px var(--e-sans); color: var(--e-ink); cursor: pointer; text-align: left; transition: transform var(--e-t-hover) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease), background-color var(--e-t-hover); }
-html[data-theme="light"] .starter { background: var(--e-s3); }
-.starter svg { width: 15px; height: 15px; color: var(--e-ink-4); transition: transform var(--e-t-hover) var(--e-ease), color var(--e-t-hover); }
-.starter:hover { transform: translateY(-2px); background: var(--e-s1-hover); box-shadow: var(--e-elev-2), inset 0 0 0 1px color-mix(in srgb, var(--e-cyan) 30%, transparent); border: 0; }
-.starter:hover svg { transform: translateX(3px); color: var(--e-cyan-ink); }
+html[data-theme="light"] .starter { background: #fff; box-shadow: var(--e-elev-1); }
+.starter svg { width: 15px; height: 15px; flex: none; color: var(--e-ink-4); transition: transform var(--e-t-hover) var(--e-ease), color var(--e-t-hover); }
+.starter:hover:not(:disabled) { transform: translateY(-2px); background: var(--e-s1-hover); box-shadow: var(--e-elev-2); border: 0; }
+html[data-theme="light"] .starter:hover:not(:disabled) { background: #fff; box-shadow: var(--e-elev-2); }
+.starter:hover:not(:disabled) svg { transform: translateX(3px); color: var(--e-cyan-ink); }
+.starter:active:not(:disabled) { transform: translateY(0) scale(.98); box-shadow: var(--e-elev-1); transition-duration: 60ms; }
+.starter:focus-visible { outline: 2px solid var(--e-focus); outline-offset: 2px; }
+.starter.is-sent, .starter.is-sent:disabled { opacity: 1; cursor: default; color: var(--e-ink); background: var(--e-charge-soft); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--e-cyan) 55%, transparent); }
+.starter.is-sent svg { color: var(--e-cyan-ink); transform: translateX(3px); }
+.starter:disabled:not(.is-sent) { opacity: .5; cursor: default; }
 .ask-form { position: relative; display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 16px; border: 0; border-radius: var(--e-r-lg); background: var(--e-s3); box-shadow: var(--e-inset); transition: box-shadow var(--e-t-hover); }
 .ask-form:focus-within { box-shadow: inset 0 0 0 1.5px var(--e-cyan), 0 0 0 5px color-mix(in srgb, var(--e-cyan) 12%, transparent); }
 .ask-input { flex: 1; min-height: 40px; padding: 10px 0; border: 0; background: none; color: var(--e-ink); font: 500 16px/1.45 var(--e-sans); resize: none; outline: none; }
@@ -94,12 +108,14 @@ html[data-theme="light"] .ask-send { color: #fff; }
 .ask-q { justify-self: end; max-width: 80%; padding: 11px 15px; border-radius: 16px 16px 4px 16px; background: var(--e-charge-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--e-cyan) 22%, transparent); font: 500 15.5px var(--e-sans); color: var(--e-ink); border: 0; }
 .ask-a { padding: 14px 18px; border-radius: 16px 16px 16px 4px; background: var(--e-s0); border: 0; box-shadow: inset 0 0 0 1px var(--e-rule); font-size: 16px; line-height: 1.65; color: var(--e-ink); }
 html[data-theme="light"] .ask-a { background: var(--e-s3); }
+/* Thunder's door from a single recording (electric/thunder.css has the mark): a quiet raised row, no outline */
 .ask-across { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--e-r-md); text-decoration: none; color: var(--e-ink-2); font-size: 14px; line-height: 1.45;
-  background: linear-gradient(100deg, color-mix(in srgb, var(--e-violet) 12%, transparent), transparent 70%); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--e-violet) 18%, transparent); transition: box-shadow var(--e-t-hover), transform var(--e-t-hover) var(--e-ease); }
+  background: linear-gradient(100deg, color-mix(in srgb, var(--e-violet) 11%, transparent), transparent 70%), var(--e-s0); box-shadow: var(--e-elev-0); transition: box-shadow var(--e-t-hover) var(--e-ease), transform var(--e-t-hover) var(--e-ease); }
+html[data-theme="light"] .ask-across { background: linear-gradient(100deg, color-mix(in srgb, var(--e-violet) 8%, transparent), transparent 70%), var(--e-s1); }
 .ask-across svg { width: 22px; height: 22px; flex: none; color: var(--e-violet-ink); }
 .ask-across b { color: var(--e-ink); display: block; font-size: 14.5px; }
-.ask-across:hover { transform: translateY(-1px); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--e-violet) 40%, transparent), var(--e-elev-1); }
-.ask-across-plan { margin-left: auto; flex: none; font: 600 12.5px var(--e-sans); color: var(--e-violet-ink); }
+.ask-across:hover { transform: translateY(-2px); box-shadow: var(--e-elev-2), 0 10px 26px -14px var(--e-glow-violet); }
+.ask-across .thunder-mark { margin-left: auto; }
 
 /* ---------- Create: recommended tools with examples, then compact rows ---------- */
 .cr2 { display: grid; gap: 18px; }
@@ -201,3 +217,15 @@ html[data-theme="light"] .cr-sample { background: var(--e-s3); }
   .ctool.big:hover, .starter:hover, .ask-across:hover { transform: none; }
   .ctool.big:hover .ctool-ic svg, .cr-row-wrap .cr-sample { animation: none !important; }
 }
+
+/* Practice Quiz with no questions that passed the checks (tools.js quizQualityNotice): information, not an error */
+.quality-note { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px; align-items: start; width: 100%; max-width: 560px; margin: 4px auto 0; padding: 16px 18px; border-radius: var(--e-r-lg); text-align: left;
+  background: color-mix(in srgb, var(--e-blue) 9%, var(--e-s1)); box-shadow: var(--e-elev-1); }
+html[data-theme="light"] .quality-note { background: #edf2f9; box-shadow: 0 0 0 1px rgba(40, 70, 120, .1); }
+.qn-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; color: var(--e-blue-ink); background: color-mix(in srgb, var(--e-blue) 18%, transparent); }
+.qn-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; }
+.qn-body { display: grid; gap: 4px; }
+.qn-title { font: 600 15.5px var(--e-sans); color: var(--e-ink); }
+.qn-body p { margin: 0; color: var(--e-ink-2); font-size: 14.5px; line-height: 1.55; }
+.qn-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.qn-actions:empty { display: none; }

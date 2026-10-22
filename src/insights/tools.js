@@ -666,6 +666,36 @@ export function createToolsUI(api) {
     </div>`;
   }
 
+  // A quiz saved with no questions: every question written failed the checks (server/ai/study.js validateQuiz,
+  // studyrun.js verify), or the recording gave nothing to ask about. The saved quality counts say which; only actions
+  // that can change the outcome are offered (writing the same quiz again with the same settings would fail the same way
+  // and use AI allowance again, so it's offered only when a check couldn't run).
+  function quizQualityNotice(a, sel) {
+    const q = a?.content?.quality || {};
+    const fmt = TOOL_SETTINGS.quiz.types.options[sel.types] || '';
+    let title = 'Not enough material for a reliable quiz', text, actions = '';
+    const alt = '<button class="btn btn-ghost btn-sm" type="button" data-goto-tab="summary">Read the summary</button><button class="btn btn-ghost btn-sm" type="button" data-goto-tab="ask">Ask about it</button>';
+    if (q.verify_failed) {
+      title = 'The quality check couldn’t finish';
+      text = 'Every question is checked against the recording before you see it, and that check didn’t run this time. Nothing is wrong with your recording.';
+      actions = '<button class="btn btn-primary btn-sm" type="button" data-act="regen">Try again</button>';
+    } else if (sel.types !== 'mixed' && q.wrong_type) {
+      title = `No reliable ${fmt} questions here`;
+      text = `What this recording explains didn’t fit ${fmt} questions well enough to pass the checks.`;
+      actions = '<button class="btn btn-primary btn-sm" type="button" data-set="types" data-val="mixed">Use mixed formats</button>';
+    } else if (!q.selected) {
+      text = 'This recording doesn’t explain enough ideas clearly to test fairly. Short or conversational recordings often don’t.';
+      actions = alt;
+    } else {
+      text = 'The questions written for this recording didn’t pass the checks: each one must be answerable from what was said, with exactly one right answer.';
+      actions = alt;
+    }
+    return `<div class="quality-note" role="status">
+        <span class="qn-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></span>
+        <div class="qn-body"><b class="qn-title">${esc(title)}</b><p>${esc(text)}</p><div class="qn-actions">${actions}</div></div>
+      </div>`;
+  }
+
   function quizSetupHtml({ sel, a, busy, err, stale, legacy, improved, prev }) {
     const spec = TOOL_SETTINGS.quiz;
     const minutes = (api.duration?.() || 0) / 60;
@@ -685,15 +715,15 @@ export function createToolsUI(api) {
         ${legacy ? legacyNote('quiz', improved) : coverageNote('quiz', a)}
         ${stale && !busy ? '<div class="ins-msg warn"><span>The transcript changed after these questions were written.</span><button class="btn btn-ghost btn-sm" type="button" data-act="regen">Update</button></div>' : ''}
         ${err && !busy ? api.errorBox(err, 'regen', n ? "New questions couldn't be written; your current quiz still works." : "The quiz couldn't be created.") : ''}
-        ${busy ? api.loading(TOOL_INFO.quiz.loading) : `<button class="btn btn-primary study-start" type="button" data-act="start"${empty ? ' disabled' : ''}>Start Quiz <span aria-hidden="true">→</span></button>`}
+        ${busy ? api.loading(TOOL_INFO.quiz.loading) : empty && !stale && !err ? quizQualityNotice(a, sel) : `<button class="btn btn-primary study-start" type="button" data-act="start"${empty ? ' disabled' : ''}>Start Quiz <span aria-hidden="true">→</span></button>`}
         ${!busy && !stale && !legacy ? focusResumeHtml(a) : ''}
-        <p class="setup-meta">${empty ? 'The recording didn’t support good questions with these settings.' : n ? `${n} question${n === 1 ? '' : 's'} ready${last} · retakes are free` : 'Questions are written from this recording once; retakes are free.'}</p>
+        <p class="setup-meta">${empty ? '' : n ? `${n} question${n === 1 ? '' : 's'} ready${last} · retakes are free` : 'Questions are written from this recording once; retakes are free.'}</p>
         ${!n && !busy ? api.privacyLine : ''}
       </section>
       ${a?.content ? `<div class="study-tools">
         <button class="btn btn-ghost btn-sm" type="button" data-act="copy">Copy</button>
         <button class="btn btn-ghost btn-sm" type="button" data-act="export">Export…</button>
-        ${!stale && !busy && !legacy ? '<button class="btn btn-ghost btn-sm" type="button" data-act="regen-confirm">New questions</button>' : ''}
+        ${!stale && !busy && !legacy && !empty ? '<button class="btn btn-ghost btn-sm" type="button" data-act="regen-confirm">New questions</button>' : ''}
         ${prev && !legacy ? '<button class="btn btn-ghost btn-sm" type="button" data-act="show-legacy">Earlier quiz</button>' : ''}
         <button class="btn btn-ghost btn-sm tool-del" type="button" data-act="delete">Delete quiz</button></div>` : ''}
     </div>`;
@@ -1084,6 +1114,7 @@ export function createToolsUI(api) {
       api.generate(kind, settings, false);
     });
     on('[data-act="regen"]', () => api.generate(kind, settings, true));
+    on('[data-goto-tab]', (e) => api.showTab(e.currentTarget.dataset.gotoTab));
     on('[data-act="create"]', () => { ui.legacyView[kind] = false; api.generate(kind, settings, false); });
     on('[data-act="show-legacy"]', () => { ui.legacyView[kind] = true; rerender('setup'); });
     on('[data-act="show-new"]', () => { ui.legacyView[kind] = false; rerender('setup'); });

@@ -47,8 +47,11 @@
 .ws-menu .danger { color: var(--e-red-ink); }
 
 /* ---------- workspace tabs: text, one electric line, sticky under the header on long documents ---------- */
-#resTabs.tabs { position: sticky; top: 60px; z-index: 20; display: flex; width: 100%; gap: 4px; padding: 0 2px; margin: 0; border: 0; border-radius: 0; overflow-x: auto; scrollbar-width: none;
-  background: color-mix(in srgb, var(--e-canvas) 86%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: inset 0 -1px 0 var(--e-rule); }
+/* the strip is a surface with softly rounded top corners (not a pill; the bottom stays square where it meets the
+   rule), so it reads as the top of the workspace, also while it sticks under the header */
+#resTabs.tabs { position: sticky; top: 60px; z-index: 20; display: flex; width: 100%; gap: 4px; padding: 0 12px; margin: 0; border: 0; border-radius: 12px 12px 0 0; overflow-x: auto; scrollbar-width: none;
+  background: color-mix(in srgb, var(--e-s1) 78%, transparent); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: inset 0 1px 0 var(--e-hi), inset 0 -1px 0 var(--e-rule); }
+html[data-theme="light"] #resTabs.tabs { background: color-mix(in srgb, #fff 82%, transparent); box-shadow: inset 0 0 0 1px var(--e-rule); }
 #resTabs .tab { flex: none; position: relative; z-index: 1; padding: 14px 8px 15px; margin-right: 18px; border: 0; border-radius: 0; background: none; box-shadow: none;
   font: 500 16px var(--e-sans); letter-spacing: -0.01em; text-transform: none; color: var(--e-ink-3); transition: color var(--e-t-hover) var(--e-ease); }
 #resTabs .tab:hover { color: var(--e-ink); background: none; }
@@ -63,7 +66,7 @@ html[data-theme="light"] .transcript-card { background: #fff; }
 .view-toggle button { font: 600 13.5px var(--e-sans); color: var(--e-ink-3); background: none; border: 0; border-radius: 8px; padding: 7px 14px; cursor: pointer; transition: background-color var(--e-t-hover), color var(--e-t-hover); }
 .view-toggle button:hover { color: var(--e-ink); }
 .view-toggle button.on { color: var(--e-ink); background: var(--e-s1); box-shadow: var(--e-elev-1); }
-.transcript { display: grid; gap: 22px; max-width: 76ch; }
+.transcript { display: grid; gap: 22px; max-width: 88ch; } /* ~85 characters a line at 17px: a document measure */
 .transcript .grp { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 14px; padding: 0; border: 0; background: none; box-shadow: none; }
 .transcript .avatar { width: 30px; height: 30px; border-radius: 50%; border: 0; display: grid; place-items: center; font: 700 11px var(--e-sans); letter-spacing: 0;
   color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); box-shadow: none; margin-top: 1px; }

@@ -45,28 +45,33 @@ const FEATURE = {
   across_guide: { name: 'Combined study guides', text: 'One study guide from up to 10 recordings: shared themes, where each was taught, how they differ.' },
 };
 
-// Each card answers "who is this for, and why choose it". What every plan shares lives once, in "Every plan includes".
+// Each card answers "who is this for, and why choose it", as one progression: Flash makes a single lecture useful,
+// Bolt keeps up with weekly classes and fixes what you miss, Thunder connects recordings. What every plan shares lives
+// once, in "Every plan includes". Only real capabilities (billing_plans.features and allowances); prices come from the
+// database.
 const LOOK = {
   free: {
-    theme: 'free', line: 'Try the real app, free.', sub: 'No credit card required',
-    who: 'I want to see what SparkScribe can do.',
+    theme: 'free', tag: 'Start here', line: 'Try the real app, free.', sub: 'No credit card required',
+    best: 'trying it on a real lecture',
     items: ['Sign up in seconds with email or Google', 'Summaries, notes, Ask, flashcards and quizzes', 'Keep everything you save'],
     cta: 'Get Started Free',
   },
   flash: {
-    theme: 'flash', tag: 'Best low-cost upgrade', line: 'Perfect for the occasional lecture.',
-    who: 'I record a lecture now and then.',
-    items: ['{x:free} Free’s transcription time', 'The full AI study workspace', 'Cancel anytime'],
+    theme: 'flash', tag: 'Best low-cost upgrade', line: 'Turn any lecture into notes and practice.',
+    best: 'a lecture now and then',
+    items: ['{x:free} Free’s transcription time', 'Notes, flashcards and quizzes for each lecture', 'Cancel anytime'],
     cta: 'Choose Flash',
   },
   bolt: {
-    theme: 'bolt', tag: 'Great for regular studying', line: 'Built for your weekly lectures.', who: 'I have classes every week.',
-    items: ['Focused Review: practise exactly what you missed', 'Room for weekly lectures and revision', 'Cancel anytime'],
+    theme: 'bolt', tag: 'Great for regular studying', line: 'Keep up every week, and fix what you miss.',
+    best: 'classes every week',
+    items: ['Focused Review: practise exactly what you missed', '{x:flash} Flash’s transcription time', 'Cancel anytime'],
     cta: 'Choose Bolt',
   },
   thunder: {
-    theme: 'thunder', tag: 'Most powerful', line: 'Your entire semester, working together.', who: 'I study across many lectures and courses.',
-    items: ['Everything in Bolt', 'Answers and guides saved to your account', 'Lowest price per hour: {ph}'],
+    theme: 'thunder', tag: 'Most powerful', line: 'Connect your lectures across the semester.',
+    best: 'many courses and exams',
+    items: ['Everything in Bolt, including Focused Review', 'Answers and guides saved to your account', 'Lowest price per hour: {ph}'],
     cta: 'Get Thunder',
   },
 };
@@ -125,7 +130,9 @@ function card(p, i) {
   const a = allowance(p.monthly_seconds);
   const pl = yearly() && hasYearly(p) ? yearlyPriceLines(p) : priceLines(sp);
   const sub = look.sub || (yearly() && hasYearly(p) ? `${pl.note} · you save ${money(yearlySavings(p))} a year` : p.billing_interval && !sp.intro ? 'Billed monthly' : pl.note);
-  const items = look.items.map((t) => t.replace('{x:free}', free ? times(p, free) : '').replace('{ph}', perHour(p) || ''));
+  const flash = byKey('flash');
+  const items = look.items.map((t) => t.replace('{x:free}', free ? times(p, free) : '').replace('{x:flash}', flash ? times(p, flash) : '').replace('{ph}', perHour(p) || ''))
+    .filter((t) => !/^\s*(Flash|Free)’s/.test(t)); // a multiplier whose plan isn't in the lineup is left out
   let callout = '';
   if (p.key === 'bolt' && p.features.includes('focused_review')) {
     callout = `<div class="pz-x"><span class="pz-x-text"><b>${esc(FEATURE.focused_review.name)}</b><span>${esc(FEATURE.focused_review.text)}</span></span></div>`;
@@ -147,6 +154,7 @@ function card(p, i) {
       ${look.tag ? `<span class="pz-tag">${esc(look.tag)}</span>` : ''}
     </header>
     ${look.line ? `<p class="pz-line">${esc(look.line)}</p>` : ''}
+    ${look.best ? `<p class="pz-who"><b>Best for:</b> ${esc(look.best)}</p>` : ''}
     <div class="pz-price">
       <span class="pz-amt" aria-live="polite">${esc(pl.amount)}</span><span class="pz-per">${esc(pl.per)}</span>
     </div>
@@ -325,5 +333,13 @@ async function main() {
   const wanted = q.get('plan');
   if (PAID_PLANS && (yearly() ? status?.yearlyAvailable : status?.upgradesAvailable) && session && wanted && plans.some((p) => p.key === wanted && p.billing_interval) && status?.plan === 'free') upgrade(wanted);
   else if (wanted && byKey(wanted)) document.getElementById(`pz-${wanted}`)?.closest('.pz-card')?.classList.add('is-selected');
+  // from a feature that belongs to a plan (e.g. Thunder's Ask across recordings): point at that plan, never start
+  // checkout by itself; the student chooses it on the card
+  const hl = q.get('highlight');
+  const card = hl && byKey(hl) && !wanted ? document.getElementById(`pz-${hl}`)?.closest('.pz-card') : null;
+  if (card) {
+    card.classList.add('is-selected');
+    card.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }
 }
 main();

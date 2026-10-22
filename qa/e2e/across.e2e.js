@@ -4,7 +4,7 @@
 // 2) on /across (still Free):   gate()   — then __qaKnobs({ plan: 'thunder' }) + reload
 // 3) run(), reload, run2(), reload, run3(), reload, run4(), reload, run5()
 // Answers and guides are saved by the server (the harness store stands in for public.across_items).
-import { $, $$, sleep, waitFor, runTests, assert } from './lib.js';
+import { $, $$, sleep, waitFor, runTests, assert, eq } from './lib.js';
 
 // results survive the reloads between stages (the driver reloads after each stage)
 const keep = (name, r) => { const all = JSON.parse(sessionStorage.getItem('__axResults') || '{}'); all[name] = r; sessionStorage.setItem('__axResults', JSON.stringify(all)); return r; };
@@ -27,10 +27,20 @@ export async function fromLibrary() {
       await sleep(300);
       assert($('#acrossTag') && !$('#acrossTag').hidden && /Thunder/.test($('#acrossTag').textContent), 'Thunder tag shown');
     }],
-    ['"Ask across recordings" starts selecting; Ask across needs 2–12 recordings', async () => {
-      await waitFor(() => $('#acrossBtn') && $$('.lib-card').length, { what: 'library' });
+    ['Free: "Ask across recordings" explains Thunder with an example and leads to Pricing (Thunder highlighted, no checkout)', async () => {
       $('#acrossBtn').click();
-      await waitFor(() => !$('#bulkBar').hidden && /Select 2 or more/.test($('#bulkCount').textContent), { what: 'hint' });
+      const dlg = await waitFor(() => $('dialog.thunder-dlg[open]'), { what: 'Thunder explanation' });
+      assert(/Connect the dots/.test(dlg.innerText) && dlg.querySelector('.th-example'), 'title and example');
+      eq(dlg.querySelector('.th-cta').getAttribute('href'), '/pricing?highlight=thunder&next=%2Flibrary', 'Explore Thunder');
+      assert(document.activeElement === dlg.querySelector('.th-cta'), 'focus on the action');
+      assert($('#bulkBar').hidden, 'no selection started');
+      dlg.querySelector('[data-act="cancel"]').click();
+      await waitFor(() => !$('dialog.thunder-dlg[open]'), { what: 'closed' });
+    }],
+    ['Selecting in the Library; Ask across needs 2–12 recordings', async () => {
+      await waitFor(() => $('#selectBtn') && $$('.lib-card').length, { what: 'library' });
+      $('#selectBtn').click();
+      await waitFor(() => !$('#bulkBar').hidden, { what: 'selection bar' });
       const ask = $('[data-bulk="across"]'), guide = $('[data-bulk="across-guide"]');
       assert(ask.disabled && guide.disabled, 'nothing selected → disabled');
       const card = (title) => $$('.lib-card').find((c) => c.querySelector('.lib-card-title, h3, .lib-title')?.textContent.trim() === title || c.textContent.includes(title));
@@ -52,8 +62,9 @@ export async function gate() {
       await waitFor(() => $$('.ax-item').length === 2, { what: 'selection', timeout: 10000 });
       const locked = await waitFor(() => $('#askPanel .ax-locked'), { what: 'Thunder panel' });
       assert(!$('#askForm'), 'no question form');
-      const a = locked.querySelector('a[href^="/pricing?plan=thunder"]');
-      assert(a && decodeURIComponent(a.getAttribute('href')).includes(`/across?ids=${selIds().join(',')}`), 'See Thunder, coming back to this selection');
+      const a = locked.querySelector('a.th-cta[href^="/pricing?highlight=thunder&next="]');
+      assert(a && decodeURIComponent(a.getAttribute('href')).includes(`/across?ids=${selIds().join(',')}`), 'Explore Thunder, coming back to this selection');
+      assert(locked.querySelector('.thunder-mark') && locked.querySelector('.th-example'), 'Thunder mark and an example');
       btn(/Combined study guide/).click();
       await waitFor(() => $('#guidePanel .ax-locked'), { what: 'guide explains Thunder too' });
       assert(!btn(/Create combined study guide/, main()), 'no create button');

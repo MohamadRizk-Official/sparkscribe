@@ -31,6 +31,21 @@ export function meterHtml(s) {
     </div>`;
 }
 
+// A canceled subscription that hasn't ended yet: a neutral notice built from the billing status the server read from
+// Stripe (plan, end date, allowance, included features) and the Free plan from billing_plans. Display only: nothing
+// here changes the subscription.
+function cancelNotice(s, plan, features, end) {
+  const free = plans.find((p) => p.is_default);
+  const keeps = [`${allowanceLabel(s.monthlySeconds)} of transcription a month`, ...features.map((f) => FEATURE_NAME[f])];
+  const list = keeps.length > 1 ? `${keeps.slice(0, -1).join(', ')} and ${keeps[keeps.length - 1]}` : keeps[0];
+  return `<div class="bill-alert is-ending" role="status">
+      <span class="ba-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span>
+      <div class="ba-body"><b class="ba-title">${esc(plan.name)} ends ${dateText(end)}</b>
+        <p>Your subscription won’t renew. Until then you keep ${esc(list)}. After that you’re on ${esc(free?.name || 'Free')}${free ? ` (${esc(allowanceLabel(free.monthly_seconds))} a month)` : ''}. Nothing in your library is removed.</p>
+        ${s.hasBillingAccount ? `<p class="ba-next">Changed your mind? Keep ${esc(plan.name)} or change plans in Manage Billing.</p>` : ''}</div>
+    </div>`;
+}
+
 function render() {
   const s = status;
   const plan = plans.find((p) => p.key === s.plan) || { name: s.planName, price_cents: 0, tier: null, features: s.features || [] };
@@ -54,9 +69,7 @@ function render() {
 
   const warn = s.paymentProblem
     ? `<div class="bill-alert bad"><b>We couldn't process your payment.</b> ${paid ? `Your ${esc(plan.name)} plan stays active while Stripe retries.` : 'Your paid plan is paused until the payment goes through.'} Update your payment method in Manage Billing. Your recordings and everything you created are safe.</div>`
-    : s.cancelAtPeriodEnd
-      ? `<div class="bill-alert">Your subscription is canceled and won't renew. Until ${dateText(subEnd)} you keep ${esc(allowanceLabel(s.monthlySeconds))} a month; after that you're on Free (${esc(allowanceLabel(plans.find((p) => p.is_default)?.monthly_seconds || 0))} a month). Nothing in your library is removed.</div>`
-      : '';
+    : s.cancelAtPeriodEnd ? cancelNotice(s, plan, features, subEnd) : '';
   const limitMsg = level === 'high' && next
     ? `<p class="meter-hint">${Number(s.remainingSeconds) < 1 ? `You've used your ${esc(allowanceLabel(s.monthlySeconds))} for this ${period}.` : 'You’re almost out of transcription time.'} <b>${esc(next.name)}</b> includes ${esc(allowanceLabel(next.monthly_seconds))} a month.</p>`
     : level === 'warn' && next ? `<p class="meter-hint">You’ve used most of this ${period === 'month' ? 'month' : 'period'}’s time.</p>` : '';
@@ -66,7 +79,7 @@ function render() {
     : p.intro && !paid && s.introEligible !== false ? `${money(p.intro.price_cents)} first month, then ${price(p)}${perInterval(p)}` : `${price(p)}${perInterval(p)}`);
   const upInterval = yearly ? 'year' : 'month';
   const canUp = yearly ? s.yearlyAvailable : s.upgradesAvailable;
-  const upgradeBtn = next && canUp
+  const upgradeBtn = next && canUp && !s.cancelAtPeriodEnd
     ? `<button class="btn btn-primary" type="button" data-up="${esc(next.key)}" data-interval="${upInterval}"${busy ? ' disabled' : ''}>${busy === next.key ? 'Opening…' : `${paid ? 'Switch' : 'Upgrade'} to ${esc(next.name)} · ${esc(priceOf(next))}`}</button>`
     : '';
   // a monthly subscriber can move the same plan to yearly billing (confirmed in Stripe's portal, prorated there)

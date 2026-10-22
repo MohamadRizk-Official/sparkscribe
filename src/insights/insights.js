@@ -14,6 +14,7 @@ import { myPlan } from '../lib/billing.js';
 import { normalizeToolSettings, describeSettings, ENGINE2_TOOLS, isEngine2Key } from '../lib/tool-settings.js';
 import { resolveContent, transcriptBasis, sameBasis, renderAskSpeakers } from '../lib/speaker-refs.js';
 import { makeDialog } from '../library/dialogs.js';
+import { thunderMark, openThunderDialog } from '../electric/thunder.js';
 import { mascotSignal } from '../mascot/bus.js';
 import { fmtClock, splitCitations, RECORDING_TYPES, RECORDING_TYPE_LABEL, normalizeRecordingType, isNotFound, refersToPlayback } from '../lib/segments.js';
 
@@ -589,7 +590,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
         // before anything is made: what the notebook will look like for this kind of recording, and one button
         const sections = NOTES_INTRO[t].replace(/\.$/, '').split(/, (?:and )?| and /).slice(0, 5);
         html += `<div class="notes-empty"><div class="ne-text"><h3>Your notes, organized</h3><p>${esc(NOTES_INTRO[t])} Only what was said in this recording, nothing added.</p>
-          <button class="btn btn-primary" type="button" data-act="notes-make">${t === 'lecture' ? 'Make study notes' : t === 'meeting' ? 'Make meeting notes' : 'Make notes'}</button>${privacyLine}</div>
+          <button class="btn btn-primary ne-make" type="button" data-act="notes-make">${ICON.spark}<span>${t === 'lecture' ? 'Make lecture notes' : t === 'meeting' ? 'Make meeting notes' : 'Make notes'}</span></button>${privacyLine}</div>
           <div class="ne-preview" aria-hidden="true"><span class="cr-sample-tag">What you'll get</span>${sections.map((x, i) => `<span class="ne-sec"><b>${esc(x.charAt(0).toUpperCase() + x.slice(1))}</b><i style="--w:${[82, 64, 74, 58, 70][i]}%"></i><i style="--w:${[56, 70, 48, 66, 52][i]}%"></i></span>`).join('')}</div></div>`;
       }
     } else {
@@ -654,13 +655,13 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     p.innerHTML = `<div class="panel ins-card ask-card${empty ? ' is-empty' : ''}">
       <div class="ask-thread" aria-live="polite">${empty ? `<div class="ask-empty"><span class="ask-empty-ic" aria-hidden="true">${ICON.spark}</span><h3>Ask anything about this recording</h3><p>Answers come from what was said, with the moments they rely on.</p></div>` : thread + live}</div>
       ${empty ? '<p class="ask-try">Try one of these</p>' : ''}
-      <div class="ask-starters${empty ? ' big' : ''}">${starters.map((s) => `<button type="button" class="starter" data-q="${esc(s)}"${pending && !pending.error ? ' disabled' : ''}><span>${esc(s)}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m0 0-5-5m5 5-5 5"/></svg></button>`).join('')}</div>
+      <div class="ask-starters${empty ? ' big' : ''}">${starters.map((s) => `<button type="button" class="starter${pending && !pending.error && pending.question === s ? ' is-sent' : ''}" data-q="${esc(s)}"${pending && !pending.error ? ' disabled' : ''}><span>${esc(s)}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m0 0-5-5m5 5-5 5"/></svg></button>`).join('')}</div>
       <form class="ask-form" autocomplete="off">
         <textarea class="ask-input" rows="1" maxlength="500" placeholder="Ask anything about this recording" aria-label="Your question" enterkeyhint="send"${pending && !pending.error ? ' disabled' : ''}></textarea>
         <button class="ask-send" type="submit" aria-label="Ask"${pending && !pending.error ? ' disabled' : ''}>${ICON.send}</button>
       </form>
       ${privacyLine}
-      ${ctx.getId?.() ? `<a class="ask-across" href="/across?ids=${encodeURIComponent(ctx.getId())}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.3 8.2 15.7 11M8.3 15.8l7.4-2.8"/></svg><span><b>Ask across several recordings</b> One question, answered from up to 12 of your lectures at once.</span><span class="ask-across-plan">Thunder</span></a>` : ''}
+      ${ctx.getId?.() ? `<a class="ask-across" href="/across?ids=${encodeURIComponent(ctx.getId())}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2.5"/><circle cx="6" cy="17" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8.3 8.2 15.7 11M8.3 15.8l7.4-2.8"/></svg><span><b>Ask across several recordings</b> One question, answered from up to 12 of your lectures at once.</span>${thunderMark()}</a>` : ''}
     </div>`;
     const form = p.querySelector('.ask-form');
     const input = p.querySelector('.ask-input');
@@ -672,6 +673,12 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     form.addEventListener('submit', (e) => { e.preventDefault(); ask(input.value); });
     p.querySelectorAll('.starter').forEach((b) => b.addEventListener('click', () => ask(b.dataset.q)));
     p.querySelector('[data-act="ask-retry"]')?.addEventListener('click', () => ask(pending.question));
+    // asking across recordings is Thunder's: on another plan, explain it and offer Thunder instead of a page that refuses
+    p.querySelector('.ask-across')?.addEventListener('click', (e) => {
+      if (!planInfo || planInfo.features.includes('across_ask')) return;
+      e.preventDefault();
+      openThunderDialog({ feature: 'ask', back: e.currentTarget.getAttribute('href'), planName: planInfo.planName });
+    });
     const th = p.querySelector('.ask-thread');
     th.scrollTop = th.scrollHeight;
   }

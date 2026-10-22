@@ -14,6 +14,7 @@ import { mascotSignal } from '../mascot/bus.js';
 import { makeDialog, promptDialog, confirmDialog, confirmDeleteRecordings, folderPicker, toast, addRecordingsDialog } from '../library/dialogs.js';
 import { courseTone } from '../lib/course-tone.js';
 import { myPlan } from '../lib/billing.js';
+import { openThunderDialog } from '../electric/thunder.js';
 
 const $ = (id) => document.getElementById(id);
 const TYPES = ['lecture', 'meeting', 'voice_message', 'interview', 'podcast', 'general'];
@@ -200,7 +201,7 @@ function emptyHtml() {
     ? `<div class="lib-empty-actions"><button class="btn btn-primary" type="button" data-act="add-recordings">${ICON.plus}<span>Add recordings</span></button><a class="btn btn-ghost" href="/#upload">${ICON.upload}<span>Upload a lecture</span></a></div>`
     : cta ? `<div class="lib-empty-actions"><a class="btn btn-primary" href="/#upload">${ICON.upload}<span>Upload a recording</span></a></div>` : '';
   return `<div class="lib-empty e-empty k-${key}">
-    <div class="e-empty-art" aria-hidden="true"><span class="e-empty-ring"></span>${art}</div>
+    <div class="e-empty-mark" aria-hidden="true"><span class="e-empty-ring"></span><div class="e-empty-art">${art}</div></div>
     <h2>${esc(title)}</h2><p>${esc(text)}</p>
     ${actions}
     ${st.type && st.type !== 'general' ? '<p class="lib-empty-hint">Tip: open a recording and set its type with the Type button at the top.</p>' : ''}
@@ -563,9 +564,14 @@ function placeTabIndicator(instant = false) {
 // ---------- events ----------
 function bind() {
   // "Ask across recordings": start selecting, with the hint in the bar
-  $('acrossBtn')?.addEventListener('click', () => { st.acrossHint = true; if (!st.selecting) setSelecting(true); else renderBulkBar(); });
-  // a Thunder feature: the tag says so on other plans (the across page explains it, keeping the selection)
-  myPlan().then((p) => { if (p?.features?.includes('across_ask') && $('acrossTag')) $('acrossTag').hidden = true; });
+  // a Thunder feature: on another plan it explains what it does and offers Thunder (instead of a selection that leads
+  // to a refusal); the mark stays on other plans only
+  let plan = null;
+  myPlan().then((p) => { plan = p; if (p?.features?.includes('across_ask') && $('acrossTag')) $('acrossTag').hidden = true; });
+  $('acrossBtn')?.addEventListener('click', () => {
+    if (plan && !plan.features.includes('across_ask')) { openThunderDialog({ feature: 'ask', back: '/library', planName: plan.planName }); return; }
+    st.acrossHint = true; if (!st.selecting) setSelecting(true); else renderBulkBar();
+  });
   $('viewTabs').addEventListener('click', (e) => {
     const b = e.target.closest('[data-view]');
     if (!b) return;

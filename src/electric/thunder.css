@@ -1,0 +1,83 @@
+/* ELECTRIC — Thunder: the plan that connects recordings (electric/thunder.js). Violet is its colour; its mark is a
+   bolt. On hover or focus of the control that holds the mark, one short violet current crosses it (no permanent
+   animation, no gradient outline). */
+
+.thunder-mark {
+  position: relative; overflow: hidden; flex: none;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px 3px 7px; border-radius: 999px;
+  font: 650 12.5px/1.2 var(--e-sans); letter-spacing: 0; text-transform: none; color: var(--e-violet-ink);
+  background: color-mix(in srgb, var(--e-violet) 16%, transparent);
+  box-shadow: 0 0 14px -4px var(--e-glow-violet);
+}
+.thunder-mark svg { width: 13px; height: 13px; fill: currentColor; stroke: none; transition: filter var(--e-t-hover) var(--e-ease); }
+.thunder-mark .tm-arc {
+  position: absolute; inset: -2px auto -2px 0; width: 46%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(232, 214, 255, .85) 48%, rgba(195, 163, 255, .9) 52%, transparent);
+  transform: translateX(-130%) skewX(-18deg); opacity: 0;
+}
+html[data-theme="light"] .thunder-mark { background: color-mix(in srgb, var(--e-violet) 11%, transparent); box-shadow: none; }
+html[data-theme="light"] .thunder-mark .tm-arc { background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .95) 50%, transparent); }
+:is(a, button):is(:hover, :focus-visible) .thunder-mark .tm-arc, .ax-locked:hover .thunder-mark .tm-arc { animation: e-tm-arc 560ms cubic-bezier(.55, .05, .35, 1) 1; }
+:is(a, button):is(:hover, :focus-visible) .thunder-mark svg, .ax-locked:hover .thunder-mark svg { filter: drop-shadow(0 0 4px var(--e-violet)); }
+@keyframes e-tm-arc { 0% { transform: translateX(-130%) skewX(-18deg); opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translateX(260%) skewX(-18deg); opacity: 0; } }
+
+/* the violet action: Explore Thunder */
+.btn.th-cta {
+  color: #fff; background: linear-gradient(100deg, #8a55f5 0%, #a16bff 55%, #b98aff 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 1px 2px rgba(0, 0, 0, .25), 0 8px 22px -8px var(--e-glow-violet);
+  text-decoration: none; position: relative; overflow: hidden;
+}
+.btn.th-cta svg { fill: currentColor; stroke: none; width: 16px; height: 16px; }
+.btn.th-cta::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, .55) 50%, transparent 65%);
+  transform: translateX(-110%); opacity: 0;
+}
+.btn.th-cta:hover { background: linear-gradient(100deg, #8a55f5 0%, #a16bff 55%, #b98aff 100%); transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 2px 4px rgba(0, 0, 0, .2), 0 14px 30px -10px var(--e-glow-violet), 0 0 0 4px color-mix(in srgb, var(--e-violet) 16%, transparent); }
+.btn.th-cta:hover::after, .btn.th-cta:focus-visible::after { animation: e-th-cta 600ms cubic-bezier(.55, .05, .35, 1) 1; }
+@keyframes e-th-cta { 0% { transform: translateX(-110%); opacity: 1; } 100% { transform: translateX(110%); opacity: 1; } }
+html[data-theme="light"] .btn.th-cta, html[data-theme="light"] .btn.th-cta:hover { background: linear-gradient(100deg, #6232cf 0%, #7c4ae8 60%, #8d5cf0 100%); }
+
+/* an example of what Thunder does: a question, then the recordings that answer it */
+.th-example { display: grid; gap: 8px; padding: 14px 16px; border-radius: var(--e-r-md); background: var(--e-s0); box-shadow: inset 0 0 0 1px var(--e-rule); }
+html[data-theme="light"] .th-example { background: var(--e-s3); }
+.th-example .cr-sample-tag { margin: 0; }
+.th-q { margin: 0; font: 600 15px/1.45 var(--e-sans); color: var(--e-ink); }
+.th-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.th-links span { padding: 3px 9px; border-radius: 7px; font: 500 12.5px var(--e-sans); color: var(--e-ink-2); background: color-mix(in srgb, var(--e-ink) 7%, transparent); }
+.th-links span:first-child { color: var(--e-violet-ink); background: color-mix(in srgb, var(--e-violet) 14%, transparent); font-weight: 600; }
+.th-links i { width: 18px; height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--e-violet) 55%, transparent); }
+
+/* the explanation, as a dialog (Ask, Library) */
+dialog.thunder-dlg { width: min(520px, calc(100vw - 32px)); display: grid; gap: 16px;
+  background: radial-gradient(120% 70% at 0% 0%, color-mix(in srgb, var(--e-violet) 14%, transparent), transparent 62%), var(--e-s2); }
+dialog.thunder-dlg:not([open]) { display: none; }
+.th-head { display: grid; gap: 8px; justify-items: start; }
+.th-head h3 { margin: 4px 0 0; font-size: 22px; }
+.th-head p { margin: 0; color: var(--e-ink-2); font-size: 15px; line-height: 1.55; }
+.th-plan { margin: 0; font-size: 13.5px; color: var(--e-ink-3); }
+dialog.thunder-dlg .confirm-actions { margin-top: 0; }
+
+/* /across on another plan */
+.ax-locked { display: grid; gap: 12px; justify-items: start; padding: clamp(22px, 3vw, 32px); border: 0; border-radius: var(--e-r-xl);
+  background: radial-gradient(110% 80% at 0% 0%, color-mix(in srgb, var(--e-violet) 13%, transparent), transparent 60%), var(--e-s1); box-shadow: var(--e-elev-1); }
+.ax-locked h2 { margin: 2px 0 0; font-family: var(--e-display); font-size: clamp(21px, 2.2vw, 26px); letter-spacing: -0.022em; color: var(--e-ink); }
+.ax-locked > p { margin: 0; max-width: 62ch; color: var(--e-ink-2); line-height: 1.55; }
+.ax-locked .th-example { width: min(100%, 520px); }
+.ax-locked .ax-fine { color: var(--e-ink-3); }
+.ax-locked .ax-empty-actions { justify-content: flex-start; margin-top: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .thunder-mark .tm-arc, .btn.th-cta::after { display: none; }
+  .btn.th-cta:hover { transform: none; }
+}
+
+/* /across header: the page's eyebrow in Thunder's colour; its existing pulse is a saturated violet core with a short
+   halo (6px at most, clear of the text beside it) */
+.ax-hero .eyebrow { display: inline-flex; align-items: center; gap: 8px; padding: 4px 11px 4px 9px; border: 0; border-radius: 999px;
+  font: 600 13px var(--e-sans); letter-spacing: 0; text-transform: none; color: var(--e-violet-ink); background: color-mix(in srgb, var(--e-violet) 13%, transparent); }
+.ax-hero .eyebrow .pulse { width: 7px; height: 7px; margin: 0; background: var(--e-violet); box-shadow: 0 0 6px var(--e-violet); animation: e-dot-halo 2.8s cubic-bezier(.2, .7, .3, 1) infinite; }
+@keyframes e-dot-halo { 0% { box-shadow: 0 0 6px var(--e-violet), 0 0 0 0 color-mix(in srgb, var(--e-violet) 55%, transparent); } 80%, 100% { box-shadow: 0 0 6px var(--e-violet), 0 0 0 6px color-mix(in srgb, var(--e-violet) 0%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .ax-hero .eyebrow .pulse { animation: none; } }

@@ -41,6 +41,9 @@ html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color
 .pz-card::before { /* the light that gathers under a card you consider */
   content: ""; position: absolute; z-index: -1; left: -20%; right: -20%; bottom: -55%; height: 80%; border-radius: 50%;
   background: radial-gradient(closest-side, color-mix(in srgb, var(--tc) 30%, transparent), transparent); opacity: .35; transition: opacity var(--e-t-panel) var(--e-ease);
+  /* the legacy Flash card drew an animated gradient outline with this pseudo-element (mask + padding + pz-sheen);
+     none of it may leak into the glow */
+  padding: 0; -webkit-mask: none; mask: none; animation: none; background-size: auto;
 }
 .pz-card::after { content: none; }
 .pz-card:hover, .pz-card:focus-within { transform: translateY(-6px); box-shadow: var(--e-elev-2), 0 26px 50px -28px color-mix(in srgb, var(--tc) 85%, transparent); }
@@ -55,6 +58,7 @@ html[data-theme="light"] .pz-card.t-thunder { background: radial-gradient(120% 8
 .pz-card.t-thunder:hover, .pz-card.t-thunder:focus-within { transform: translateY(-8px); box-shadow: var(--e-elev-3), inset 0 0 0 1px color-mix(in srgb, var(--e-violet) 45%, transparent), 0 30px 60px -26px color-mix(in srgb, var(--e-violet) 90%, transparent); }
 .pz-card.is-current { box-shadow: var(--e-elev-1), inset 0 0 0 2px color-mix(in srgb, var(--tc) 60%, transparent); }
 .pz-card.is-selected { box-shadow: var(--e-elev-2), inset 0 0 0 2px var(--tc); }
+.pz-card { scroll-margin-top: 92px; }
 .pz-ribbon, .pz-badge { display: none; }
 
 /* the tier's effect */
@@ -118,8 +122,11 @@ html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 .pz-connect i { grid-column: 1 / 4; grid-row: 2; height: 14px; margin: -2px 10% 0; border: 1.5px solid color-mix(in srgb, var(--e-violet) 60%, transparent); border-top: 0; border-radius: 0 0 10px 10px; }
 .pz-connect b { grid-column: 1 / -1; grid-row: 3; justify-self: center; padding: 5px 10px; border-radius: 8px; font: 700 12px var(--e-sans); color: #fff; background: linear-gradient(100deg, var(--e-violet), var(--e-magenta)); box-shadow: 0 6px 16px -8px var(--e-violet); }
 .t-thunder:hover .pz-connect i { border-color: var(--e-cyan); box-shadow: 0 6px 12px -6px var(--e-glow-cyan); transition: border-color 300ms, box-shadow 300ms; }
-.pz-who { margin: 0; font-size: 14px; font-style: italic; color: var(--e-ink-3); }
-.pz-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.pz-who { margin: -2px 0 0; font-size: 13.5px; font-style: normal; line-height: 1.45; color: var(--e-ink-3); }
+.pz-who b { font-weight: 600; color: var(--e-ink-2); }
+/* the list sits under one hairline with real room below it (the 2026-10-21 cards had the legacy border but this
+   layer's padding: 0, so the first item touched the line) */
+.pz-list { list-style: none; margin: 2px 0 0; padding: 16px 0 0; border-top: 1px solid var(--e-rule); display: grid; gap: 8px; }
 .pz-list li { display: grid; grid-template-columns: 18px 1fr; gap: 9px; align-items: start; font-size: 14.5px; line-height: 1.45; color: var(--e-ink-2); }
 .pz-list svg { width: 18px; height: 18px; color: var(--tc-ink); stroke-width: 2.2; margin-top: 1px; }
 .pz-cta { margin-top: auto; padding-top: 6px; }

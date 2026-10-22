@@ -409,8 +409,8 @@ function renderPct() {
   run.overall = overall;
   els.pctNum.innerHTML = `${Math.floor(overall)}<small>%</small>`;
   els.pctBar.style.width = overall + '%';
-  els.waveSweep.style.width = overall + '%';
-  els.sweepHead.style.left = overall + '%'; // the bolt rides the edge of what's been read
+  els.waveSweep.style.width = waveEdge(overall);
+  els.sweepHead.style.left = waveEdge(overall); // the bolt rides the edge of what's been read
   if (run.stage === 'run' || run.stage === 'speakers' || run.stage === 'review') {
     const elapsed = (performance.now() - run.stageStart) / 1000;
     const p = run.stagePct / 100;
@@ -575,31 +575,62 @@ async function start(file) {
   }, [samples.buffer]);
 }
 
+// The recording's waveform while it is transcribed. Drawn at the canvas's real CSS size × devicePixelRatio (no
+// stretching), inside a padding that keeps bars off the rounded edges; the lit copy (the part already read) is the
+// same drawing in vivid cyan, revealed by its parent's width, which renderPct sets from real progress mapped onto the
+// padded bar area. Redrawn when the window is resized.
+const WAVE_PAD = 14; // px inside the frame, left/right and top/bottom
+let wavePeaks = null;
 function drawWave(pk) {
+  if (pk !== undefined) wavePeaks = pk;
+  pk = wavePeaks;
   const base = els.wave;
-  const dpr = window.devicePixelRatio || 1;
-  const W = base.clientWidth || 800, H = 96;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const W = Math.round(els.waveWrap.clientWidth || base.clientWidth || 800);
+  const H = Math.round(base.clientHeight || 112);
+  const light = document.documentElement.dataset.theme === 'light';
   let sweepCanvas = els.waveSweep.querySelector('canvas');
   if (!sweepCanvas) { sweepCanvas = document.createElement('canvas'); els.waveSweep.appendChild(sweepCanvas); }
-  for (const [c, lit] of [[base, false], [sweepCanvas, true]]) {
-    c.width = W * dpr; c.height = H * dpr;
-    if (lit) c.style.width = W + 'px'; // the lit copy is revealed by its parent's width
-    const ctx = c.getContext('2d');
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, W, H);
-    if (!pk) continue;
-    const g = ctx.createLinearGradient(0, 0, W, 0);
-    g.addColorStop(0, '#22d3ee'); g.addColorStop(0.55, '#a78bfa'); g.addColorStop(1, '#f472b6');
-    ctx.fillStyle = lit ? g : '#8a93b9';
+  // bars: 3px wide, 2px apart, centred; peaks max-pooled to the bars that fit
+  const innerW = W - 2 * WAVE_PAD, innerH = H - 2 * WAVE_PAD;
+  const step = 5, bw = 3;
+  const n = Math.max(1, Math.floor((innerW + (step - bw)) / step));
+  const x0 = WAVE_PAD + (innerW - (n * step - (step - bw))) / 2;
+  let bars = null;
+  if (pk) {
     let max = 0;
     for (const v of pk) max = Math.max(max, v);
-    const n = pk.length, bw = W / n;
+    bars = Array.from({ length: n }, (_, i) => {
+      let m = 0;
+      for (let k = Math.floor((i * pk.length) / n), e = Math.max(k + 1, Math.floor(((i + 1) * pk.length) / n)); k < e; k++) m = Math.max(m, pk[k]);
+      return Math.max(3, Math.sqrt(m / (max || 1)) * innerH); // sqrt: quiet passages stay visible
+    });
+  }
+  for (const [c, lit] of [[base, false], [sweepCanvas, true]]) {
+    c.width = W * dpr; c.height = H * dpr;
+    c.style.width = W + 'px'; c.style.height = H + 'px';
+    const ctx = c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    if (!bars) continue;
+    if (lit) {
+      const g = ctx.createLinearGradient(0, WAVE_PAD, 0, H - WAVE_PAD);
+      if (light) { g.addColorStop(0, '#0b8fb0'); g.addColorStop(0.5, '#0eb5d6'); g.addColorStop(1, '#0b8fb0'); }
+      else { g.addColorStop(0, '#7af0ff'); g.addColorStop(0.5, '#20d4f4'); g.addColorStop(1, '#7af0ff'); }
+      ctx.fillStyle = g;
+      ctx.shadowColor = light ? 'rgba(14, 181, 214, .35)' : 'rgba(32, 212, 244, .55)';
+      ctx.shadowBlur = light ? 3 : 6;
+    } else ctx.fillStyle = light ? 'rgba(20, 45, 90, .2)' : 'rgba(170, 196, 235, .22)';
     for (let i = 0; i < n; i++) {
-      const h = Math.max(2, (pk[i] / (max || 1)) * (H - 14));
-      ctx.fillRect(i * bw, (H - h) / 2, Math.max(1, bw - 0.6), h);
+      const h = bars[i], x = x0 + i * step, y = (H - h) / 2;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, bw, h, 1.5); else ctx.rect(x, y, bw, h);
+      ctx.fill();
     }
   }
 }
+// progress → how much of the frame the lit copy shows: the bars span the padded area only
+const waveEdge = (pct) => `calc(${WAVE_PAD}px + (100% - ${2 * WAVE_PAD}px) * ${(pct / 100).toFixed(4)})`;
 
 // ---------- results ----------
 function onComplete({ lines, language, ms, device, stats }) {
@@ -1007,7 +1038,10 @@ els.timeline.addEventListener('mousemove', (e) => {
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(() => { if (state?.lines && !els.resultsPanel.classList.contains('hidden')) { drawTimeline(); updatePlayhead(); } }, 120);
+  resizeTimer = setTimeout(() => {
+    if (state?.lines && !els.resultsPanel.classList.contains('hidden')) { drawTimeline(); updatePlayhead(); }
+    if (wavePeaks && els.waveWrap.offsetParent) drawWave();
+  }, 120);
 });
 
 // ---------- player ----------

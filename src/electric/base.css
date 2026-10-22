@@ -34,9 +34,15 @@ html[data-theme="light"] .bg .bg-noise { opacity: .025; }
 .e-circuit { -webkit-mask-image: radial-gradient(120% 100% at 50% 50%, transparent 38%, #000 75%); mask-image: radial-gradient(120% 100% at 50% 50%, transparent 38%, #000 75%); }
 .e-circuit .ec-trace { fill: none; stroke: rgba(170, 196, 235, .07); stroke-width: 1; }
 .e-circuit .ec-node { fill: var(--e-canvas); stroke: rgba(170, 196, 235, .14); stroke-width: 1; }
-.e-circuit .ec-current { fill: none; stroke: url(#ecGrad); stroke-width: 1.6; stroke-linecap: round; stroke-dasharray: 90 1400; stroke-dashoffset: 1490; animation: e-current 9s var(--e-ease) infinite; opacity: .9; }
-.e-circuit .ec-current.b { animation-delay: -4.5s; animation-duration: 11s; }
-@keyframes e-current { 0% { stroke-dashoffset: 1490; opacity: 0; } 8% { opacity: .9; } 70% { opacity: .9; } 85%, 100% { stroke-dashoffset: 0; opacity: 0; } }
+/* the current (electric/chrome.js runCurrents): a crisp bright core over a controlled cyan glow, and a spark at the
+   node it reaches. Dash and timing are set per run from the trace's real length. */
+.e-circuit .ec-glow, .e-circuit .ec-core { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 16 100; stroke-dashoffset: 16; opacity: 0; }
+.e-circuit .ec-glow { stroke: #20d4f4; stroke-width: 7; filter: blur(3px); }
+.e-circuit .ec-core { stroke: #dffbff; stroke-width: 1.8; filter: drop-shadow(0 0 2px #20d4f4); }
+.e-circuit .ec-spark { fill: #dffbff; opacity: 0; transform-box: fill-box; transform-origin: center; filter: drop-shadow(0 0 6px #20d4f4) drop-shadow(0 0 12px rgba(32, 212, 244, .6)); }
+html[data-theme="light"] .e-circuit .ec-glow { stroke: rgba(14, 181, 214, .45); stroke-width: 5; }
+html[data-theme="light"] .e-circuit .ec-core { stroke: #0b8fb0; filter: none; }
+html[data-theme="light"] .e-circuit .ec-spark { fill: #0eb5d6; filter: drop-shadow(0 0 6px rgba(14, 181, 214, .6)); }
 html[data-theme="light"] .e-circuit .ec-trace { stroke: rgba(20, 45, 90, .07); }
 @media (max-width: 760px) { .e-circuit { display: none; } }
 
@@ -88,7 +94,7 @@ html[data-theme="light"] .btn-primary:hover { background: linear-gradient(100deg
 @media (prefers-reduced-motion: reduce) {
   .btn, .btn-primary { transition: background-color var(--e-t-hover), box-shadow var(--e-t-hover), color var(--e-t-hover); }
   .btn:hover, .btn-primary:hover, .btn:active, .btn-primary:active { transform: none; }
-  .e-circuit .ec-current { animation: none; opacity: 0; }
+  .e-circuit .ec-live { display: none; }
 }
 
 /* a page's own quiet trust line (e.g. Plan & billing: "Payments are handled by Stripe…"), in the text face */

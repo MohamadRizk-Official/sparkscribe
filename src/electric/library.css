@@ -29,8 +29,8 @@
 .lib-sub { margin: 8px 0 0; font-size: 17px; color: var(--e-ink-2); }
 .lib-stats { margin: 6px 0 0; font: 500 14px var(--e-sans); color: var(--e-ink-3); letter-spacing: 0; }
 .lib-across { gap: 9px; }
-.lib-across .plan-tag { margin: 0; padding: 0; border: 0; background: none; font: 600 12.5px var(--e-sans); letter-spacing: 0; text-transform: none; color: var(--e-violet-ink); }
-.lib-across .plan-tag::before { content: "· "; color: var(--e-ink-4); }
+.lib-across .thunder-mark { margin-left: 2px; padding: 2px 8px 2px 6px; }
+.lib-across .thunder-mark[hidden] { display: none; }
 
 /* ---------- search: a real productivity field ---------- */
 .lib-search { position: relative; display: flex; align-items: center; border: 0; border-radius: var(--e-r-md); background: var(--e-s1); box-shadow: var(--e-elev-1);
@@ -124,15 +124,29 @@
 .e-empty { display: grid; justify-items: center; gap: 6px; text-align: center; padding: 48px 24px 52px; border-radius: var(--e-r-xl); background: transparent; box-shadow: none; border: 0; }
 .e-empty h2 { margin: 10px 0 0; font-family: var(--e-display); font-size: 23px; font-weight: 600; letter-spacing: -0.02em; color: var(--e-ink); }
 .e-empty p { margin: 0; max-width: 46ch; color: var(--e-ink-3); font-size: 15.5px; line-height: 1.55; }
-.e-empty-art { position: relative; display: grid; place-items: center; width: 76px; height: 76px; border-radius: 24px; color: var(--e-cyan-ink);
-  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--e-cyan) 20%, var(--e-s1)), var(--e-s1)); box-shadow: var(--e-elev-2); }
-.e-empty-art svg { width: 32px; height: 32px; position: relative; }
-.e-empty-ring { position: absolute; inset: -10px; border-radius: 30px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--e-cyan) 18%, transparent); animation: e-ring 3.6s var(--e-ease) infinite; }
-.k-favorites .e-empty-art { color: var(--e-amber); background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--e-amber) 22%, var(--e-s1)), var(--e-s1)); }
-.k-favorites .e-empty-art svg { fill: color-mix(in srgb, var(--e-amber) 30%, transparent); }
-.k-favorites .e-empty-ring { box-shadow: 0 0 0 1px color-mix(in srgb, var(--e-amber) 22%, transparent); }
+/* the mark: a saturated core (the icon on its lit tile) and, behind it, a soft halo of the same colour that swells and
+   dissipates every few seconds. The halo is a filled glow, not an outline, and never reaches past 12px beyond the tile,
+   so it can't touch the heading under it (16px away). Tone per view: cyan (types), gold (Favorites), the course's own
+   colour (a course, violet by default). */
+.e-empty-mark { --halo: var(--e-cyan); position: relative; display: grid; place-items: center; width: 76px; height: 76px; margin-bottom: 4px; }
+.k-favorites .e-empty-mark { --halo: #ffc21a; }
+.k-folder .e-empty-mark { --halo: var(--tone, var(--e-violet)); }
+.e-empty-art { position: relative; z-index: 1; display: grid; place-items: center; width: 76px; height: 76px; border-radius: 24px; color: var(--e-cyan-ink);
+  background: radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--halo) 30%, var(--e-s1)), var(--e-s1) 78%);
+  box-shadow: var(--e-elev-2), 0 0 26px -6px color-mix(in srgb, var(--halo) 70%, transparent); }
+.e-empty-art svg { width: 32px; height: 32px; position: relative; filter: drop-shadow(0 0 6px color-mix(in srgb, var(--halo) 60%, transparent)); }
+.e-empty-ring { position: absolute; inset: 0; border-radius: 26px; pointer-events: none;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--halo) 42%, transparent), color-mix(in srgb, var(--halo) 14%, transparent) 62%, transparent);
+  opacity: 0; animation: e-halo 3.4s cubic-bezier(.2, .7, .3, 1) infinite; }
+.k-favorites .e-empty-art { color: #ffc21a; }
+.k-favorites .e-empty-art svg { fill: color-mix(in srgb, #ffc21a 45%, transparent); }
 .k-folder .e-empty-art { color: var(--tone, var(--e-violet)); }
-@keyframes e-ring { 0% { transform: scale(.92); opacity: 0; } 30% { opacity: 1; } 100% { transform: scale(1.18); opacity: 0; } }
+html[data-theme="light"] .e-empty-art { background: radial-gradient(circle at 50% 34%, color-mix(in srgb, var(--halo) 18%, #fff), #fff 78%); box-shadow: var(--e-elev-2); }
+html[data-theme="light"] .e-empty-art svg { filter: none; }
+html[data-theme="light"] .k-favorites .e-empty-mark { --halo: #e8a400; }
+html[data-theme="light"] .k-favorites .e-empty-art { color: #b77f00; }
+/* 1 → 1.32 of 76px = 100px: 12px past the tile at its largest, by then almost transparent */
+@keyframes e-halo { 0% { transform: scale(.94); opacity: 0; } 22% { opacity: .95; } 100% { transform: scale(1.32); opacity: 0; } }
 .lib-empty-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 16px; }
 .lib-empty-hint { color: var(--e-ink-3); font-size: 14px; }
 
@@ -227,7 +241,8 @@ html[data-theme="light"] .ar-row input:checked + .ar-box { color: #fff; }
 @media (prefers-reduced-motion: reduce) {
   .lib-card, .folder-tile { transition: box-shadow var(--e-t-hover), background-color var(--e-t-hover); }
   .lib-card:hover, .folder-tile:hover { transform: none; }
-  .e-empty-ring, .icon-btn.star.just-on svg, .icon-btn.star.just-on { animation: none; }
+  .e-empty-ring { animation: none; opacity: .45; transform: scale(1.1); }
+  .icon-btn.star.just-on svg, .icon-btn.star.just-on { animation: none; }
   .tab-ind { transition: none; }
 }
 
