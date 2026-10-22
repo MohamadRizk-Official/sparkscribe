@@ -19,3 +19,9 @@ html[data-theme="light"] :is(.transcript-card, .speakers-card, .timeline-card, .
 /* card: list items people click — soft shadow and surface contrast; their hover rules stay where they are */
 .lib-card, .folder-tile, .sr-item { box-shadow: var(--e-card); }
 html[data-theme="light"] .ns-step { box-shadow: var(--e-card); }
+
+/* performance: no live backdrop blurs or hairline filters left over from the old design. These surfaces have their
+   own background (or nothing scrolls beneath them), so the blur only cost a re-composite whenever the animated
+   background or anything under them changed. */
+.lib-views, .ax-tabs, .set-nav a { -webkit-backdrop-filter: none; backdrop-filter: none; }
+.lib-card::before { filter: none; }

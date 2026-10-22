@@ -33,3 +33,13 @@ Fixes: the mascot steps at most ~60 times a second and draws at most 24 times a 
 20 draws/s), pixel density capped at 1.5; the tab bar, player bar, scrolled header and settings nav are solid surfaces
 (no backdrop blur); the logo ignites three times after load, then rests; the background current has no mask or
 filters. Nothing visible was removed.
+
+### Pricing page lag (follow-up)
+
+Root cause: every plan card still carried the old design's `backdrop-filter: blur(14px)` (style.css `.pz-card`), which the
+Electric layer never switched off. Four tall cards re-blurred the animated page behind them, and recomputed it on every
+frame of a hover lift; a hover also animated two large box-shadows, 20 meter-cell glows and filtered effects (69 animated
+properties per card). Fix: no backdrop blur (the body is opaque, nothing visible changes), the lift is a composited
+transform and the larger shadow swaps in at once, the meter cells animate colour only, the hover currents move with
+transform and lost their drop-shadow filters. Same leftovers removed on the Library and /across tab strips, the Settings
+nav links and the Library cards' hairline blur filter. Audited every page afterwards: no live backdrop blur left.

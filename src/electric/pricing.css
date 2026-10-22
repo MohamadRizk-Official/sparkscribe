@@ -36,11 +36,15 @@ html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color
   --tc: var(--e-cyan); --tc-ink: var(--e-cyan-ink);
   position: relative; display: flex; flex-direction: column; gap: 12px; padding: 24px 22px 22px; border: 0; border-radius: var(--e-r-xl); overflow: hidden; isolation: isolate;
   background: var(--e-s1); box-shadow: var(--e-elev-1); animation: none; transform: none;
-  transition: transform var(--e-t-panel) var(--e-ease), box-shadow var(--e-t-panel) var(--e-ease);
+  /* performance (2026-10-22, "Pricing is laggy"): the old design gave every plan card a live backdrop blur of the
+     animated page behind it, recomputed on every frame of a hover lift. The body is opaque, so the blur is off; the
+     lift is a composited transform and the larger shadow swaps in at once instead of being re-drawn every frame. */
+  -webkit-backdrop-filter: none; backdrop-filter: none; will-change: transform;
+  transition: transform var(--e-t-panel) var(--e-ease);
 }
 .pz-card::before { /* the light that gathers under a card you consider */
   content: ""; position: absolute; z-index: -1; left: -20%; right: -20%; bottom: -55%; height: 80%; border-radius: 50%;
-  background: radial-gradient(closest-side, color-mix(in srgb, var(--tc) 30%, transparent), transparent); opacity: .35; transition: opacity var(--e-t-panel) var(--e-ease);
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--tc) 30%, transparent), transparent); opacity: .35; transition: opacity var(--e-t-panel) var(--e-ease); will-change: opacity;
   /* the legacy Flash card drew an animated gradient outline with this pseudo-element (mask + padding + pz-sheen);
      none of it may leak into the glow */
   padding: 0; -webkit-mask: none; mask: none; animation: none; background-size: auto;
@@ -72,18 +76,19 @@ html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-
 .pz-fx { position: absolute; z-index: -1; pointer-events: none; }
 .pz-fx svg { display: block; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .t-flash .pz-fx { top: 26px; left: 70px; width: 120px; height: 40px; }
-.fx-flash path { stroke: var(--e-amber); stroke-width: 2; stroke-dasharray: 22 200; stroke-dashoffset: 22; opacity: 0; filter: drop-shadow(0 0 4px var(--e-amber)); }
+.fx-flash path { stroke: var(--e-amber); stroke-width: 2; stroke-dasharray: 22 200; stroke-dashoffset: 22; opacity: 0; }
 .t-flash:hover .fx-flash path, .t-flash:focus-within .fx-flash path { animation: fx-ignite 900ms var(--e-ease) 1 both; }
 @keyframes fx-ignite { 0% { stroke-dashoffset: 22; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { stroke-dashoffset: -190; opacity: 0; } }
 .t-bolt .pz-fx { top: 0; left: 0; right: 0; height: 3px; }
 .t-bolt .pz-fx svg { width: 100%; height: 3px; }
 .fx-bolt path { stroke: var(--e-blue); stroke-width: 6; opacity: .25; }
-.t-bolt .pz-fx::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, #8fd1ff, var(--e-blue), transparent); background-size: 40% 100%; background-repeat: no-repeat; background-position: -40% 0; opacity: 0; }
+.t-bolt .pz-fx, .t-thunder .pz-fx { overflow: hidden; }
+.t-bolt .pz-fx::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(90deg, transparent, #8fd1ff, var(--e-blue), transparent); transform: translateX(-100%); opacity: 0; }
 .t-bolt:hover .pz-fx::after, .t-bolt:focus-within .pz-fx::after { animation: fx-current 800ms var(--e-ease) 1 both; }
-@keyframes fx-current { 0% { background-position: -40% 0; opacity: 1; } 100% { background-position: 140% 0; opacity: 1; } }
+@keyframes fx-current { 0% { transform: translateX(-100%); opacity: 1; } 100% { transform: translateX(250%); opacity: 1; } }
 .t-thunder .pz-fx { top: 0; left: 0; right: 0; height: 4px; background: linear-gradient(90deg, #8a5cff, #a16bff 60%, #c38bff); opacity: .9; }
 .t-thunder .pz-fx svg { display: none; }
-.t-thunder .pz-fx::after { content: ""; position: absolute; inset: -1px 0; background: linear-gradient(90deg, transparent, #f3e9ff, #c9a6ff, transparent); background-size: 30% 100%; background-repeat: no-repeat; background-position: -30% 0; opacity: 0; filter: drop-shadow(0 0 4px #c39bff); }
+.t-thunder .pz-fx::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 30%; background: linear-gradient(90deg, transparent, #f3e9ff, #c9a6ff, transparent); transform: translateX(-100%); opacity: 0; }
 .t-thunder:hover .pz-fx::after, .t-thunder:focus-within .pz-fx::after { animation: fx-current 700ms cubic-bezier(.55, .05, .35, 1) 1 both; }
 
 .pz-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -111,9 +116,9 @@ html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 .pz-of { flex-basis: 100%; font-size: 13px; color: var(--e-ink-3); }
 .pz-meter.cells { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 3px; height: 12px; }
 .pz-meter.cells i { border-radius: 3px; background: color-mix(in srgb, var(--e-ink) 9%, transparent); box-shadow: none; border: 0; position: relative; overflow: hidden; }
-.pz-meter.cells i.on, .pz-meter.cells i.part { background: color-mix(in srgb, var(--tc) 55%, transparent); transition: background-color 200ms var(--e-ease) calc(var(--i) * 28ms), box-shadow 200ms var(--e-ease) calc(var(--i) * 28ms); }
+.pz-meter.cells i.on, .pz-meter.cells i.part { background: color-mix(in srgb, var(--tc) 55%, transparent); transition: background-color 200ms var(--e-ease) calc(var(--i) * 28ms); }
 .pz-meter.cells i.part { background: linear-gradient(90deg, color-mix(in srgb, var(--tc) 55%, transparent) var(--p), color-mix(in srgb, var(--e-ink) 9%, transparent) var(--p)); }
-.pz-card:hover .pz-meter.cells i.on, .pz-card:focus-within .pz-meter.cells i.on { background: var(--tc); box-shadow: 0 0 8px color-mix(in srgb, var(--tc) 70%, transparent); }
+.pz-card:hover .pz-meter.cells i.on, .pz-card:focus-within .pz-meter.cells i.on { background: var(--tc); }
 
 .pz-x { display: grid; gap: 10px; padding: 0; border: 0; background: none; box-shadow: none; border-radius: 0; }
 .pz-x-text { display: grid; gap: 3px; }
