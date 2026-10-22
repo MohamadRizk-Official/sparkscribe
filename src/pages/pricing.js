@@ -324,6 +324,8 @@ async function main() {
   }
   // the footer mirrors the same state: Stripe is only mentioned once plans can actually be bought
   if (PAID_PLANS && (!session || status?.upgradesAvailable)) $('billFoot').textContent = `${yearlyShown() ? 'Monthly or yearly plans' : 'Monthly plans'} · secure payments by Stripe`;
+  // the HTML's footer assumes payments are on (what crawlers should read on the live site); say so when they aren't
+  if (!PAID_PLANS || (session && !status?.upgradesAvailable)) $('billFoot').textContent = 'Paid plans coming soon · the Free plan is available today';
   if (!PAID_PLANS || (session && !status?.upgradesAvailable)) notice('<b>Paid plans are coming soon.</b> The Free plan is available today. Nothing on this page can charge you.');
   renderBilling();
   bindBilling();

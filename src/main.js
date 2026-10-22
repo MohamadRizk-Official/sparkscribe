@@ -180,7 +180,18 @@ function getWorker() {
 function killWorker() {
   if (worker) { worker.terminate(); worker = null; }
 }
-getWorker().postMessage({ type: 'detect', forceCPU: FORCE_CPU });
+// The device check (GPU or CPU, for the speed note) starts the transcription worker, a large download (165 KB
+// compressed) that a visitor reading the page doesn't need yet. It runs once the page is idle, or at the first
+// interaction, whichever comes first; the check itself is unchanged.
+let detectStarted = false;
+function detectDeviceSoon() {
+  if (detectStarted) return;
+  detectStarted = true;
+  getWorker().postMessage({ type: 'detect', forceCPU: FORCE_CPU });
+}
+for (const ev of ['pointerdown', 'keydown', 'dragenter', 'focusin']) addEventListener(ev, detectDeviceSoon, { once: true, passive: true });
+const afterLoad = (fn) => (document.readyState === 'complete' ? fn() : addEventListener('load', fn, { once: true }));
+afterLoad(() => ('requestIdleCallback' in window ? requestIdleCallback(detectDeviceSoon, { timeout: 3000 }) : setTimeout(detectDeviceSoon, 1500)));
 
 function onWorkerMessage({ data }) {
   switch (data.type) {
@@ -562,6 +573,7 @@ async function start(file) {
   // the recording type is always Auto here: SparkScribe infers it, and it can be changed on the result page
   const recordingType = null;
   state = { duration: decoded.duration, language: 'en', mode, recordingType, view: 'original' };
+  detectDeviceSoon(); // normally already done; a file chosen before any interaction still gets the check first
   getWorker().postMessage({
     type: 'run',
     audio: samples,

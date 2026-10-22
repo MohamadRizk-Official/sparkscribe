@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { BRAND_HTML, MARK_HTML, BRAND_FONT_LINK, LEGAL_HTML } from './src/lib/brand-markup.js';
 import { THEME_BOOT } from './src/lib/theme.js';
+import { seoHead, pricingStatic, pricingDescription } from './scripts/seo.mjs';
 
 // Server-only settings the /api functions read from process.env. Locally they come from .env.local;
 // on Vercel from the project's Environment Variables. They are NOT in envPrefix, so they never reach the
@@ -77,6 +78,18 @@ export default defineConfig(({ mode }) => ({
           .replace('href="/src/style.css"', 'href="/src/app.css"')
           .replace(/\s*<link href="https:\/\/fonts\.googleapis\.com\/css2\?family=Space\+Grotesk[^>]*>/, '')
           .replace('</head>', `  ${BRAND_FONT_LINK}\n  </head>`),
+      },
+    },
+    {
+      // What search engines and link previews read (scripts/seo.mjs): social tags and JSON-LD for indexable pages,
+      // and the four plans in the pricing page's HTML, all from the same sources as the live site.
+      name: 'sparkscribe-seo',
+      transformIndexHtml: {
+        order: 'post',
+        handler: (html, ctx) => {
+          const name = (ctx.filename || ctx.path || '').replace(/\\/g, '/').split('/').pop().replace(/\.html$/, '');
+          return seoHead(html.replace('<!-- sparkscribe:plans-static -->', pricingStatic()).replaceAll('__PRICING_DESCRIPTION__', pricingDescription()), name === '' ? 'index' : name);
+        },
       },
     },
     {

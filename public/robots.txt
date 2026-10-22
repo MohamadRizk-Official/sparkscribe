@@ -1,5 +1,6 @@
-# Private pages (library, transcripts, settings, account) are marked noindex in their own HTML; they are not
-# disallowed here, so crawlers can see that.
+# Private pages (library, transcripts, settings, account, sign-in) and the API carry noindex (in their HTML and as an
+# X-Robots-Tag header, vercel.json). They are not disallowed here, so crawlers can see that. This file is not a
+# privacy control: private content needs a signed-in account (Supabase row-level security).
 User-agent: *
 Allow: /
 

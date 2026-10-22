@@ -1260,10 +1260,22 @@ export function mountMascot({ page = 'other' } = {}) {
   }
 
   // Off: the 3D character isn't even loaded until it's switched on
+  // Performance: the 3D scene (Three.js, shader compile, then a frame loop) was the page's largest main-thread cost
+  // while it loaded (Lighthouse mobile, 2026-10-22: ~3 s of script + a 3.4 s long task right after load). It now
+  // starts after the page has loaded, at the visitor's first interaction (a moment later, so that interaction
+  // stays instant) or after 6 s of quiet; a device asking to save data or with very little memory gets the still.
   function bootSoon() {
     if (booted) return;
     booted = true;
-    if ('requestIdleCallback' in window) requestIdleCallback(boot, { timeout: 1500 }); else setTimeout(boot, 300);
+    const lowEnd = navigator.connection?.saveData || (navigator.deviceMemory && navigator.deviceMemory <= 2);
+    if (lowEnd) { el.classList.add('m-ready'); fallback(); applyPref(); return; }
+    const idle = (fn, t) => ('requestIdleCallback' in window ? requestIdleCallback(fn, { timeout: t }) : setTimeout(fn, 300));
+    let started = false;
+    const go = () => { if (started) return; started = true; EV.forEach((ev) => removeEventListener(ev, soon)); idle(boot, 2000); };
+    const soon = () => setTimeout(go, 900);
+    const EV = ['pointermove', 'pointerdown', 'keydown', 'scroll', 'wheel', 'touchstart'];
+    const arm = () => { EV.forEach((ev) => addEventListener(ev, soon, { once: true, passive: true })); setTimeout(go, 6000); };
+    if (document.readyState === 'complete') arm(); else addEventListener('load', arm, { once: true });
   }
   applyPref();
 

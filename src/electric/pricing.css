@@ -286,3 +286,10 @@ html[data-theme="light"] .pz-fit-col:hover, html[data-theme="light"] .pz-fit-col
 .faq-item + .faq-item { border-top: 0; }
 .faq-item[open] { background: none; }
 .faq-item summary:focus-visible { outline: 2px solid var(--e-focus); outline-offset: 2px; }
+
+/* the plans as plain HTML (scripts/seo.mjs), inside the placeholders until pricing.js draws the full cards: readable
+   for crawlers and for the moment before the script runs, laid out in the same four columns */
+.pz-card.pz-static { display: grid; align-content: start; gap: 8px; min-height: 520px; padding: 24px 22px; animation: none; }
+.pz-static h2 { margin: 0 0 4px; font-family: var(--e-display); font-size: 24px; font-weight: 700; letter-spacing: -0.03em; color: var(--e-ink); }
+.pz-static p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--e-ink-2); }
+.pz-static p:nth-of-type(1) { font-weight: 600; color: var(--e-ink); }
