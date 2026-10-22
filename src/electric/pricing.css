@@ -40,7 +40,8 @@ html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color
      animated page behind it, recomputed on every frame of a hover lift. The body is opaque, so the blur is off; the
      lift is a composited transform and the larger shadow swaps in at once instead of being re-drawn every frame. */
   -webkit-backdrop-filter: none; backdrop-filter: none; will-change: transform;
-  transition: transform var(--e-t-panel) var(--e-ease);
+  --lift: -6px;
+  transition: transform 380ms cubic-bezier(.22, .61, .36, 1), box-shadow 380ms cubic-bezier(.22, .61, .36, 1);
 }
 .pz-card::before { /* the light that gathers under a card you consider */
   content: ""; position: absolute; z-index: -1; left: -20%; right: -20%; bottom: -55%; height: 80%; border-radius: 50%;
@@ -50,7 +51,7 @@ html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color
   padding: 0; -webkit-mask: none; mask: none; animation: none; background-size: auto;
 }
 .pz-card::after { content: none; }
-.pz-card:hover, .pz-card:focus-within { transform: translateY(-6px); box-shadow: var(--e-elev-2), 0 26px 50px -28px color-mix(in srgb, var(--tc) 85%, transparent); }
+.pz-card:hover, .pz-card:focus-within { transform: translateY(var(--lift)); box-shadow: var(--e-elev-2), 0 26px 50px -28px color-mix(in srgb, var(--tc) 85%, transparent); }
 .pz-card:hover::before, .pz-card:focus-within::before { opacity: 1; }
 .pz-card.t-free { --tc: var(--e-cyan); --tc-ink: var(--e-cyan-ink); }
 .pz-card.t-flash { --tc: var(--e-amber); --tc-ink: var(--e-amber-ink); }
@@ -63,7 +64,7 @@ html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color
   box-shadow: inset 0 1px 0 rgba(230, 215, 255, .14), 0 0 0 2px rgba(220, 205, 255, .62), 0 4px 10px rgba(0, 0, 0, .35), 0 36px 80px -32px rgba(161, 107, 255, .7), 0 30px 64px -26px rgba(0, 0, 0, .9); }
 html[data-theme="light"] .pz-card.t-thunder { background: radial-gradient(110% 70% at 100% 0%, rgba(124, 74, 232, .12), transparent 58%), linear-gradient(180deg, #fbf9ff, #fff 60%);
   box-shadow: 0 0 0 2px rgba(60, 30, 130, .6), 0 2px 4px rgba(15, 23, 42, .07), 0 30px 60px -26px rgba(124, 74, 232, .45); }
-.pz-card.t-thunder:hover, .pz-card.t-thunder:focus-within { transform: translateY(-8px);
+.pz-card.t-thunder:hover, .pz-card.t-thunder:focus-within { transform: translateY(var(--lift));
   box-shadow: inset 0 1px 0 rgba(230, 215, 255, .18), 0 0 0 2px var(--e-violet), 0 8px 16px rgba(0, 0, 0, .35), 0 46px 90px -30px rgba(161, 107, 255, .85), 0 40px 74px -28px rgba(0, 0, 0, .95); }
 html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-card.t-thunder:focus-within { box-shadow: 0 0 0 2px var(--e-violet), 0 4px 8px rgba(15, 23, 42, .08), 0 40px 72px -26px rgba(124, 74, 232, .55); }
 .t-thunder:hover .pz-btn, .t-thunder:focus-within .pz-btn { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .34), 0 16px 32px -12px rgba(161, 107, 255, 1); filter: brightness(1.07); }
@@ -81,11 +82,13 @@ html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-
 .t-flash:hover .fx-flash path, .t-flash:focus-within .fx-flash path { animation: fx-ignite 900ms var(--e-ease) 1 both; }
 @keyframes fx-ignite { 0% { stroke-dashoffset: 22; opacity: 0; } 15% { opacity: 1; } 85% { opacity: 1; } 100% { stroke-dashoffset: -190; opacity: 0; } }
 /* Bolt: a bright power track across the top, and a current that races along it */
-.t-bolt .pz-fx { top: 0; left: 0; right: 0; height: 5px; overflow: hidden; }
-.t-bolt .pz-fx svg { width: 100%; height: 5px; }
-.fx-bolt path { stroke: #3f7dff; stroke-width: 10; opacity: .75; }
+/* (2026-10-22: the 5px resting "power track" read as an unexplained thick line across the top; it is gone — the
+   current alone runs along the card's top edge on hover, then disappears) */
+.t-bolt .pz-fx { top: 0; left: 0; right: 0; height: 3px; overflow: hidden; }
+.t-bolt .pz-fx svg { display: none; }
 .t-bolt .pz-fx::after { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 40%; background: linear-gradient(90deg, transparent, #c9ecff, #6fb4ff, #3f7dff, transparent); transform: translateX(-100%); opacity: 0; }
-.t-bolt:hover .pz-fx::after, .t-bolt:focus-within .pz-fx::after { animation: fx-current 800ms var(--e-ease) 1 both; }
+@keyframes fx-current-fade { 0% { transform: translateX(-100%); opacity: 0; } 12% { opacity: 1; } 85% { opacity: 1; } 100% { transform: translateX(250%); opacity: 0; } }
+.t-bolt:hover .pz-fx::after, .t-bolt:focus-within .pz-fx::after { animation: fx-current-fade 760ms cubic-bezier(.55, .05, .35, 1) 120ms 1 both; }
 @keyframes fx-current { 0% { transform: translateX(-100%); opacity: 1; } 100% { transform: translateX(250%); opacity: 1; } }
 /* Thunder: two arcs across the top of the card, faint at rest; on hover they strike, flare and settle brighter */
 .t-thunder .pz-fx { top: 0; left: 0; right: 0; height: 120px; }

@@ -46,3 +46,16 @@ html[data-theme="light"] .pz-grid .pz-card.t-thunder { --edge: #7c4ae8; }
 html[data-theme="light"] .pz-grid .pz-card, html[data-theme="light"] .pz-grid .pz-card.t-thunder, html[data-theme="light"] .pz-grid .pz-card.t-bolt { box-shadow: 0 0 0 3px var(--edge), 0 0 34px -8px color-mix(in srgb, var(--edge) 55%, transparent), 0 24px 46px -24px rgba(15, 23, 42, .3); }
 html[data-theme="light"] .pz-grid .pz-card:hover, html[data-theme="light"] .pz-grid .pz-card:focus-within, html[data-theme="light"] .pz-grid .pz-card.t-thunder:hover { box-shadow: 0 0 0 3px var(--edge), 0 0 56px -6px color-mix(in srgb, var(--edge) 70%, transparent), 0 32px 56px -24px rgba(15, 23, 42, .36); }
 html[data-theme="light"] .pz-grid .pz-card.is-current, html[data-theme="light"] .pz-grid .pz-card.is-selected { box-shadow: 0 0 0 4px var(--edge), 0 0 40px -8px color-mix(in srgb, var(--edge) 60%, transparent), 0 24px 46px -24px rgba(15, 23, 42, .3); }
+
+/* Free is the calm entry option: a clean neutral edge, a quiet resting shadow, no halo, the smallest lift. The paid
+   plans keep their colour and light (gold → blue → violet, strongest last). */
+.pz-grid .pz-card.t-free { --lift: -3px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 0 0 2px rgba(220, 232, 255, .34), 0 22px 44px -28px rgba(0, 0, 0, .8); }
+.pz-grid .pz-card.t-free:hover, .pz-grid .pz-card.t-free:focus-within { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 2px rgba(230, 240, 255, .55), 0 28px 52px -28px rgba(0, 0, 0, .85); }
+.pz-grid .pz-card.t-free.is-current { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 3px rgba(32, 212, 244, .75), 0 22px 44px -28px rgba(0, 0, 0, .8); }
+html[data-theme="light"] .pz-grid .pz-card.t-free { box-shadow: 0 0 0 2px rgba(15, 23, 42, .3), 0 14px 30px -20px rgba(15, 23, 42, .25); }
+html[data-theme="light"] .pz-grid .pz-card.t-free:hover, html[data-theme="light"] .pz-grid .pz-card.t-free:focus-within { box-shadow: 0 0 0 2px rgba(15, 23, 42, .5), 0 20px 38px -20px rgba(15, 23, 42, .3); }
+html[data-theme="light"] .pz-grid .pz-card.t-free.is-current { box-shadow: 0 0 0 3px #0aa3c4, 0 14px 30px -20px rgba(15, 23, 42, .25); }
+.pz-grid .pz-card.t-free::before { display: none; }
+.pz-grid .pz-card.t-thunder { --lift: -7px; }
+@media (prefers-reduced-motion: reduce) { .pz-grid .pz-card { transition: box-shadow 200ms linear; } }
