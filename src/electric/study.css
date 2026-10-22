@@ -229,3 +229,15 @@ html[data-theme="light"] .quality-note { background: #edf2f9; box-shadow: 0 0 0 
 .qn-body p { margin: 0; color: var(--e-ink-2); font-size: 14.5px; line-height: 1.55; }
 .qn-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .qn-actions:empty { display: none; }
+
+/* signed out on a study tab: icon, what the tab does, one sentence, then the action with room around it */
+.ins-gate { display: grid; justify-items: center; text-align: center; gap: 12px; padding: clamp(36px, 5vw, 56px) 24px; }
+.ins-gate .ins-gate-icon { margin-bottom: 6px; }
+.ins-gate h3 { margin: 0; font-family: var(--e-display); font-size: clamp(21px, 2.2vw, 25px); font-weight: 600; letter-spacing: -0.02em; color: var(--e-ink); }
+.ins-gate > p { margin: 0; max-width: 50ch; color: var(--e-ink-2); font-size: 15.5px; line-height: 1.6; }
+.gate-actions { display: grid; justify-items: center; gap: 16px; margin-top: 18px; }
+.gate-actions .btn-primary { min-height: 46px; padding: 12px 24px; font-size: 15px; }
+.gate-alt { margin: 0; font-size: 14.5px; color: var(--e-ink-3); }
+.gate-alt .link-btn { font-weight: 600; color: var(--e-cyan-ink); text-decoration: none; }
+.gate-alt .link-btn:hover { text-decoration: underline; text-underline-offset: 3px; }
+.gate-chips { display: none; }

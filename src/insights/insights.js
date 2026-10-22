@@ -394,12 +394,13 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     }
     if (!ctx.getId() || !ctx.isSignedIn()) {
       const can = typeof ctx.signIn === 'function';
+      // signed out: what this tab would do, and one clear way to get it (a free account); no list of chips
+      const want = { summary: 'Get the key points of this recording', notes: 'Turn this recording into organized notes', ask: 'Ask anything about this recording', create: 'Turn this recording into study material' }[panel.dataset.panel] || 'Keep going with this recording';
       panel.innerHTML = `<div class="panel ins-card ins-gate">
         <div class="ins-gate-icon">${ICON.spark}</div>
-        <h3>Keep going with this recording</h3>
-        <ul class="gate-chips" aria-label="With a free account"><li>Summary</li><li>Notes</li><li>Ask</li><li>Quiz</li><li>Flashcards</li><li>Study Guide</li></ul>
-        <p>Create a free account to save this transcript and use SparkScribe's AI tools on it.</p>
-        ${can ? '<button class="btn btn-primary" type="button" data-act="signup">Create free account</button><p class="gate-alt">Already have one? <button class="link-btn" type="button" data-act="signin">Sign in</button></p>' : ''}
+        <h3>${want}</h3>
+        <p>Create a free account to save this transcript to your library and use summaries, notes, Ask, quizzes, flashcards and study guides on it.</p>
+        ${can ? '<div class="gate-actions"><button class="btn btn-primary" type="button" data-act="signup">Create free account</button><p class="gate-alt">Already have one? <button class="link-btn" type="button" data-act="signin">Sign in</button></p></div>' : ''}
         ${ctx.savedNote?.() || ''}
       </div>`;
       panel.querySelector('[data-act="signin"]')?.addEventListener('click', () => ctx.signIn());

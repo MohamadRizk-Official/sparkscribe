@@ -13,6 +13,10 @@
 /* ---------- one lecture → everything: the source and the tiles are raised, not outlined ---------- */
 .pack-src { border: 0; background: var(--e-s1); box-shadow: var(--e-elev-2); }
 .pack-tile { border: 0; background: var(--e-s1); box-shadow: var(--e-elev-1); border-radius: var(--e-r-lg); }
+/* retired from the old design: the diagonal sheen that slid across every tile (a slow moving line) and the drifting
+   gradient on the headline; both read as glitches */
+.pack-tile::before { content: none; animation: none; }
+.hero h1 .grad { animation: none; background-position: 0% 50%; }
 .pack-tile:hover { border: 0; background: var(--e-s1-hover); box-shadow: var(--e-elev-2), 0 26px 50px -28px var(--c); }
 .pack-tile > b { font-family: var(--e-display); font-weight: 700; letter-spacing: -0.02em; }
 
@@ -48,3 +52,6 @@ html[data-theme="light"] .how-n { color: #fff; }
 .legal-doc { width: 100%; min-width: 0; overflow-wrap: anywhere; border: 0; border-radius: var(--e-r-xl); background: var(--e-s0); box-shadow: var(--e-elev-1); font-size: 16px; line-height: 1.7; max-width: 860px; margin: 0 auto; }
 html[data-theme="light"] .legal-doc { background: #fff; }
 .legal-doc h1, .legal-doc h2 { font-family: var(--e-display); letter-spacing: -0.02em; }
+
+/* "Transcript · speakers · timestamps" on the example: the readable green ink in light mode (was 2.7:1) */
+html[data-theme="light"] .pack-done { color: var(--e-green-ink); }

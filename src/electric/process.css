@@ -68,6 +68,17 @@ html[data-theme="light"] .sweep-head svg { fill: #0b8fb0; filter: drop-shadow(0 
 .search:focus-within { box-shadow: inset 0 0 0 1.5px var(--e-cyan), 0 0 0 4px color-mix(in srgb, var(--e-cyan) 12%, transparent); }
 .search-count { font-family: var(--e-sans); letter-spacing: 0; }
 .next-steps { border: 0; border-radius: var(--e-r-lg); background: var(--e-s1); box-shadow: var(--e-elev-1); }
+/* the three suggestions: raised surfaces (no hairline outline); hover lifts and moves the arrow */
+.ns-head h3 { font-family: var(--e-display); font-weight: 600; letter-spacing: -0.02em; color: var(--e-ink); }
+.ns-head p { color: var(--e-ink-3); }
+.ns-step { border: 0; background: var(--e-s0); box-shadow: var(--e-elev-0); border-radius: var(--e-r-md); color: var(--e-ink); transition: transform var(--e-t-hover) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease), background-color var(--e-t-hover); }
+html[data-theme="light"] .ns-step { background: #fff; box-shadow: var(--e-elev-1); }
+.ns-step:hover { transform: translateY(-2px); background: var(--e-s1-hover); box-shadow: var(--e-elev-2); border: 0; }
+html[data-theme="light"] .ns-step:hover { background: #fff; }
+.ns-step:focus-visible { outline: 2px solid var(--e-focus); outline-offset: 2px; }
+.ns-step b + span { color: var(--e-ink-3); }
+.ns-go { color: var(--e-ink-4); }
+.ns-step:hover .ns-go { color: var(--c); }
 
 /* speaker timeline: useful, compact; click to jump */
 .timeline-card { padding: 16px 20px 18px; border-radius: var(--e-r-lg); background: var(--e-s1); box-shadow: var(--e-elev-1); border: 0; animation: none; }

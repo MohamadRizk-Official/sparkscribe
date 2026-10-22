@@ -487,8 +487,8 @@ function onDownload(p) {
   let l = 0, t = 0;
   for (const d of downloads.values()) { l += d.loaded; t += d.total; }
   if (t) setStagePct((l / t) * 100);
+  // the MB count is the useful part; the per-file "Details" list emptied itself as files finished, so it isn't shown
   if (run?.firstRun && run.stage === 'load' && t) {
-    els.dlDetails.classList.remove('hidden');
     els.statusLine.textContent = `${Math.round(l / 1e6)} of ${Math.round(t / 1e6)} MB`;
   }
 }
