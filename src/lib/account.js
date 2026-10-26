@@ -31,6 +31,14 @@ export async function recordConsent() {
   if (error) throw error;
   return data.user;
 }
+// Ask Supabase to change the sign-in email: it emails a confirmation link (templates: docs/auth/email-templates/
+// change-email.html → /auth/callback, type=email_change) and changes nothing until it is opened. -> { user, error }
+export async function changeEmail(email) {
+  if (!isConfigured) return { user: null, error: { message: 'Accounts aren’t available here.' } };
+  const { data, error } = await supabase.auth.updateUser({ email });
+  return { user: data?.user || null, error };
+}
+
 // pages a person may open before confirming (to read what they're agreeing to, or to confirm it)
 const CONSENT_FREE = /^\/(auth|terms|privacy)(\/|$)/;
 export function consentUrl(next = currentPath()) { return `/auth?mode=consent&next=${encodeURIComponent(next)}`; }

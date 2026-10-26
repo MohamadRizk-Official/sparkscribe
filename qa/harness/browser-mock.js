@@ -191,6 +191,11 @@
           sessionStorage.setItem('__qaPassword', body.password);
           if (viaLink) sessionStorage.setItem('__qaPasswordViaLink', '1');
         }
+        // an email change: nothing changes until the link is opened, the address waits as new_email (knob emailTaken: in use)
+        if (body?.email) {
+          if (K.emailTaken) return json({ code: 422, error_code: 'email_exists', msg: 'A user with this email address has already been registered' }, 422);
+          USER.new_email = body.email; USER.email_change_sent_at = new Date().toISOString();
+        }
         Object.assign(USER.user_metadata, body?.data || {}); if (body?.data?.terms_accepted_at) window.__qaKnobs({ noConsent: false }); return json(USER);
       }
       return K.signedOut ? json({ message: 'no session' }, 401) : json(USER);

@@ -1,7 +1,7 @@
 // Settings: Account (who you're signed in as), Plan & billing (a summary; changes happen on /account),
 // Preferences (appearance, the mascot), Privacy (how your data is handled).
 // Works signed out too: preferences are kept in this browser, and on the account when signed in.
-import { mountAccountMenu, getSession, signOut, esc, deleteMyAccount } from '../lib/account.js';
+import { mountAccountMenu, getSession, signOut, esc, deleteMyAccount, changeEmail } from '../lib/account.js';
 import { makeDialog } from '../library/dialogs.js';
 import { createCaptcha } from '../lib/captcha.js';
 import { getMascotPref, setMascotPref, getThemePref } from '../lib/prefs.js';
@@ -22,6 +22,7 @@ function renderAccount(session) {
       ? `<div class="set-row-text" role="status"><h3>Your account was deleted</h3><p>Your transcripts, everything made from them, your folders and your sign-in have been removed. Thanks for trying SparkScribe.</p></div>`
       : `<div class="set-row-text"><h3>Not signed in</h3><p>Sign in to save transcripts to My Library and keep your preferences on every device.</p></div>
       <a class="btn btn-primary" href="/auth?next=%2Fsettings">Sign in</a>`;
+    $('dangerSlot').innerHTML = '';
     showSaved();
     renderBilling(null);
     return;
@@ -29,13 +30,64 @@ function renderAccount(session) {
   renderBilling(session);
   const u = session.user, meta = u.user_metadata || {};
   const name = meta.full_name || meta.name || '';
-  body.innerHTML = `<div class="set-who"><b>${esc(name || u.email || 'Signed in')}</b>${name ? `<span>${esc(u.email || '')}</span>` : ''}</div>
-    <div class="set-actions"><button class="btn btn-ghost" type="button" id="signOutBtn">Sign out</button></div>
-    ${DELETION_ON ? `<div class="set-danger"><div class="set-row-text"><h3>Delete account</h3><p>Permanently delete your account and everything saved in it.</p></div>
-      <button class="btn btn-danger" type="button" id="deleteAccountBtn">Delete account…</button></div>` : ''}`;
+  body.innerHTML = `<div class="set-acct-row"><div class="set-who"><b>${esc(name || u.email || 'Signed in')}</b>${name ? `<span>${esc(u.email || '')}</span>` : ''}</div>
+    <div class="set-actions">${u.email ? '<button class="btn btn-ghost" type="button" id="changeEmailBtn">Change email</button>' : ''}<button class="btn btn-ghost" type="button" id="signOutBtn">Sign out</button></div></div>
+    ${u.new_email ? `<p class="set-pending" role="status">Waiting for you to confirm <b>${esc(u.new_email)}</b>. Open the link we emailed to change your sign-in email.</p>` : ''}`;
   $('signOutBtn').addEventListener('click', async () => { await signOut(); location.reload(); });
+  $('changeEmailBtn')?.addEventListener('click', () => openEmailDialog(u));
+  // deleting the account is the last thing on the page (end of Privacy & data), quiet, never next to everyday actions
+  $('dangerSlot').innerHTML = DELETION_ON ? `<div class="set-row set-danger"><div class="set-row-text"><h3>Delete account</h3><p>Permanently delete your account and everything saved in it.</p></div>
+      <button class="btn btn-ghost btn-sm set-danger-btn" type="button" id="deleteAccountBtn">Delete account…</button></div>` : '';
   $('deleteAccountBtn')?.addEventListener('click', () => openDeleteDialog(u));
   showSaved();
+}
+
+// ---------- change email: Supabase sends the confirmation link(s); nothing changes until a link is opened ----------
+// The link lands on /auth/callback (type=email_change), which confirms it without signing anyone in. With Supabase's
+// secure email change, the current address gets a link too and both must be opened (the callback says so).
+function openEmailDialog(user) {
+  const google = !(user.app_metadata?.providers || [user.app_metadata?.provider]).includes('email');
+  const { dlg, dismiss } = makeDialog('email-dlg', `
+    <form class="dlg-form" novalidate>
+      <h3>Change your email</h3>
+      <div class="dlg-body"><p>We’ll send a confirmation link to the new address. Your email stays <b>${esc(user.email)}</b> until you open it.</p>
+        ${google ? '<p class="dlg-dim">You sign in with Google, and that keeps working after the change.</p>' : ''}</div>
+      <label class="dlg-field"><span>New email address</span><input type="email" name="email" autocomplete="email" inputmode="email" maxlength="254" required /></label>
+      <p class="dlg-err" role="alert" hidden></p>
+      <div class="confirm-actions">
+        <button class="btn btn-ghost" type="button" data-act="cancel">Cancel</button>
+        <button class="btn btn-primary" type="submit">Send confirmation link</button>
+      </div>
+    </form>`);
+  const form = dlg.querySelector('form'), input = form.elements.email, go = form.querySelector('[type=submit]'), err = form.querySelector('.dlg-err');
+  dlg.querySelector('[data-act=cancel]').addEventListener('click', dismiss);
+  input.focus();
+  const say = (m) => { err.textContent = m; err.hidden = false; };
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (go.dataset.busy) return;
+    const email = input.value.trim().toLowerCase();
+    err.hidden = true;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return say('Enter a valid email address.');
+    if (email === String(user.email || '').toLowerCase()) return say('That’s already your email address.');
+    go.dataset.busy = '1'; go.disabled = true; go.textContent = 'Sending…';
+    const { error } = await changeEmail(email);
+    delete go.dataset.busy; go.disabled = false; go.textContent = 'Send confirmation link';
+    if (error) {
+      const code = error.code || '';
+      if (code === 'email_exists' || /already (been )?registered|already exists/i.test(error.message)) return say('That email address is already used by another SparkScribe account.');
+      if (code === 'over_email_send_rate_limit' || error.status === 429) return say('Too many emails were sent just now. Try again in a few minutes.');
+      if (code === 'email_address_invalid' || code === 'validation_failed') return say('That email address can’t be used. Check it and try again.');
+      return say('The confirmation email couldn’t be sent. Try again in a moment.');
+    }
+    form.innerHTML = `<h3>Check your inbox</h3>
+      <div class="dlg-body"><p>We sent a confirmation link to <b>${esc(email)}</b>. Open it to finish. Until then you keep signing in with <b>${esc(user.email)}</b>.</p>
+        <p class="dlg-dim">For your security, a link may also arrive at your current address. If it does, open that one too. Nothing there? Check spam, or try again in a few minutes.</p></div>
+      <div class="confirm-actions"><button class="btn btn-primary" type="button" data-act="done">Done</button></div>`;
+    form.querySelector('[data-act=done]').addEventListener('click', dismiss);
+    form.querySelector('[data-act=done]').focus();
+    getSession().then(renderAccount); // shows "Waiting for you to confirm …"
+  });
 }
 
 // ---------- plan & billing: what the server says (display only; every check happens on the server) ----------
