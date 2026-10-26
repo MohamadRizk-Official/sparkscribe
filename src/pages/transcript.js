@@ -12,7 +12,8 @@ import { segmentsFromRow, segmentsToStored, fmtClock, RECORDING_TYPES, RECORDING
 import { toggleDetails } from '../lib/details-pop.js';
 import { relatedMaterialHtml, bindRelatedMaterial } from '../lib/related-material.js';
 import { cleanText } from '../lib/clean.js';
-import { getAudio, putAudio, keepAudioPref } from '../lib/audio-store.js';
+import { getAudio, putAudio, putEnvelope, keepAudioPref } from '../lib/audio-store.js';
+import { envelopeFromBlob, paragraphStart, paragraphIndexAt } from '../lib/breath.js';
 import { mountInsights } from '../insights/insights.js';
 import { mountTransport } from '../electric/transport.js';
 import { courseTone } from '../lib/course-tone.js';
@@ -139,6 +140,8 @@ function initials(name) {
   // user can attach the original file; it is then kept here for next time. Clicking a line plays from there.
   const player = $('attachPlayer');
   let audioSource = null; // 'stored' (on this device) | 'attached' (this visit only) | null
+  let env = null; // loudness envelope of the open audio (lib/breath.js): links start in the pause before the words
+  let pinned = null; // the clicked paragraph stays highlighted through the short lead-in
   let following = true;
   let lastUserScroll = 0;
   player.addEventListener('play', () => mascotSignal('audio-play'));
@@ -160,10 +163,21 @@ function initials(name) {
         : 'Play from here, or click any line of the transcript';
     }
   }
-  function openAudio(blob, source) {
+  function openAudio(blob, source, knownEnv = null) {
     if (player.src) URL.revokeObjectURL(player.src);
     player.src = URL.createObjectURL(blob);
     audioSource = source;
+    env = knownEnv;
+    // audio kept before envelopes existed: make it once, when the page is idle, and keep it with the audio
+    if (!env) {
+      const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
+      idle(async () => {
+        const made = await envelopeFromBlob(blob);
+        if (!made || player.src === '' || audioSource == null) return;
+        env = made;
+        if (audioSource === 'stored') putEnvelope(row.id, made);
+      });
+    }
     if (startAt != null && !player.dataset.started) { player.dataset.started = '1'; player.currentTime = startAt; }
     $('attachBar').classList.remove('hidden');
     document.body.classList.add('has-attach');
@@ -189,7 +203,7 @@ function initials(name) {
         toast(`This file is ${fmtDuration(d)} long, but this recording is ${fmtDuration(expected)}, so the timestamps won't line up.`, 8000);
         return;
       }
-      if (keepAudioPref() && (await putAudio(row.id, f))) { audioSource = 'stored'; paintAudioButton(); renderHeader(); toast('Audio kept on this device, so it plays along next time too.'); }
+      if (keepAudioPref() && (await putAudio(row.id, f, env))) { audioSource = 'stored'; paintAudioButton(); renderHeader(); toast('Audio kept on this device, so it plays along next time too.'); }
     });
   });
   $('attachClose').addEventListener('click', () => {
@@ -215,14 +229,23 @@ function initials(name) {
     if (who) { openSpeakerMenu(who, Number(who.dataset.g)); return; }
     const p = e.target.closest('.seg');
     if (!p || !player.getAttribute('src') || window.getSelection()?.toString()) return;
-    player.currentTime = segments[Number(p.dataset.i)]?.start || 0;
-    player.play().catch(() => {});
+    playParagraph(Number(p.dataset.i));
   });
+  function playParagraph(i) {
+    const s = segments[i];
+    if (!s) return;
+    const t = paragraphStart(segments, i, env);
+    pinned = { id: s.id, from: t - 0.1, until: s.start + 1 };
+    player.currentTime = t;
+    player.play().catch(() => {});
+  }
+  player.addEventListener('seeking', () => { if (pinned && (player.currentTime < pinned.from || player.currentTime >= pinned.until)) pinned = null; });
   let lastActive = null;
   function showActiveLine(force) {
     const t = player.currentTime;
     let cur = null;
     for (const s of segments) { if (s.start <= t + 0.05) cur = s; else break; }
+    if (pinned && t >= pinned.from && t < pinned.until) cur = segments.find((s) => s.id === pinned.id) || cur;
     const el = cur && $('transcript').querySelector(`.seg[data-i="${cur.id}"]`);
     if (el !== lastActive) {
       lastActive?.classList.remove('active');
@@ -240,7 +263,9 @@ function initials(name) {
   // `instant` (opening a link into the recording) positions without starting playback.
   function seekTo(seconds, ref, { instant = false } = {}) {
     if (player.getAttribute('src')) {
-      player.currentTime = seconds;
+      const i = ref != null && segments[ref]?.id === Number(ref) ? Number(ref) : paragraphIndexAt(segments, seconds);
+      if (!instant && i >= 0) { playParagraph(i); return; }
+      player.currentTime = i >= 0 ? paragraphStart(segments, i, env) : seconds;
       if (!instant) { player.play().catch(() => {}); return; }
     }
     ui.showTab('transcript');
@@ -273,10 +298,11 @@ function initials(name) {
     const cur = group[0]?.speaker;
     if (!cur) return;
     const others = [...new Set(segments.map((s) => s.speaker))].filter((s) => s !== cur && s !== 'Unknown');
-    const items = [{ title: 'This part was said by' }, ...others.map((s) => ({ label: s, color: colorOf.get(s), run: () => move(group, s) })),
+    // renaming comes first: clicking a name is how people expect to change it
+    const items = [...(cur !== 'Unknown' ? [{ label: 'Edit name…', run: async () => { const name = await askName(`Edit name: ${cur}`, cur); if (name && name !== cur) rename(cur, name); } }, 'hr'] : []),
+      { title: 'This part was said by' }, ...others.map((s) => ({ label: s, color: colorOf.get(s), run: () => move(group, s) })),
       { label: 'Someone new…', color: nextColor(), run: async () => { const name = await askName('Who said this?', ''); if (name) move(group, name); } }];
     if (cur !== 'Unknown') items.push({ label: 'Unknown', color: UNKNOWN_COLOR, run: () => move(group, 'Unknown') });
-    if (cur !== 'Unknown') items.push('hr', { label: `Rename ${cur} everywhere…`, run: async () => { const name = await askName(`Rename ${cur}`, cur); if (name && name !== cur) rename(cur, name); } });
     menuEl = document.createElement('div');
     menuEl.className = 'menu';
     menuEl.setAttribute('role', 'menu');
@@ -398,7 +424,7 @@ function initials(name) {
   else if (['summary', 'notes', 'ask', 'create'].includes(askedTab)) ui.showTab(askedTab);
   // the original audio, if this device kept it when the recording was transcribed
   const stored = segments.length ? await getAudio(row.id) : null;
-  if (stored) openAudio(stored.blob, 'stored');
+  if (stored) openAudio(stored.blob, 'stored', stored.env || null);
   if (segments.length) { paintAudioButton(); renderHeader(); }
   if (coarse && segments.length) {
     $('transcript').insertAdjacentHTML('beforebegin', '<p class="hint coarse-note">Saved before line-level timestamps were added, so links point to the start of each paragraph.</p>');

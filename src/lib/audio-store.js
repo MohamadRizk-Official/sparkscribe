@@ -59,16 +59,25 @@ export function setKeepAudioPref(on) {
 
 // Store the file under `key`. Asks the browser to keep this origin's storage out of automatic eviction (once;
 // the browser may still say no). Returns true when stored.
-export async function putAudio(key, file) {
+// `env` is the recording's loudness envelope (lib/breath.js), kept with it so links start in a pause.
+export async function putAudio(key, file, env = null) {
   if (!key || !file || !file.size) return false;
   if (!keepAudioPref()) return false;
   try { navigator.storage?.persist?.().catch(() => {}); } catch { /* unsupported */ }
-  const rec = { blob: file, name: file.name || 'recording', type: file.type || '', size: file.size, savedAt: Date.now() };
+  const rec = { blob: file, name: file.name || 'recording', type: file.type || '', size: file.size, savedAt: Date.now(), ...(env && { env }) };
   const ok = await run('readwrite', (s) => s.put(rec, String(key)));
   return ok === true;
 }
 
-// The stored audio for a recording: { blob, name, type, size, savedAt } or null.
+// Add the envelope to audio stored before envelopes existed (made once, on this device).
+export async function putEnvelope(key, env) {
+  if (!key || !env) return false;
+  const rec = await run('readonly', (s) => s.get(String(key)));
+  if (!rec?.blob) return false;
+  return (await run('readwrite', (s) => s.put({ ...rec, env }, String(key)))) === true;
+}
+
+// The stored audio for a recording: { blob, name, type, size, savedAt, env? } or null.
 export async function getAudio(key) {
   if (!key) return null;
   const rec = await run('readonly', (s) => s.get(String(key)));

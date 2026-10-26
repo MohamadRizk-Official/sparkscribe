@@ -15,8 +15,9 @@ import { normalizeToolSettings, describeSettings, ENGINE2_TOOLS, isEngine2Key } 
 import { resolveContent, transcriptBasis, sameBasis, renderAskSpeakers } from '../lib/speaker-refs.js';
 import { makeDialog } from '../library/dialogs.js';
 import { thunderMark, openThunderDialog } from '../electric/thunder.js';
+import { renderAnswer, bestExcerpt, claimBefore } from './answer-format.js';
 import { mascotSignal } from '../mascot/bus.js';
-import { fmtClock, splitCitations, RECORDING_TYPES, RECORDING_TYPE_LABEL, normalizeRecordingType, isNotFound, refersToPlayback } from '../lib/segments.js';
+import { fmtClock, RECORDING_TYPES, RECORDING_TYPE_LABEL, normalizeRecordingType, isNotFound, refersToPlayback } from '../lib/segments.js';
 
 const CONSENT_KEY = 'sparkscribe.aiConsent';
 const POLL_MS = 3000;
@@ -209,6 +210,7 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     moveInk();
     transcriptEls.forEach((el) => el.classList.toggle('tab-hidden', name !== 'transcript'));
     for (const [k, p] of Object.entries(panels)) p.classList.toggle('hidden', k !== name);
+    closeSources();
     if (name !== 'transcript') { ensureLoaded(); render(); }
   }
 
@@ -353,21 +355,6 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     const seen = new Set();
     return (refs || []).map((r) => byId.get(r)).filter((s) => s && !seen.has(Math.floor(s.start)) && seen.add(Math.floor(s.start)))
       .map((s) => `<button class="cite" type="button" data-seek="${s.start}" data-ref="${s.id}" title="Go to ${fmtClock(s.start)}" aria-label="Go to ${fmtClock(s.start)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>${fmtClock(s.start)}</button>`).join('');
-  }
-  // Model text with [12] citations → escaped HTML with timestamp chips; "- " lines become a list.
-  function rich(text, byId) {
-    const line = (t) => splitCitations(t, (id) => byId.has(id)).map((p) => (p.refs ? `<span class="cites">${chips(p.refs, byId)}</span>` : esc(p.text))).join('');
-    const out = [];
-    let list = null;
-    for (const raw of String(text).split('\n')) {
-      const l = raw.trim();
-      if (!l) { list = null; continue; }
-      if (/^[-•*]\s+/.test(l)) {
-        if (!list) { list = []; out.push(list); }
-        list.push(line(l.replace(/^[-•*]\s+/, '')));
-      } else { list = null; out.push(`<p>${line(l)}</p>`); }
-    }
-    return out.map((x) => (Array.isArray(x) ? `<ul>${x.map((i) => `<li>${i}</li>`).join('')}</ul>` : x)).join('');
   }
   const loading = (label) => `<div class="ins-loading" role="status"><span class="spinner sm" aria-hidden="true"></span><span>${esc(label)}…</span></div>`;
   function errorBox(err, retryAct, lead = "Analysis couldn't be generated.") {
@@ -629,13 +616,18 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   }
 
   // ---------- Ask tab ----------
+  // An answer: the model's Markdown subset as safe HTML (answer-format.js), each claim's sources one numbered marker
+  const askRich = (text, byId) => renderAnswer(renderAskSpeakers(text, ctx.getSegments()), {
+    isValid: (id) => byId.has(id),
+    cite: (g) => `<button type="button" class="cn" data-cite="${g.ids.join(',')}" aria-haspopup="dialog" aria-expanded="false" aria-label="Source ${g.n}, ${g.ids.length === 1 ? '1 moment' : `${g.ids.length} moments`}">${g.n}</button>`,
+  }).html;
   function answerHtml(q, byId) {
     // older answers may be the generic "not found" sentence; newer ones say what wasn't mentioned
     if (isNotFound(q.answer) || !q.answer) return `<div class="ask-a nf"><p>${esc(q.answer || "I couldn't find that in this recording.")}</p></div>`;
     const keep = /\{\{S\d+\}\}/.test(q.answer) ? ' data-keep-names' : '';
-    if (!q.found) return `<div class="ask-a"${keep}>${rich(renderAskSpeakers(q.answer, ctx.getSegments()), byId)}</div>`;
+    if (!q.found) return `<div class="ask-a"${keep}>${askRich(q.answer, byId)}</div>`;
     const unsupported = !(q.refs || []).length;
-    return `<div class="ask-a"${keep}>${rich(renderAskSpeakers(q.answer, ctx.getSegments()), byId)}${unsupported ? '<p class="ask-warn">No supporting passage was cited. Check the transcript before relying on this.</p>' : ''}${q.sourceVersion != null && st.contentVersion != null && q.sourceVersion < st.contentVersion ? '<p class="ask-warn">Answered before the transcript was last changed.</p>' : ''}</div>`;
+    return `<div class="ask-a"${keep}>${askRich(q.answer, byId)}${unsupported ? '<p class="ask-warn">No supporting passage was cited. Check the transcript before relying on this.</p>' : ''}${q.sourceVersion != null && st.contentVersion != null && q.sourceVersion < st.contentVersion ? '<p class="ask-warn">Answered before the transcript was last changed.</p>' : ''}</div>`;
   }
   function renderAsk() {
     const p = panels.ask;
@@ -650,15 +642,15 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     const thread = st.questions.map((q) => `<div class="ask-turn"><div class="ask-q">${esc(q.question)}</div>${answerHtml(q, byId)}</div>`).join('');
     const live = pending ? `<div class="ask-turn"><div class="ask-q">${esc(pending.question)}</div>${
       pending.error ? `<div class="ask-a">${errorBox(pending.error, 'ask-retry', "The answer couldn't be generated.")}</div>`
-      : pending.text ? `<div class="ask-a streaming" data-keep-names>${rich(renderAskSpeakers(pending.text, ctx.getSegments()), byId)}</div>`
+      : pending.text ? `<div class="ask-a streaming" data-keep-names>${askRich(pending.text, byId)}</div>`
       : `<div class="ask-a thinking" role="status"><span class="ask-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${pending.status === 'searching' ? 'Finding the moments that answer this…' : 'Writing the answer…'}</span></div>`}</div>` : '';
     const empty = !(thread || live);
     p.innerHTML = `<div class="panel ins-card ask-card${empty ? ' is-empty' : ''}">
-      <div class="ask-thread" aria-live="polite">${empty ? `<div class="ask-empty"><span class="ask-empty-ic" aria-hidden="true">${ICON.spark}</span><h3>Ask anything about this recording</h3><p>Answers come from what was said, with the moments they rely on.</p></div>` : thread + live}</div>
-      ${empty ? '<p class="ask-try">Try one of these</p>' : ''}
+      <div class="ask-thread" aria-live="polite">${empty ? `<div class="ask-empty"><span class="ask-empty-ic" aria-hidden="true">${ICON.spark}</span><h3>What would you like to know?</h3><p>Ask in your own words. You get a clear answer, with the exact moments it comes from.</p></div>` : thread + live}</div>
+      ${empty ? '<p class="ask-try">Or start with one of these</p>' : ''}
       <div class="ask-starters${empty ? ' big' : ''}">${starters.map((s) => `<button type="button" class="starter${pending && !pending.error && pending.question === s ? ' is-sent' : ''}" data-q="${esc(s)}"${pending && !pending.error ? ' disabled' : ''}><span>${esc(s)}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m0 0-5-5m5 5-5 5"/></svg></button>`).join('')}</div>
       <form class="ask-form" autocomplete="off">
-        <textarea class="ask-input" rows="1" maxlength="500" placeholder="Ask anything about this recording" aria-label="Your question" enterkeyhint="send"${pending && !pending.error ? ' disabled' : ''}></textarea>
+        <textarea class="ask-input" rows="1" maxlength="500" placeholder="Ask a question about this recording" aria-label="Your question" enterkeyhint="send"${pending && !pending.error ? ' disabled' : ''}></textarea>
         <button class="ask-send" type="submit" aria-label="Ask"${pending && !pending.error ? ' disabled' : ''}>${ICON.send}</button>
       </form>
       ${privacyLine}
@@ -667,7 +659,8 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     const form = p.querySelector('.ask-form');
     const input = p.querySelector('.ask-input');
     if (st.askDraft) input.value = st.askDraft;
-    const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; };
+    // grows with the question; a scrollbar only once it is taller than the box can get
+    const grow = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; input.style.overflowY = input.scrollHeight > 140 ? 'auto' : 'hidden'; };
     grow();
     input.addEventListener('input', () => { st.askDraft = input.value; grow(); });
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
@@ -682,6 +675,100 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
     });
     const th = p.querySelector('.ask-thread');
     th.scrollTop = th.scrollHeight;
+    if (srcPop && !srcPop.btn.isConnected) closeSources(); // the answer it belonged to was redrawn
+  }
+
+  // ---------- Ask sources: a numbered citation opens the moments that claim rests on ----------
+  // A popover beside the number (a sheet from the bottom on a phone): each moment's time, speaker and the sentence
+  // of that line that best matches the claim. Choosing one shows that passage in the transcript and plays from the
+  // pause before it when the audio is on this device. Closes on Escape, a click outside, or the number again.
+  let srcPop = null; // { el, btn }
+  let srcSeq = 0;
+  const narrow = () => matchMedia('(max-width: 640px)').matches;
+  function closeSources({ focus = false } = {}) {
+    if (!srcPop) return;
+    const { el, btn } = srcPop;
+    srcPop = null;
+    btn.setAttribute('aria-expanded', 'false');
+    btn.classList.remove('is-open');
+    el.classList.remove('is-open');
+    setTimeout(() => el.remove(), 260);
+    document.removeEventListener('pointerdown', onSrcOutside, true);
+    document.removeEventListener('keydown', onSrcKey, true);
+    window.removeEventListener('scroll', placeSources, true);
+    window.removeEventListener('resize', placeSources);
+    if (focus && btn.isConnected) btn.focus();
+  }
+  function onSrcOutside(e) { if (srcPop && !srcPop.el.contains(e.target) && !srcPop.btn.contains(e.target)) closeSources(); }
+  function onSrcKey(e) { if (e.key === 'Escape' && srcPop) { e.preventDefault(); e.stopPropagation(); closeSources({ focus: true }); } }
+  function placeSources() {
+    if (!srcPop) return;
+    const { el, btn } = srcPop;
+    if (!btn.isConnected) { closeSources(); return; }
+    el.classList.toggle('is-sheet', narrow());
+    if (narrow()) { el.style.left = ''; el.style.top = ''; return; }
+    const r = btn.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight) { closeSources(); return; }
+    const w = el.offsetWidth, h = el.offsetHeight;
+    const left = Math.min(Math.max(12, r.left + r.width / 2 - w / 2), innerWidth - w - 12);
+    const above = r.bottom + 8 + h > innerHeight - 12 && r.top - 8 - h > 12;
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(above ? r.top - 8 - h : r.bottom + 8)}px`;
+    el.classList.toggle('is-above', above);
+  }
+  function openSources(btn) {
+    if (srcPop?.btn === btn) { closeSources({ focus: true }); return; }
+    closeSources();
+    const byId = segById();
+    const ids = btn.dataset.cite.split(',').map(Number).filter((id) => byId.has(id));
+    if (!ids.length) return;
+    const claim = claimBefore(btn);
+    const audio = ctx.playbackTime() != null;
+    const n = btn.textContent.trim();
+    const el = document.createElement('div');
+    el.className = 'src-pop';
+    el.id = `src-pop-${++srcSeq}`;
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', `Source ${n}`);
+    const PLAY = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+    const GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m0 0-5-5m5 5-5 5"/></svg>';
+    el.innerHTML = `<div class="src-head"><b>Source ${esc(n)}</b><span>${ids.length === 1 ? '1 moment' : `${ids.length} moments`}</span><button class="src-close" type="button" aria-label="Close sources"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+      <ul class="src-list">${ids.map((id) => {
+        const s = byId.get(id);
+        return `<li><button type="button" class="src-item" data-src="${id}" aria-label="${audio ? 'Play from' : 'Show'} ${fmtClock(s.start)}, ${esc(s.speaker)}"><span class="src-meta"><span class="src-time">${audio ? PLAY : ''}${fmtClock(s.start)}</span><span class="src-who">${esc(s.speaker)}</span><span class="src-go">${audio ? 'Play from here' : 'Show in transcript'}${GO}</span></span><span class="src-text">${esc(bestExcerpt(s.text, claim))}</span></button></li>`;
+      }).join('')}</ul>`;
+    document.body.appendChild(el);
+    srcPop = { el, btn };
+    btn.setAttribute('aria-expanded', 'true');
+    btn.setAttribute('aria-controls', el.id);
+    btn.classList.add('is-open');
+    placeSources();
+    void el.offsetWidth; // start from the closed style, so the opening eases in
+    el.classList.add('is-open');
+    el.querySelector('.src-close').addEventListener('click', () => closeSources({ focus: true }));
+    el.querySelectorAll('.src-item').forEach((b) => b.addEventListener('click', () => goToMoment(Number(b.dataset.src))));
+    el.addEventListener('focusout', (e) => { if (srcPop?.el === el && e.relatedTarget && !el.contains(e.relatedTarget) && e.relatedTarget !== btn) closeSources(); });
+    document.addEventListener('pointerdown', onSrcOutside, true);
+    document.addEventListener('keydown', onSrcKey, true);
+    window.addEventListener('scroll', placeSources, true);
+    window.addEventListener('resize', placeSources);
+    el.querySelector('.src-item')?.focus({ preventScroll: true });
+  }
+  // the passage in the transcript, brought into view with a short highlight; played from its pause if audio is here
+  function goToMoment(id) {
+    const s = segById().get(id);
+    if (!s) return;
+    closeSources();
+    const audio = ctx.playbackTime() != null;
+    showTab('transcript');
+    const el = transcriptEls.map((c) => c.querySelector(`.seg[data-i="${id}"]`)).find(Boolean);
+    if (el) {
+      el.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      el.classList.remove('flash');
+      void el.offsetWidth;
+      el.classList.add('flash');
+    }
+    if (audio) ctx.seek(s.start, s.id);
   }
 
   async function ask(question) {
@@ -875,6 +962,8 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   renderTypeControl();
 
   host.addEventListener('click', (e) => {
+    const cn = e.target.closest('.cn[data-cite]');
+    if (cn) { openSources(cn); return; }
     const b = e.target.closest('[data-seek]');
     if (!b) return;
     ctx.seek(Number(b.dataset.seek), Number(b.dataset.ref));

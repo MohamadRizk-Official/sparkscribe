@@ -85,8 +85,10 @@ html[data-theme="light"] .who, html[data-theme="light"] .transcript .avatar, htm
 .transcript .seg:not(.static):hover { background: color-mix(in srgb, var(--e-ink) 5%, transparent); }
 .transcript .seg.active { background: color-mix(in srgb, var(--e-cyan) 10%, transparent); box-shadow: none; }
 .transcript .seg.active::before { content: ""; position: absolute; left: -6px; top: 6px; bottom: 6px; width: 3px; border-radius: 3px; background: var(--e-charge); box-shadow: 0 0 10px var(--e-glow-cyan); }
-.transcript .seg.flash { animation: e-flash 1.4s var(--e-ease) 1; }
-@keyframes e-flash { 0%, 30% { background: color-mix(in srgb, var(--e-amber) 22%, transparent); } 100% { background: transparent; } }
+/* a passage you were sent to: a calm cool tint with a lit edge that fades out; kept clear of the sticky header */
+.transcript .seg { scroll-margin: 120px 0 110px; }
+.transcript .seg.flash { animation: e-flash 2.4s var(--e-ease) 1; }
+@keyframes e-flash { 0%, 35% { background: color-mix(in srgb, var(--e-cyan) 15%, transparent); box-shadow: inset 3px 0 0 var(--e-cyan); } 100% { background: transparent; box-shadow: inset 3px 0 0 transparent; } }
 .transcript mark, .seg mark { background: color-mix(in srgb, var(--e-amber) 36%, transparent); color: inherit; }
 .transcript .seg mark.cur { background: var(--e-amber); color: #1b1300; }
 .plain-transcript { font: 16px/1.7 var(--e-sans); white-space: pre-wrap; color: var(--e-ink); }
@@ -162,5 +164,5 @@ body.has-attach main.app, body:has(#resultsPanel:not(.hidden)) main.app { paddin
 }
 @media (prefers-reduced-motion: reduce) {
   .pb-eq i { animation: none !important; height: 60% !important; }
-  .transcript .seg.flash { animation: none; background: color-mix(in srgb, var(--e-amber) 18%, transparent); }
+  .transcript .seg.flash { animation: none; background: color-mix(in srgb, var(--e-cyan) 12%, transparent); }
 }

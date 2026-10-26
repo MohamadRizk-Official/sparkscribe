@@ -10,8 +10,9 @@ import { mountInsights } from './insights/insights.js';
 import { sparkPulse } from './lib/brand.js';
 import { mountMascot } from './mascot/mascot.js';
 import { mascotSignal, mascotTravel } from './mascot/bus.js';
-import { confirmDialog } from './library/dialogs.js';
+import { confirmDialog, promptDialog } from './library/dialogs.js';
 import { putAudio, rekeyAudio, deleteAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
+import { envelopeFromSamples, paragraphStart, paragraphIndexAt } from './lib/breath.js';
 import { mountDashboard } from './home/dashboard.js';
 import { attachSpeedMenu } from './electric/speed-menu.js';
 import { loadPlans, getBillingStatus, authorizeTranscription, startCheckout, allowanceLabel, usageText, usageLevel, durationText, dateText } from './lib/billing.js';
@@ -316,6 +317,7 @@ function reset({ restartWorker = !!run && !state?.lines } = {}) {
   if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
   state = null; currentFile = null; run = null;
   resetSave();
+  if (location.pathname !== '/') history.replaceState(history.state, '', '/');
   insights.reset();
   setView('original');
   els.searchInput.value = '';
@@ -572,7 +574,8 @@ async function start(file) {
   const mode = modeValue();
   // the recording type is always Auto here: SparkScribe infers it, and it can be changed on the result page
   const recordingType = null;
-  state = { duration: decoded.duration, language: 'en', mode, recordingType, view: 'original' };
+  // loudness envelope for starting playback in a pause (lib/breath.js); made before the samples go to the worker
+  state = { duration: decoded.duration, language: 'en', mode, recordingType, view: 'original', env: envelopeFromSamples(samples) };
   detectDeviceSoon(); // normally already done; a file chosen before any interaction still gets the check first
   getWorker().postMessage({
     type: 'run',
@@ -901,7 +904,7 @@ function renderTranscript() {
       body.appendChild(p);
     }
     el.querySelector('.who').addEventListener('click', (e) => openReassignMenu(e.currentTarget, g));
-    el.querySelector('.grp-time').addEventListener('click', () => seek(first.start, true));
+    el.querySelector('.grp-time').addEventListener('click', () => playParagraph(g.idx[0]));
     frag.appendChild(el);
   }
   els.transcript.innerHTML = '';
@@ -916,12 +919,24 @@ function renderTranscript() {
 els.transcript.addEventListener('click', (e) => {
   const p = e.target.closest('.seg');
   if (!p || window.getSelection()?.toString()) return; // allow selecting text to copy
-  seek(state.lines[Number(p.dataset.i)].start, true);
+  playParagraph(Number(p.dataset.i));
 });
+
+// Clicking a paragraph or a reference starts in the breath before its words (lib/breath.js). The clicked paragraph
+// stays highlighted through that short lead-in.
+let pinned = null; // { idx, until }
+function playParagraph(i) {
+  if (!state?.lines?.[i]) return;
+  const t = paragraphStart(state.lines, i, state.env);
+  pinned = { idx: i, from: t - 0.1, until: state.lines[i].start + 1 };
+  seek(t, true, true);
+}
 
 function openReassignMenu(anchor, g) {
   const cur = g.speaker;
-  const items = [{ title: 'This part was said by' }];
+  // renaming comes first: clicking a name is how people expect to change it (everywhere it appears)
+  const items = cur !== UNKNOWN ? [{ label: 'Edit name…', onClick: () => editSpeakerName(cur) }, 'hr'] : [];
+  items.push({ title: 'This part was said by' });
   for (const id of speakerOrder()) {
     if (id === cur || id === UNKNOWN) continue;
     items.push({ label: spk(id).name, color: spk(id).color, onClick: () => reassignGroup(g, id) });
@@ -930,6 +945,15 @@ function openReassignMenu(anchor, g) {
   items.push({ label: 'Someone new', color: COLORS[realSpeakers().length % COLORS.length], onClick: () => reassignGroup(g, newSpeaker()) });
   if (cur !== UNKNOWN) items.push({ label: 'Unknown', color: UNKNOWN_COLOR, onClick: () => reassignGroup(g, UNKNOWN) });
   openMenu(anchor, items);
+}
+
+async function editSpeakerName(id) {
+  const s = spk(id);
+  const v = (await promptDialog({ title: `Edit name: ${s.name}`, label: 'Name', value: s.name, maxLength: 60 }))?.trim();
+  if (!v || v === s.name) return;
+  s.name = v;
+  renderAll();
+  scheduleSync();
 }
 
 function newSpeaker() {
@@ -1060,7 +1084,8 @@ window.addEventListener('resize', () => {
 });
 
 // ---------- player ----------
-function seek(t, play = false) {
+function seek(t, play = false, keepPin = false) {
+  if (!keepPin) pinned = null;
   els.player.currentTime = Math.max(0, t);
   if (play) els.player.play().catch(() => {});
   updatePlayhead();
@@ -1074,6 +1099,7 @@ els.player.addEventListener('pause', () => { els.playBtn.classList.remove('playi
 els.player.addEventListener('timeupdate', () => { updatePlayhead(); updateActive(false); });
 els.pbSeek.addEventListener('input', () => {
   if (!state?.duration) return;
+  pinned = null;
   els.player.currentTime = (els.pbSeek.value / 1000) * state.duration;
   updatePlayhead();
   updateActive(true);
@@ -1142,6 +1168,7 @@ function updatePlayhead() {
 // The line being spoken right now: last line that started before t (binary search).
 function lineAt(t) {
   const L = state.lines;
+  if (pinned && L[pinned.idx] && t >= pinned.from && t < pinned.until) return pinned.idx;
   let lo = 0, hi = L.length - 1, ans = -1;
   while (lo <= hi) {
     const mid = (lo + hi) >> 1;
@@ -1277,7 +1304,7 @@ const insights = mountInsights({
     signIn: (mode) => signInToSave(mode),
     saving: () => ['saving', 'pending', 'syncing'].includes(save.status),
     getSegments: () => (state?.lines || []).map((l, i) => ({ id: i, start: l.start, end: l.end, speaker: spk(l.speaker).name, orig: spk(l.speaker).orig || spk(l.speaker).name, text: l.text })),
-    seek: (t) => seek(t, true),
+    seek: (t) => { const i = paragraphIndexAt(state?.lines || [], t); if (i >= 0) playParagraph(i); else seek(t, true); },
     playbackTime: () => (els.player.getAttribute('src') ? els.player.currentTime || 0 : null),
     getRecordingType: () => state?.recordingType || null,
     nameMap: () => nameMapFromSegments((state?.lines || []).map((l) => ({ speaker: spk(l.speaker).name, orig: spk(l.speaker).orig }))),
@@ -1300,7 +1327,7 @@ const insights = mountInsights({
 async function signInToSave(mode) {
   if (!stashPending(savePayload(), session?.user?.id ?? null)) return toast("Couldn't hold the transcript for sign-in. Export it first.");
   await deleteAudio(PENDING_AUDIO_KEY); // never let an older parked file be attached to this transcript
-  if (currentFile) await putAudio(PENDING_AUDIO_KEY, currentFile); // parked with the transcript; re-keyed once it is saved
+  if (currentFile) await putAudio(PENDING_AUDIO_KEY, currentFile, state?.env); // parked with the transcript; re-keyed once it is saved
   leavingOnPurpose = true;
   location.href = `/auth?${mode === 'signup' ? 'mode=signup&' : ''}next=${encodeURIComponent('/?save=pending')}`;
 }
@@ -1391,10 +1418,12 @@ async function doSave() {
   try {
     const id = await saveTranscript(savePayload());
     // the original audio stays on this device (IndexedDB, never uploaded) so the saved copy can play along later
-    if (file) putAudio(id, file).then((ok) => { if (ok && save.id === id) { save.audioKept = true; renderSaveBar(); } });
+    if (file) putAudio(id, file, state?.env).then((ok) => { if (ok && save.id === id) { save.audioKept = true; renderSaveBar(); } });
     if (gen !== save.gen) return; // the user started over: that recording is saved; nothing on screen belongs to it
     save.id = id;
     save.status = 'saved';
+    // the address now names the saved recording: Back from Pricing (or a reload) returns to it, not to an empty home
+    if (location.pathname === '/') history.replaceState(history.state, '', `/transcript?id=${encodeURIComponent(id)}`);
     insights.setTranscription();
     refreshUsageLine();
     if (save.editedWhileSaving) { save.editedWhileSaving = false; scheduleSync(); return; } // renames made meanwhile
