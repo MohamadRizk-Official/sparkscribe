@@ -2331,17 +2331,13 @@ dialog.sheet p.dlg-dim, .dlg-dim { color: var(--dim); font-size: 13px; margin: 0
 
 /* proof: the moment in the recording */
 .proof { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 10px; }
-.hear-btn, .proof-line > summary { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 999px; font-size: 15px; font-weight: 700; cursor: pointer;
+.hear-btn, .proof-sum { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 999px; font-size: 15px; font-weight: 700; cursor: pointer;
   transition: background-color .15s, border-color .15s, box-shadow .2s; }
 .hear-btn { color: var(--k-cffafe); background: var(--k-22d3ee-12); border: 1px solid var(--k-22d3ee-55); }
 .hear-btn:hover { background: var(--k-22d3ee-20); box-shadow: 0 0 22px -6px var(--k-22d3ee-70); }
-.proof-line { flex: 1 1 100%; }
-.proof .hear-btn + .proof-line { flex: 0 1 auto; }
-.proof-line > summary { list-style: none; color: var(--k-e9d5ff); background: var(--k-a78bfa-10); border: 1px solid var(--k-a78bfa-45); width: fit-content; }
-.proof-line > summary::-webkit-details-marker { display: none; }
-.proof-line > summary:hover { background: var(--k-a78bfa-18); }
-.proof-line[open] { flex: 1 1 100%; }
-.proof-line blockquote { display: grid; gap: 6px; margin: 10px 0 0; padding: 14px 16px; border-radius: 12px; border-left: 3px solid var(--k-a78bfa); background: var(--k-060812-55); font-size: 16px; line-height: 1.55; color: var(--k-e3e8ff); }
+.proof-sum { color: var(--k-e9d5ff); background: var(--k-a78bfa-10); border: 1px solid var(--k-a78bfa-45); width: fit-content; }
+.proof-sum:hover { background: var(--k-a78bfa-18); }
+.proof-quote { flex: 1 1 100%; display: grid; gap: 6px; margin: 10px 0 0; padding: 14px 16px; border-radius: 12px; border-left: 3px solid var(--k-a78bfa); background: var(--k-060812-55); font-size: 16px; line-height: 1.55; color: var(--k-e3e8ff); }
 .proof-meta { font-size: 13px; font-weight: 700; color: var(--k-9aa8dc); }
 
 .study-next { display: flex; justify-content: flex-end; }

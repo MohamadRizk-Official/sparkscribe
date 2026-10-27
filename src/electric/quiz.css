@@ -117,17 +117,18 @@ html[data-theme="light"] .fb.wrong .fb-ic { background: #db2777; color: #fff; }
 .fb-link { color: var(--e-cyan-ink); }
 
 /* "Hear it at…" and "Show the line": solid buttons with a 2px edge (no pill, no tint gradient) */
-.hear-btn, .proof-line > summary { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; transition: background-color 200ms var(--e-ease), box-shadow 200ms var(--e-ease), color 200ms; }
+.hear-btn, .proof-sum { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; transition: background-color 200ms var(--e-ease), box-shadow 200ms var(--e-ease), color 200ms; }
 .hear-btn { color: #d7ecff; background: #1d3a60; box-shadow: inset 0 0 0 3px #3f6aa3; }
-.proof-line > summary { color: #e6e0ff; background: #2b2a55; box-shadow: inset 0 0 0 3px #5a52a0; }
+.proof-sum { color: #e6e0ff; background: #2b2a55; box-shadow: inset 0 0 0 3px #5a52a0; }
 .hear-btn:hover { background: #234571; box-shadow: inset 0 0 0 3px #7fb4ff; }
-.proof-line > summary:hover { background: #343366; box-shadow: inset 0 0 0 3px #a78bfa; }
+.proof-sum:hover { background: #343366; box-shadow: inset 0 0 0 3px #a78bfa; }
 html[data-theme="light"] .hear-btn { color: #1e3a8a; background: #e3ecfb; box-shadow: inset 0 0 0 3px #93b4e8; }
-html[data-theme="light"] .proof-line > summary { color: #4c1d95; background: #efe9fd; box-shadow: inset 0 0 0 3px #c4b5fd; }
+html[data-theme="light"] .proof-sum { color: #4c1d95; background: #efe9fd; box-shadow: inset 0 0 0 3px #c4b5fd; }
 html[data-theme="light"] .hear-btn:hover { box-shadow: inset 0 0 0 3px #2563eb; }
-html[data-theme="light"] .proof-line > summary:hover { box-shadow: inset 0 0 0 3px #7c3aed; }
-.proof-line blockquote { border-left: 6px solid #a78bfa; background: color-mix(in srgb, var(--e-ink) 5%, transparent); color: var(--e-ink-2); }
-html[data-theme="light"] .proof-line blockquote { border-left-color: #7c3aed; }
+html[data-theme="light"] .proof-sum:hover { box-shadow: inset 0 0 0 3px #7c3aed; }
+.proof-quote { margin: 0; border-left: 6px solid #a78bfa; background: color-mix(in srgb, var(--e-ink) 5%, transparent); color: var(--e-ink-2); }
+html[data-theme="light"] .proof-quote { border-left-color: #7c3aed; }
+.proof-quote[hidden] { display: none; }
 
 /* results: the score, then "6 strong · 2 to review" as plain counts (no chips) */
 .qr-split { gap: 28px; }
@@ -186,7 +187,7 @@ html[data-theme="light"] .fr-plan { color: #2563eb; }
   .fb-answer b { font-size: 16px; }
   .fb-why { font-size: 15px; line-height: 1.5; }
   .study-continue { width: auto; padding: 10px 16px; font-size: 15px; }
-  .hear-btn, .proof-line > summary { padding: 9px 13px; font-size: 14px; }
+  .hear-btn, .proof-sum { padding: 9px 13px; font-size: 14px; }
   .sa-given { padding: 12px 14px; font-size: 16px; }
   .sa-input { padding: 13px 14px; font-size: 17px; }
 }

@@ -9,7 +9,7 @@ import { examBacked } from './tools.js';
 import { str, obj, list } from './prompts.js';
 import {
   sectionize, SECTION_SCHEMA, sectionInstructions, CONSOLIDATE_SCHEMA, consolidateInstructions, buildMap, selectConcepts,
-  excerptIds, WRITE_SCHEMA, writeInstructions, VERIFY_SCHEMA, verifyInstructions, applyChecks, optionsLine, unseenNames, transcriptWordSet,
+  excerptIds, WRITE_SCHEMA, writeInstructions, VERIFY_SCHEMA, verifyInstructions, applyChecks, optionsLine, lectureOverview, unseenNames, transcriptWordSet,
 } from './studymap.js';
 
 const lineOf = (speakers) => (s) => codedLine(s, speakers.codeOf, fmtClock);
@@ -61,6 +61,7 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   const spares = selectConcepts(map, ctx.count + Math.ceil(ctx.count / 4), { focus: ctx.settings?.focus }).selected.filter((x) => !selected.includes(x));
   const primary = new Set(selected.map((x) => x.id));
   const line = lineOf(speakers);
+  const overview = kind === 'quiz' ? lectureOverview(map) : '';
   const vctx = { ...ctx, rawConceptIds: new Set(map.concepts.map((c) => c.id)) };
   const validate = (items) => { const c = { concepts: map.concepts, [key]: items }; tool.validate(c, segments, vctx); return c; };
 
@@ -95,7 +96,7 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
     if (Date.now() - started >= 200_000) { addStats({ verify_skipped: 1 }); return batch; }
     let applied = null;
     try {
-      const r = await call({ task: `${tool.task}:verify`, schema: VERIFY_SCHEMA, body: batch.map(blockOf).join('\n'), instructions: verifyInstructions(kind) });
+      const r = await call({ task: `${tool.task}:verify`, schema: VERIFY_SCHEMA, body: batch.map(blockOf).join('\n'), instructions: verifyInstructions(kind, { overview }) });
       applied = applyChecks(kind, batch, r.json?.checks || []);
     } catch (err) {
       // a failed check must not throw away the paid work, nor ship choices nobody checked: keep only items without options
@@ -110,7 +111,7 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
       let final = null;
       if (Date.now() - started < 240_000) {
         try {
-          const r2 = await call({ task: `${tool.task}:recheck`, schema: VERIFY_SCHEMA, body: again.map(blockOf).join('\n'), instructions: verifyInstructions(kind, { final: true }) });
+          const r2 = await call({ task: `${tool.task}:recheck`, schema: VERIFY_SCHEMA, body: again.map(blockOf).join('\n'), instructions: verifyInstructions(kind, { final: true, overview }) });
           final = applyChecks(kind, again, r2.json?.checks || [], { final: true });
         } catch (err) { console.warn('[study] recheck failed:', err?.code || err?.name || 'error'); }
       }
@@ -272,7 +273,7 @@ ${avoid || '- (none)'}`,
   const tokenized = (list) => tokenizeSpeakers({ questions: list }, speakers.codeOf).questions || [];
   let applied;
   try {
-    const v = await call({ task: 'quiz:verify', schema: VERIFY_SCHEMA, body: items.map(blockOf).join('\n'), instructions: verifyInstructions('quiz') });
+    const v = await call({ task: 'quiz:verify', schema: VERIFY_SCHEMA, body: items.map(blockOf).join('\n'), instructions: verifyInstructions('quiz', { overview: lectureOverview(map) }) });
     applied = applyChecks('quiz', items, v.json?.checks || []);
   } catch {
     return []; // unchecked choices are never shipped (the same rule as the quiz itself)
@@ -282,7 +283,7 @@ ${avoid || '- (none)'}`,
     const again = applied.recheck.map((i) => out[i]);
     let final = null;
     try {
-      const v2 = await call({ task: 'quiz:recheck', schema: VERIFY_SCHEMA, body: again.map(blockOf).join('\n'), instructions: verifyInstructions('quiz', { final: true }) });
+      const v2 = await call({ task: 'quiz:recheck', schema: VERIFY_SCHEMA, body: again.map(blockOf).join('\n'), instructions: verifyInstructions('quiz', { final: true, overview: lectureOverview(map) }) });
       final = applyChecks('quiz', again, v2.json?.checks || [], { final: true });
     } catch { /* not re-checked: not shipped */ }
     const kept = new Set(applied.recheck);

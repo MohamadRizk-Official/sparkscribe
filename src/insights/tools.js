@@ -666,9 +666,8 @@ export function createToolsUI(api) {
     const play = api.canPlay?.();
     return `<div class="proof">
       ${play ? `<button class="hear-btn" type="button" data-seek="${s.start}" data-ref="${s.id}">${ICON.headphones}<span>Hear it at ${t}</span></button>` : ''}
-      <details class="proof-line"><summary>${play ? `${ICON.quote}<span>Show the line</span>` : `${ICON.quote}<span>See it at ${t}</span>`}</summary>
-        <blockquote><span class="proof-meta"><span class="mono">${t}</span>${s.speaker ? ` · ${esc(s.speaker)}` : ''}</span><span class="proof-text">${esc(s.text)}</span>${play ? '' : `<button class="fb-link" type="button" data-seek="${s.start}" data-ref="${s.id}">Open in transcript</button>`}</blockquote>
-      </details>
+      <button class="proof-sum" type="button" data-proof aria-expanded="false">${ICON.quote}<span>${play ? 'Show the line' : `See it at ${t}`}</span></button>
+      <blockquote class="proof-quote" hidden><span class="proof-meta"><span class="mono">${t}</span>${s.speaker ? ` · ${esc(s.speaker)}` : ''}</span><span class="proof-text">${esc(s.text)}</span>${play ? '' : `<button class="fb-link" type="button" data-seek="${s.start}" data-ref="${s.id}">Open in transcript</button>`}</blockquote>
     </div>`;
   }
 
@@ -1300,6 +1299,17 @@ export function createToolsUI(api) {
       if (!panel.dataset.quizKeys) {             // one keyboard handler per panel; each screen sets ui.quizKey
         panel.dataset.quizKeys = '1';
         panel.addEventListener('keydown', (e) => ui.quizKey?.(e));
+        // "Show the line": the quoted line opens below the buttons, which stay where they are
+        panel.addEventListener('click', (e) => {
+          const b = e.target.closest('[data-proof]');
+          const q = b?.parentElement.querySelector('.proof-quote');
+          if (!q) return;
+          const open = q.hidden;
+          q.hidden = !open;
+          b.setAttribute('aria-expanded', String(open));
+          const label = b.querySelector('span');
+          if (label && /the line$/.test(label.textContent)) label.textContent = open ? 'Hide the line' : 'Show the line';
+        });
       }
       ui.quizKey = null;
       const coded = () => { if (ui.tool && current(ui.tool).a?.content?.speakers) panel.firstElementChild?.setAttribute('data-keep-names', ''); };
