@@ -71,6 +71,16 @@
           <li data-v="quiet">Stays in its corner and only reacts to what matters.</li>
           <li data-v="off">Hidden everywhere.</li>
         </ul>
+        <div class="set-row">
+          <div class="set-row-text">
+            <h3 id="soundLabel">Quiz sounds</h3>
+            <p>A short chime for a right answer, a soft tone for a wrong one.</p>
+          </div>
+          <div class="segctl" role="radiogroup" aria-labelledby="soundLabel" id="soundSeg">
+            <button type="button" role="radio" data-v="on">On</button>
+            <button type="button" role="radio" data-v="off">Off</button>
+          </div>
+        </div>
         <p class="set-note" id="mascotSaved" aria-live="polite"></p>
         <p class="set-note">SparkScribe always follows your device’s “Reduce motion” setting.</p>
       </section>

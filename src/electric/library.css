@@ -11,7 +11,7 @@
 .icon-btn:hover { color: var(--e-ink); background: color-mix(in srgb, var(--e-ink) 8%, transparent); border: 0; }
 .icon-btn:active { transform: scale(.9); }
 .btn-sm { min-height: 34px; padding: 7px 12px; font-size: 13.5px; border-radius: var(--e-r-xs); }
-.btn-danger { color: #fff; background: linear-gradient(180deg, #ff5f78, #e33b5a); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 8px 20px -10px rgba(226, 66, 93, .7); border: 0; }
+.btn-danger { color: #fff; background: linear-gradient(180deg, #ff5f78, #e33b5a); box-shadow: 0 8px 20px -10px rgba(226, 66, 93, .7); border: 0; }
 .btn-danger:hover { background: linear-gradient(180deg, #ff6f86, #ea4565); border: 0; }
 .lib-select, select.lib-select {
   appearance: none; -webkit-appearance: none; font: 500 14px var(--e-sans); color: var(--e-ink); cursor: pointer;
@@ -46,7 +46,7 @@
 .lib-search-clear { right: 10px; }
 
 /* ---------- views: text tabs and one moving line ---------- */
-.lib-views { position: relative; display: flex; width: 100%; gap: 6px; padding: 0 2px; border: 0; border-radius: 0; background: none; box-shadow: inset 0 -1px 0 var(--e-rule); overflow: visible; }
+.lib-views { position: relative; display: flex; width: 100%; gap: 6px; padding: 0 2px; border: 0; border-radius: 0; background: none; box-shadow: none; overflow: visible; }
 .lib-views .tab { position: relative; padding: 12px 6px 14px; margin-right: 18px; border: 0; border-radius: 0; background: none; box-shadow: none;
   font: 500 16px var(--e-sans); letter-spacing: -0.01em; color: var(--e-ink-3); transition: color var(--e-t-hover) var(--e-ease); }
 .lib-views .tab:hover { color: var(--e-ink); background: none; }
@@ -223,7 +223,7 @@ html[data-theme="light"] .ar-row input:checked + .ar-box { color: #fff; }
 .ar-title { font: 600 15px var(--e-sans); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ar-meta { font: 500 13px var(--e-sans); color: var(--e-ink-3); white-space: nowrap; }
 .ar-none { padding: 20px 10px; }
-.ar-foot { align-items: center; margin: 0; padding: 14px 24px 20px; box-shadow: inset 0 1px 0 var(--e-rule); }
+.ar-foot { align-items: center; margin: 0; padding: 14px 24px 20px; box-shadow: none; }
 .ar-count { margin-right: auto; font: 600 14px var(--e-sans); color: var(--e-cyan-ink); }
 .add-rec-dlg .dlg-err { margin: 0 24px; }
 

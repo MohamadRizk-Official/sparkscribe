@@ -20,7 +20,7 @@ html[data-theme="light"] :is(.transcript-card, .speakers-card, .timeline-card, .
 .ctool.big, .pz-card { background: var(--e-feature-bg); box-shadow: var(--e-feature); }
 .ctool.big:hover, .ctool.big:focus-visible { box-shadow: var(--e-feature-hover), 0 22px 40px -24px color-mix(in srgb, var(--tc) 80%, transparent); }
 /* a plan you point at takes its own colour: a solid 2px edge in the tier colour */
-.pz-card:hover, .pz-card:focus-within { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 2px var(--tc), 0 6px 14px rgba(0, 0, 0, .35), 0 30px 60px -28px color-mix(in srgb, var(--tc) 75%, transparent); }
+.pz-card:hover, .pz-card:focus-within { box-shadow: 0 0 0 2px var(--tc), 0 6px 14px rgba(0, 0, 0, .35), 0 30px 60px -28px color-mix(in srgb, var(--tc) 75%, transparent); }
 html[data-theme="light"] .pz-card:hover, html[data-theme="light"] .pz-card:focus-within { box-shadow: 0 0 0 2px var(--tc), 0 4px 8px rgba(15, 23, 42, .08), 0 26px 50px -24px color-mix(in srgb, var(--tc) 55%, transparent); }
 
 /* card: list items people click — soft shadow and surface contrast; their hover rules stay where they are */
@@ -39,11 +39,11 @@ html[data-theme="light"] .ns-step { box-shadow: var(--e-card); }
 .pz-grid .pz-card.t-flash { --edge: #ffc531; }
 .pz-grid .pz-card.t-bolt { --edge: #3f7dff; }
 .pz-grid .pz-card.t-thunder { --edge: #a46bff; }
-.pz-grid .pz-card, .pz-grid .pz-card.t-thunder { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 3px var(--edge), 0 0 38px -6px color-mix(in srgb, var(--edge) 65%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
-.pz-grid .pz-card.t-bolt, .pz-grid .pz-card.t-thunder { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 3px var(--edge), 0 0 48px -4px color-mix(in srgb, var(--edge) 75%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
+.pz-grid .pz-card, .pz-grid .pz-card.t-thunder { box-shadow: 0 0 0 3px var(--edge), 0 0 38px -6px color-mix(in srgb, var(--edge) 65%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
+.pz-grid .pz-card.t-bolt, .pz-grid .pz-card.t-thunder { box-shadow: 0 0 0 3px var(--edge), 0 0 48px -4px color-mix(in srgb, var(--edge) 75%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
 .pz-grid .pz-card:hover, .pz-grid .pz-card:focus-within, .pz-grid .pz-card.t-thunder:hover, .pz-grid .pz-card.t-thunder:focus-within {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 0 0 3px color-mix(in srgb, var(--edge) 75%, #fff), 0 0 70px -2px color-mix(in srgb, var(--edge) 85%, transparent), 0 40px 70px -30px rgba(0, 0, 0, .9); }
-.pz-grid .pz-card.is-current, .pz-grid .pz-card.is-selected { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12), 0 0 0 4px var(--edge), 0 0 54px -4px color-mix(in srgb, var(--edge) 80%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--edge) 75%, #fff), 0 0 70px -2px color-mix(in srgb, var(--edge) 85%, transparent), 0 40px 70px -30px rgba(0, 0, 0, .9); }
+.pz-grid .pz-card.is-current, .pz-grid .pz-card.is-selected { box-shadow: 0 0 0 4px var(--edge), 0 0 54px -4px color-mix(in srgb, var(--edge) 80%, transparent), 0 30px 60px -30px rgba(0, 0, 0, .85); }
 html[data-theme="light"] .pz-grid .pz-card { --edge: #0aa3c4; }
 html[data-theme="light"] .pz-grid .pz-card.t-flash { --edge: #e0a100; }
 html[data-theme="light"] .pz-grid .pz-card.t-bolt { --edge: #2563ff; }
@@ -55,9 +55,9 @@ html[data-theme="light"] .pz-grid .pz-card.is-current, html[data-theme="light"] 
 /* Free is the calm entry option: a clean neutral edge, a quiet resting shadow, no halo, the smallest lift. The paid
    plans keep their colour and light (gold → blue → violet, strongest last). */
 .pz-grid .pz-card.t-free { --lift: -3px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 0 0 2px rgba(220, 232, 255, .34), 0 22px 44px -28px rgba(0, 0, 0, .8); }
-.pz-grid .pz-card.t-free:hover, .pz-grid .pz-card.t-free:focus-within { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 2px rgba(230, 240, 255, .55), 0 28px 52px -28px rgba(0, 0, 0, .85); }
-.pz-grid .pz-card.t-free.is-current { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 3px rgba(32, 212, 244, .75), 0 22px 44px -28px rgba(0, 0, 0, .8); }
+  box-shadow: 0 0 0 2px rgba(220, 232, 255, .34), 0 22px 44px -28px rgba(0, 0, 0, .8); }
+.pz-grid .pz-card.t-free:hover, .pz-grid .pz-card.t-free:focus-within { box-shadow: 0 0 0 2px rgba(230, 240, 255, .55), 0 28px 52px -28px rgba(0, 0, 0, .85); }
+.pz-grid .pz-card.t-free.is-current { box-shadow: 0 0 0 3px rgba(32, 212, 244, .75), 0 22px 44px -28px rgba(0, 0, 0, .8); }
 html[data-theme="light"] .pz-grid .pz-card.t-free { box-shadow: 0 0 0 2px rgba(15, 23, 42, .3), 0 14px 30px -20px rgba(15, 23, 42, .25); }
 html[data-theme="light"] .pz-grid .pz-card.t-free:hover, html[data-theme="light"] .pz-grid .pz-card.t-free:focus-within { box-shadow: 0 0 0 2px rgba(15, 23, 42, .5), 0 20px 38px -20px rgba(15, 23, 42, .3); }
 html[data-theme="light"] .pz-grid .pz-card.t-free.is-current { box-shadow: 0 0 0 3px #0aa3c4, 0 14px 30px -20px rgba(15, 23, 42, .25); }
@@ -69,12 +69,12 @@ html[data-theme="light"] .pz-grid .pz-card.t-free.is-current { box-shadow: 0 0 0
    title and a fitted icon tile; informative, never alarming, never green */
 .bill-alert.is-ending, .bill-notice:not(.bad) {
   background: linear-gradient(135deg, rgba(74, 123, 255, .2), rgba(32, 212, 244, .08) 70%), #102036;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 0 0 2px rgba(98, 160, 255, .55), 0 0 30px -10px rgba(74, 123, 255, .5), 0 14px 30px -18px rgba(0, 0, 0, .8);
+  box-shadow: 0 0 0 2px rgba(98, 160, 255, .55), 0 0 30px -10px rgba(74, 123, 255, .5), 0 14px 30px -18px rgba(0, 0, 0, .8);
   color: #d8e4f5; }
 .bill-alert.is-ending .ba-title { font: 650 17px var(--e-sans); letter-spacing: -0.01em; color: #fff; }
 .bill-alert.is-ending p { color: #c9d6ea; }
 .bill-alert.is-ending .ba-next { color: #9fb2cc; }
-.bill-alert.is-ending .ba-ic { width: 40px; height: 40px; border-radius: 12px; color: #dbe7ff; background: linear-gradient(160deg, rgba(98, 160, 255, .55), rgba(74, 123, 255, .3)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .2), 0 6px 14px -6px rgba(74, 123, 255, .7); }
+.bill-alert.is-ending .ba-ic { width: 40px; height: 40px; border-radius: 12px; color: #dbe7ff; background: linear-gradient(160deg, rgba(98, 160, 255, .55), rgba(74, 123, 255, .3)); box-shadow: 0 6px 14px -6px rgba(74, 123, 255, .7); }
 .bill-notice:not(.bad) b { color: #fff; }
 html[data-theme="light"] .bill-alert.is-ending, html[data-theme="light"] .bill-notice:not(.bad) {
   background: linear-gradient(135deg, #e6efff, #f2f8ff 70%); color: #22344f;

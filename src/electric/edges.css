@@ -1,0 +1,58 @@
+/* ELECTRIC — edges, the last word on lines (loaded last). The owner's rule: an edge is at least 2px, solid and clearly
+   visible, or there is none; no pills; no gradient-filled small boxes. Everything here was found by measuring the
+   rendered pages (qa/e2e/edge-audit.js, edge-sweep.js), mostly 1px borders the old stylesheet still drew. */
+html { --edge: rgba(110, 170, 255, .3); --edge-hover: rgba(130, 188, 255, .65); }
+html[data-theme="light"] { --edge: rgba(30, 58, 138, .24); --edge-hover: rgba(37, 99, 235, .6); }
+
+/* row dividers the old stylesheet drew between sections and items: spacing separates them now */
+.ins-sec + .ins-sec, .note-sec + .note-sec, .faq-item + .faq-item, .tool-actions, .pz-list, .pz-table { border-top: 0; }
+
+/* cards and boxes that had a 1px border: a 2px solid edge (brighter on hover where they are clickable) */
+.draft-pick, .help-group details, .seo-sec details, .fc { border: 2px solid var(--edge); }
+.draft-pick { transition: border-color 220ms var(--e-ease), background-color 220ms var(--e-ease); }
+.draft-pick:hover, .draft-pick:focus-visible, .fc:hover { border-color: var(--edge-hover); }
+.fc { background: var(--e-s1); }
+html[data-theme="light"] .fc { background: #fff; }
+.plan-task { border: 2px solid var(--edge); border-left: 4px solid var(--c-blue, #3b82f6); }
+.plan-done { border: 0; background: color-mix(in srgb, var(--e-ink) 5%, transparent); }
+.ax-side { border: 0; background: var(--e-main-bg); box-shadow: var(--e-main); }
+
+/* Notes: a section keeps its accent as a 2px edge; its items are set apart by their fill (and the 3px accent bar) */
+.ins-sec { border: 0; box-shadow: 0 0 0 2px rgba(var(--acc, 150, 170, 255), .32); }
+.ins-item { border: 0; }
+
+/* form fields on Home (advanced options): a 2px edge like other fields */
+.control select, .chips-input { border: 2px solid var(--edge); }
+.control select:hover, .chips-input:hover, .chips-input:focus-within { border-color: var(--edge-hover); }
+
+/* small icons that had a hairline ring: a solid tint instead */
+.info { border: 0; background: color-mix(in srgb, var(--e-ink) 12%, transparent); }
+.adv-ic { border: 0; }
+
+/* Pricing details */
+.pz-connect i { border-width: 2px; }
+.pz-meter i, .pz-legend-half, .pz-legend-blk { outline: 0; }
+.pz-table tbody tr:nth-child(even) th, .pz-table tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--e-ink) 4%, transparent); }
+.pz-connect b { background: var(--e-violet); }
+.segctl-ind { border-radius: var(--e-r-sm); background: var(--e-cyan); }
+html[data-theme="light"] .segctl-ind { background: #2563eb; }
+
+/* no pills: links and badges that were fully rounded */
+.seo-more a { border: 2px solid var(--edge); border-radius: 10px; }
+.seo-more a:hover, .seo-more a:focus-visible { border-color: var(--edge-hover); }
+.thunder-mark { padding: 0; border-radius: 0; background: none; box-shadow: none; font-weight: 700; }
+.thunder-mark .tm-arc { display: none; }
+.lib-across .thunder-mark { padding: 0; }
+.ax-hero .eyebrow, .eyebrow.mono { padding: 0; border: 0; border-radius: 0; background: none; }
+.ax-count { border: 0; border-radius: 6px; }
+
+/* selected tab and the question bubble in Ask: solid, not a gradient */
+.ax-tabs .tab.on { border-color: transparent; background: color-mix(in srgb, var(--e-cyan) 16%, transparent); box-shadow: none; }
+.ask-q { background: #183352; }
+html[data-theme="light"] .ask-q { background: #e3edfb; }
+
+/* "Writing your study guide…": steady text (no sliding sheen) */
+.ins-loading span:last-child { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--e-ink-2); animation: none; }
+
+/* the plan comparison table and the across-recordings tab strip drew a 1px frame */
+.pz-table, .ax-tabs { border: 0; }

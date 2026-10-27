@@ -11,9 +11,11 @@
 @import url('./electric/library.css') layer(electric);
 @import url('./electric/workspace.css') layer(electric);
 @import url('./electric/study.css') layer(electric);
+@import url('./electric/quiz.css') layer(electric);
 @import url('./electric/process.css') layer(electric);
 @import url('./electric/landing.css') layer(electric);
 @import url('./electric/pricing.css') layer(electric);
 @import url('./electric/settings.css') layer(electric);
 @import url('./electric/thunder.css') layer(electric);
 @import url('./electric/surfaces.css') layer(electric);
+@import url('./electric/edges.css') layer(electric);

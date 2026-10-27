@@ -18,7 +18,7 @@
 .set-nav a[aria-current]::before { content: ""; position: absolute; left: 0; top: 9px; bottom: 9px; width: 3px; border-radius: 3px; background: var(--e-charge); box-shadow: 0 0 10px var(--e-glow-cyan); }
 .set-card { grid-column: 2; scroll-margin-top: 92px; display: grid; gap: 18px; padding: clamp(20px, 2.6vw, 30px); border: 0; border-radius: var(--e-r-xl); background: var(--e-s1); box-shadow: var(--e-elev-1); animation: none; }
 .set-card h2 { margin: 0; font-family: var(--e-display); font-size: 22px; font-weight: 700; letter-spacing: -0.025em; color: var(--e-ink); }
-.set-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 14px 0 0; border: 0; box-shadow: inset 0 1px 0 var(--e-rule); }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; padding: 14px 0 0; border: 0; box-shadow: none; }
 .set-card h2 + .set-row { box-shadow: none; padding-top: 0; }
 .set-row-text { display: grid; gap: 3px; min-width: 0; flex: 1 1 260px; }
 .set-row-text h3 { margin: 0; font: 600 16px var(--e-sans); color: var(--e-ink); }
@@ -88,7 +88,7 @@ html[data-theme="light"] .set-usage { background: var(--e-s3); }
 .meter-text b { font: 700 22px var(--e-display); letter-spacing: -0.02em; color: var(--e-ink); }
 .meter-hint { margin: 0; font-size: 14.5px; color: var(--e-ink-2); }
 .acct-paths { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
-.acct-paths li { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: baseline; padding: 12px 0; border: 0; border-radius: 0; background: none; box-shadow: inset 0 -1px 0 var(--e-rule); }
+.acct-paths li { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: baseline; padding: 12px 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 .acct-paths li b { font: 700 16px var(--e-sans); }
 .acct-paths li span { font-size: 14px; color: var(--e-ink-3); }
 .acct-paths li .mono { font-family: var(--e-sans); font-weight: 600; color: var(--e-ink-2); }

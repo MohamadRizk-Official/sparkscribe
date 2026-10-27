@@ -45,7 +45,7 @@ ok(fc.artifact.content.cards.length === 2, 'only the two sound cards are kept');
 ok(fq.circular === 1 && fq.vague === 1 && fq.duplicate === 1 && fq.attribution_lost === 1, 'circular, vague, duplicate and attribution-less cards are each dropped and counted');
 ok(fq.explanation_removed === 1 && fc.artifact.content.cards.some((k) => k.explanation) && fc.artifact.content.cards.some((k) => k.explanation === null), 'an explanation that only repeats the answer is removed; useful ones stay');
 ok(fc.artifact.content.cards.every((k) => k.refs.length), "a card without lines gets its concept's lines");
-ok(fc.artifact.content.cards.some((k) => /Spelling not found in the transcript: “Mock”, “School”/.test(k.caution || '')), 'a name the transcript never contains is labelled on the card, not silently kept');
+ok(fc.artifact.content.cards.some((k) => /Spelled differently in the transcript: “Mock”, “School”/.test(k.caution || '')), 'a name the transcript never contains is labelled on the card, not silently kept');
 ok(fc.artifact.content.target === tools.cardCount(25, 'standard'), 'card count is a ceiling that follows recording length');
 const fcMore = await svc.generateArtifact(db, { transcriptionId: T, kind: 'flashcards', settings: { size: 'more' } });
 ok(!fcMore.cached && fcMore.artifact.settingsKey === 'g2;size=more', '"More" is its own cached result');

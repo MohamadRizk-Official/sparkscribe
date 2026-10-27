@@ -25,7 +25,7 @@
 .pz-billing .segctl button[aria-checked="true"] { color: var(--e-on-accent); background: none; box-shadow: none; }
 html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color: #fff; }
 .segctl-ind { position: absolute; z-index: 0; top: 5px; bottom: 5px; left: 5px; width: calc(50% - 5px); border-radius: var(--e-r-pill); background: var(--e-charge);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 6px 18px -8px var(--e-glow-blue); transition: transform var(--e-t-tab) var(--e-ease); }
+  box-shadow: 0 6px 18px -8px var(--e-glow-blue); transition: transform var(--e-t-tab) var(--e-ease); }
 .pz-billing[data-v="year"] .segctl-ind { transform: translateX(100%); }
 .pz-billing-note { margin: 0; font-size: 14px; color: var(--e-ink-3); text-align: center; }
 .pz-save { display: none; }
@@ -61,13 +61,13 @@ html[data-theme="light"] .pz-billing .segctl button[aria-checked="true"] { color
    accent band across the top that a current runs along on hover (.pz-fx below). */
 .pz-card.t-thunder { --tc: var(--e-violet); --tc-ink: var(--e-violet-ink);
   background: radial-gradient(110% 70% at 100% 0%, rgba(161, 107, 255, .26), transparent 58%), radial-gradient(80% 50% at 0% 100%, rgba(234, 98, 186, .08), transparent 70%), linear-gradient(180deg, #1c1a44 0%, #151b36 50%, #121d31 100%);
-  box-shadow: inset 0 1px 0 rgba(230, 215, 255, .14), 0 0 0 2px rgba(220, 205, 255, .62), 0 4px 10px rgba(0, 0, 0, .35), 0 36px 80px -32px rgba(161, 107, 255, .7), 0 30px 64px -26px rgba(0, 0, 0, .9); }
+  box-shadow: 0 0 0 2px rgba(220, 205, 255, .62), 0 4px 10px rgba(0, 0, 0, .35), 0 36px 80px -32px rgba(161, 107, 255, .7), 0 30px 64px -26px rgba(0, 0, 0, .9); }
 html[data-theme="light"] .pz-card.t-thunder { background: radial-gradient(110% 70% at 100% 0%, rgba(124, 74, 232, .12), transparent 58%), linear-gradient(180deg, #fbf9ff, #fff 60%);
   box-shadow: 0 0 0 2px rgba(60, 30, 130, .6), 0 2px 4px rgba(15, 23, 42, .07), 0 30px 60px -26px rgba(124, 74, 232, .45); }
 .pz-card.t-thunder:hover, .pz-card.t-thunder:focus-within { transform: translateY(var(--lift));
-  box-shadow: inset 0 1px 0 rgba(230, 215, 255, .18), 0 0 0 2px var(--e-violet), 0 8px 16px rgba(0, 0, 0, .35), 0 46px 90px -30px rgba(161, 107, 255, .85), 0 40px 74px -28px rgba(0, 0, 0, .95); }
+  box-shadow: 0 0 0 2px var(--e-violet), 0 8px 16px rgba(0, 0, 0, .35), 0 46px 90px -30px rgba(161, 107, 255, .85), 0 40px 74px -28px rgba(0, 0, 0, .95); }
 html[data-theme="light"] .pz-card.t-thunder:hover, html[data-theme="light"] .pz-card.t-thunder:focus-within { box-shadow: 0 0 0 2px var(--e-violet), 0 4px 8px rgba(15, 23, 42, .08), 0 40px 72px -26px rgba(124, 74, 232, .55); }
-.t-thunder:hover .pz-btn, .t-thunder:focus-within .pz-btn { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .34), 0 16px 32px -12px rgba(161, 107, 255, 1); filter: brightness(1.07); }
+.t-thunder:hover .pz-btn, .t-thunder:focus-within .pz-btn { box-shadow: 0 16px 32px -12px rgba(161, 107, 255, 1); filter: brightness(1.07); }
 .pz-card.is-current { box-shadow: 0 0 0 3px var(--tc), var(--e-elev-2); }
 .pz-card.is-selected { box-shadow: 0 0 0 3px var(--tc), var(--e-elev-2); }
 .pz-card { scroll-margin-top: 92px; }
@@ -148,7 +148,7 @@ html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 .pz-who b { font-weight: 600; color: var(--e-ink-2); }
 /* the list sits under one hairline with real room below it (the 2026-10-21 cards had the legacy border but this
    layer's padding: 0, so the first item touched the line) */
-.pz-list { list-style: none; margin: 2px 0 0; padding: 16px 0 0; border-top: 1px solid var(--e-rule); display: grid; gap: 8px; }
+.pz-list { list-style: none; margin: 2px 0 0; padding: 12px 0 0; border-top: 0; display: grid; gap: 8px; }
 .pz-list li { display: grid; grid-template-columns: 18px 1fr; gap: 9px; align-items: start; font-size: 14.5px; line-height: 1.45; color: var(--e-ink-2); }
 .pz-list svg { width: 18px; height: 18px; color: var(--tc-ink); stroke-width: 2.2; margin-top: 1px; }
 .pz-cta { margin-top: auto; padding-top: 6px; }
@@ -158,9 +158,9 @@ html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 .pz-btn:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--tc) 24%, var(--e-s1)); box-shadow: var(--e-elev-2), inset 0 0 0 2px var(--tc); }
 .pz-btn:active { transform: scale(.98); }
 .pz-btn:disabled { opacity: .6; cursor: progress; }
-.t-flash .pz-btn { color: #1b1300; background: linear-gradient(100deg, #ffd977, #ffb938); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 10px 22px -12px rgba(255, 185, 56, .8); }
-.t-bolt .pz-btn { color: #fff; background: linear-gradient(100deg, #3f8cff, #4a67ff); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 10px 22px -12px rgba(74, 123, 255, .8); }
-.t-thunder .pz-btn { color: #fff; background: linear-gradient(100deg, #8a5cff, #b464ff 55%, #e062b8); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 12px 26px -12px rgba(161, 107, 255, .9); }
+.t-flash .pz-btn { color: #1b1300; background: linear-gradient(100deg, #ffd977, #ffb938); box-shadow: 0 10px 22px -12px rgba(255, 185, 56, .8); }
+.t-bolt .pz-btn { color: #fff; background: linear-gradient(100deg, #3f8cff, #4a67ff); box-shadow: 0 10px 22px -12px rgba(74, 123, 255, .8); }
+.t-thunder .pz-btn { color: #fff; background: linear-gradient(100deg, #8a5cff, #b464ff 55%, #e062b8); box-shadow: 0 12px 26px -12px rgba(161, 107, 255, .9); }
 .t-flash .pz-btn:hover, .t-bolt .pz-btn:hover, .t-thunder .pz-btn:hover { filter: brightness(1.06) saturate(1.05); }
 .pz-current, .pz-note { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: var(--e-r-md); font: 600 14.5px var(--e-sans); color: var(--e-ink-2); background: color-mix(in srgb, var(--e-ink) 5%, transparent); border: 0; }
 .pz-current { color: var(--tc-ink); }
@@ -185,7 +185,7 @@ html[data-theme="light"] .pz-allow { background: var(--e-s3); }
 .pz-fit-col { --tc: var(--e-cyan); --tc-ink: var(--e-cyan-ink); display: grid; align-content: start; gap: 8px; padding: 22px; border-radius: var(--e-r-lg); position: relative; overflow: hidden;
   background: var(--e-feature-bg); box-shadow: var(--e-feature); will-change: transform; transition: transform var(--e-t-panel) var(--e-ease); }
 .pz-fit-col::before { content: ""; position: absolute; left: 0; top: 0; right: 0; height: 4px; background: var(--tc); transition: opacity 160ms var(--e-ease); }
-.pz-fit-col:hover, .pz-fit-col:focus-within { transform: translateY(-5px); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 0 0 2px var(--tc), 0 6px 14px rgba(0, 0, 0, .35), 0 30px 56px -26px color-mix(in srgb, var(--tc) 75%, transparent); }
+.pz-fit-col:hover, .pz-fit-col:focus-within { transform: translateY(-5px); box-shadow: 0 0 0 2px var(--tc), 0 6px 14px rgba(0, 0, 0, .35), 0 30px 56px -26px color-mix(in srgb, var(--tc) 75%, transparent); }
 html[data-theme="light"] .pz-fit-col:hover, html[data-theme="light"] .pz-fit-col:focus-within { box-shadow: 0 0 0 2px var(--tc), 0 4px 8px rgba(15, 23, 42, .08), 0 24px 46px -22px color-mix(in srgb, var(--tc) 55%, transparent); }
 .pz-fit-col:hover::before, .pz-fit-col:focus-within::before { opacity: 0; }
 .fit-zap { position: absolute; left: 0; top: 0; width: 100%; height: 24px; overflow: visible; pointer-events: none; }
@@ -213,7 +213,7 @@ html[data-theme="light"] .pz-fit-col:hover, html[data-theme="light"] .pz-fit-col
 /* ---------- comparison: a decision tool ---------- */
 .pz-table-wrap { border-radius: var(--e-r-xl); background: var(--e-s1); box-shadow: var(--e-elev-1); overflow-x: auto; border: 0; }
 .pz-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 15px; }
-.pz-table thead th, .pz-table thead td { position: sticky; top: 0; z-index: 2; background: var(--e-s1); padding: 18px 16px 14px; border: 0; box-shadow: inset 0 -1px 0 var(--e-rule); }
+.pz-table thead th, .pz-table thead td { position: sticky; top: 0; z-index: 2; background: var(--e-s1); padding: 18px 16px 14px; border: 0; box-shadow: none; }
 .pz-th { display: inline-flex; align-items: center; gap: 8px; font: 700 17px var(--e-display); letter-spacing: -0.02em; color: var(--e-ink); }
 .pz-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--tc, var(--e-cyan)); box-shadow: 0 0 10px color-mix(in srgb, var(--tc, var(--e-cyan)) 60%, transparent); }
 .pz-table .t-free { --tc: var(--e-cyan); } .pz-table .t-flash { --tc: var(--e-amber); } .pz-table .t-bolt { --tc: var(--e-blue); } .pz-table .t-thunder { --tc: var(--e-violet); }
@@ -221,7 +221,7 @@ html[data-theme="light"] .pz-fit-col:hover, html[data-theme="light"] .pz-fit-col
 .pz-table tbody th small { display: block; margin-top: 3px; font: 400 13px var(--e-sans); color: var(--e-ink-3); }
 .pz-table tbody td { text-align: center; padding: 16px 14px; border: 0; color: var(--e-ink-2); }
 .pz-table tbody tr { transition: background-color 140ms var(--e-ease); }
-.pz-table tbody tr + tr th, .pz-table tbody tr + tr td { box-shadow: inset 0 1px 0 var(--e-rule); }
+.pz-table tbody tr + tr th, .pz-table tbody tr + tr td { box-shadow: none; }
 .pz-table tbody tr:hover, .pz-table tbody tr:focus-within { background: color-mix(in srgb, var(--e-cyan) 6%, transparent); }
 .pz-table tbody td b { font: 700 16px var(--e-sans); color: var(--e-ink); }
 .pz-table tbody td small { display: block; font-size: 12.5px; color: var(--e-ink-3); margin-top: 2px; }
@@ -243,7 +243,7 @@ html[data-theme="light"] .pz-fit-col:hover, html[data-theme="light"] .pz-fit-col
 
 /* ---------- FAQ: light, roomy, smooth ---------- */
 .faq-list { max-width: 860px; margin: 0 auto; display: grid; gap: 0; padding: 0; border: 0; background: none; box-shadow: none; }
-.faq-item { border: 0; border-radius: 0; background: none; box-shadow: inset 0 -1px 0 var(--e-rule); }
+.faq-item { border: 0; border-radius: 0; background: none; box-shadow: none; }
 .faq-item summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 22px 6px; cursor: pointer; font: 600 17px var(--e-sans); letter-spacing: -0.01em; color: var(--e-ink); border-radius: var(--e-r-sm); transition: color var(--e-t-hover); }
 .faq-item summary::-webkit-details-marker { display: none; }
 .faq-item summary:hover { color: var(--e-cyan-ink); background: none; }

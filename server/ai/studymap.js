@@ -245,7 +245,7 @@ export function excerptIds(concepts, segments, pad = 3) {
 // ---------------- 4. writing and checking ----------------
 export const WRITE_SCHEMA = { flashcards: obj({ cards: list(FLASHCARD) }), quiz: obj({ questions: list(QUESTION) }) };
 
-export function writeInstructions(kind, { concepts, topics, settings, dominant }) {
+export function writeInstructions(kind, { concepts, topics, settings, dominant, tfLimit }) {
   const topicTitle = new Map((topics || []).map((t) => [t.id, t.title]));
   const brief = concepts.map((c) => ({ id: c.id, topic: topicTitle.get(c.topic) || '', name: c.name, kind: c.kind, importance: c.importance, stance: c.stance, held_by: c.held_by, summary: c.summary, reasoning: c.reasoning }));
   const what = kind === 'quiz' ? 'question' : 'flashcard';
@@ -253,10 +253,14 @@ export function writeInstructions(kind, { concepts, topics, settings, dominant }
 <concepts>
 ${JSON.stringify(brief, null, 1)}
 </concepts>
-${kind === 'quiz' ? `- ${QUIZ_TYPES[settings?.types] || QUIZ_TYPES.mixed}
+${kind === 'quiz' ? `- ${tfLimit === 0 && !['multiple_choice', 'true_false'].includes(settings?.types) ? 'Mostly multiple_choice, plus a few short_answer (answers of a few words). No true_false in this set.' : tfLimit === 1 && !['multiple_choice', 'true_false'].includes(settings?.types) ? 'Mostly multiple_choice, plus a few short_answer (answers of a few words). At most one true_false, only for a meaningful distinction or a common misconception the recording corrects.' : QUIZ_TYPES[settings?.types] || QUIZ_TYPES.mixed}
 - ${settings?.difficulty === 'harder' ? 'Challenge level: reasoning, application, distinction and misconception questions, with close distractors.' : 'Standard level: the important ideas, clearly asked.'}
 - Test understanding, reasoning, distinctions, cause and effect, application or misconceptions — not whether a sentence was said. "skill" says which.
-- multiple_choice: exactly 4 options and ONE unambiguously correct answer according to the lines. Distractors must be plausible to someone who half-understood: the other school's position on the same question, a reversed cause and effect, a related idea from elsewhere in the lecture that does NOT answer this question, a common misconception. Every distractor must be clearly wrong for the question exactly as worded: never an option that is also true of the question's subject, in the lecture or in general (asked "what cannot replace exercise?", a balanced diet is also a correct answer). If the answer is one of several things that would fit, ask what the lecture specifically says about it instead (which example the lecturer gave, what the lecturer criticized, who claimed it). Never absurd, joking or obviously wrong options ("only experts are allowed to use the formula"); no "all/none of the above"; all options similar in length, detail and grammar; no word in the question that gives the answer away.
+- The correct answer must be what the speaker says in the lines. Ask "why" or "how" only when the speaker gives the reason or the way in the lines, and make the answer that stated reason: never a reason inferred, interpreted or taken from general knowledge of the subject.
+- multiple_choice: exactly 4 options and ONE unambiguously correct answer according to the lines. Build each distractor from the lecture itself, so that only someone who listened carefully can rule it out: another reason, detail, person or example the speaker gives elsewhere that does NOT answer this question; the other school's position on the same question; a reversed cause and effect; a close misreading of this passage; a common misconception. Every distractor must be clearly wrong for the question exactly as worded: never an option that is also true of the question's subject, in the lecture or in general (asked "what cannot replace exercise?", a balanced diet is also a correct answer). If the answer is one of several things that would fit, ask what the lecture specifically says about it instead (which example the lecturer gave, what the lecturer criticized, who claimed it).
+- Every option must fit the facts the question itself states. If the question says he stayed when others ran, no option may say he ran; if it says the verse uses a phrase, no option may deny the phrase is there. An option the question already rules out is a giveaway.
+- Never absurd, joking or obviously wrong options ("only experts are allowed to use the formula", "he was glad the prayer had finally ended"): a student who never heard the lecture should not be able to eliminate any option by common sense alone. No "all/none of the above"; all options similar in length, detail and grammar; no word in the question that gives the answer away.
+- When a question or an option refers to words the speaker quotes (a verse, a hadith, a saying, a title, a phrase), put those words in double quotation marks: the phrase “those who are with him”, the line “I have won”.
 - Keep qualifiers exactly as the lines have them (sometimes, often, may, might, must, always, never, only): never turn "may" into "must" or "often" into "always" in a question, an option or an answer.
 - explanation: the principle or reasoning behind the right answer, from the lines; one sentence for a simple point. Don't restate the option.`
     : `- front: one clear question about the concept. back: answers exactly that question with the actual knowledge and makes sense on its own; never circular.
@@ -295,10 +299,10 @@ export function verifyInstructions(kind, { final = false } = {}) {
   return `Check each ${kind === 'quiz' ? 'quiz question' : 'flashcard'} above against its own transcript lines, as a careful teacher would before handing it to students.
 For each item return one check (same index):
 - matches: does the answer respond to what the question asks? A question about why answered with what, or about one thing answered with another, does not match.
-- supported: is the answer stated or clearly established in the lines?
+- supported: is the answer stated or clearly established in the lines? For a "why" or "how" question, the speaker must give that reason or way in the lines; a reason that is only inferred, interpreted or known from elsewhere is not supported (drop the item, or reword it to ask about what the speaker does say).
 - explanation_supported: is every claim in the explanation supported by the lines?
 - attribution_ok: is each position attributed as in the lines (a school's or person's view not presented as fact or as the lecturer's own; a criticized view presented as criticized; the right participant named)?
-- distractors_ok (multiple choice): plausible wrong options, none absurd, none giving the answer away by length or wording.
+- distractors_ok (multiple choice): false when any wrong option is absurd or joking, could be ruled out by common sense without having heard the lecture, contradicts a fact the question itself states (the question says he stayed, the option says he ran), or gives the answer away by length or wording. Then give fixed_options: four options whose wrong ones come from the lecture's own material (another reason or detail the speaker gives elsewhere, a close misreading of these lines), each clearly wrong for this question.
 - option_checks (multiple choice and true/false): act as a student arguing for a different answer. Take the question exactly as worded (its scope, any negation such as not / cannot / except, and qualifiers such as only / always / never / sometimes / may) and judge EVERY option on its own: fits = yes if the lines say or imply it answers the question, or if it is generally true of the question's subject (asked what cannot replace X, another option that also cannot replace X fits); arguably if a careful student could defend it; no otherwise. For this judgement only, you may use common knowledge.${final ? '' : `
 - If more than one option fits (or the keyed answer doesn't): give fixed_question, making the question specific to what the lines single out (for example "Which product did the lecturer criticize people for treating as a substitute for exercise?") so that only the keyed option fits; or give fixed_options that the lines clearly rule out for this question. If neither works, set drop = true.`}
 - uncertain_terms: words or names from the lines that look misrecognized by the automatic transcription and appear in the item. Never correct them.
@@ -340,7 +344,7 @@ export function applyChecks(kind, items, checks, { final = false } = {}) {
     if (kind === 'quiz' && next.type === 'multiple_choice') {
       const fo = final ? [] : (c.fixed_options || []).map((o) => String(o).trim()).filter(Boolean);
       if (fo.length >= 3 && fo.includes(next.answer)) { opts = fo; next.options = fo; repaired = true; if (!c.distractors_ok) stats.verify_fixed++; }
-      else if (!c.distractors_ok) stats.weak_distractors++;
+      else if (!c.distractors_ok) { stats.weak_distractors++; return; } // weak or giveaway options with no fix: not shipped
       if (!next.options.includes(next.answer)) { stats.verify_dropped++; return; }
     }
     if (hasChoices(kind, next)) {

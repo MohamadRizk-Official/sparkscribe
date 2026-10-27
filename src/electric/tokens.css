@@ -64,10 +64,10 @@
   --e-focus: #5fe2f8;
 
   /* elevation: ambient + key shadow + lit top edge. No outlines. */
-  --e-elev-0: inset 0 1px 0 var(--e-hi);
-  --e-elev-1: inset 0 1px 0 var(--e-hi), 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px -6px rgba(0, 0, 0, .45);
-  --e-elev-2: inset 0 1px 0 rgba(255, 255, 255, .08), 0 2px 4px rgba(0, 0, 0, .3), 0 18px 36px -12px rgba(0, 0, 0, .6);
-  --e-elev-3: inset 0 1px 0 rgba(255, 255, 255, .08), 0 24px 60px -16px rgba(0, 0, 0, .7), 0 8px 18px -8px rgba(0, 0, 0, .5);
+  --e-elev-0: 0 0 0 transparent;
+  --e-elev-1: 0 1px 2px rgba(0, 0, 0, .35), 0 6px 18px -6px rgba(0, 0, 0, .45);
+  --e-elev-2: 0 2px 4px rgba(0, 0, 0, .3), 0 18px 36px -12px rgba(0, 0, 0, .6);
+  --e-elev-3: 0 24px 60px -16px rgba(0, 0, 0, .7), 0 8px 18px -8px rgba(0, 0, 0, .5);
   --e-inset: inset 0 1px 2px rgba(0, 0, 0, .35), inset 0 0 0 2px rgba(170, 196, 235, .2);
 
   /* surface hierarchy (electric/surfaces.css assigns these; one role per component):
@@ -76,11 +76,11 @@
      card     — interactive items in a list: soft shadow, no edge; hover raises them
      overlays and utility controls keep elev-2/3 and the inset well */
   --e-main-bg: linear-gradient(180deg, #13243a 0, #102033 160px, #0f1e30 100%);
-  --e-main: inset 0 1px 0 rgba(255, 255, 255, .07), 0 0 0 2px rgba(98, 160, 255, .42), 0 0 30px -12px rgba(74, 123, 255, .42), 0 2px 6px rgba(0, 0, 0, .35), 0 28px 60px -26px rgba(0, 0, 0, .85);
-  --e-main-hover: inset 0 1px 0 rgba(255, 255, 255, .09), 0 0 0 2px rgba(120, 178, 255, .7), 0 0 38px -8px rgba(74, 123, 255, .6), 0 4px 10px rgba(0, 0, 0, .35), 0 32px 64px -26px rgba(0, 0, 0, .9);
+  --e-main: 0 0 0 2px rgba(98, 160, 255, .42), 0 0 30px -12px rgba(74, 123, 255, .42), 0 2px 6px rgba(0, 0, 0, .35), 0 28px 60px -26px rgba(0, 0, 0, .85);
+  --e-main-hover: 0 0 0 2px rgba(120, 178, 255, .7), 0 0 38px -8px rgba(74, 123, 255, .6), 0 4px 10px rgba(0, 0, 0, .35), 0 32px 64px -26px rgba(0, 0, 0, .9);
   --e-feature-bg: linear-gradient(180deg, #16293f 0, #112236 100%);
-  --e-feature: inset 0 1px 0 rgba(255, 255, 255, .09), 0 0 0 2px rgba(228, 238, 255, .55), 0 3px 8px rgba(0, 0, 0, .35), 0 30px 64px -26px rgba(0, 0, 0, .9);
-  --e-feature-hover: inset 0 1px 0 rgba(255, 255, 255, .11), 0 0 0 2px rgba(240, 247, 255, .85), 0 6px 14px rgba(0, 0, 0, .35), 0 40px 74px -28px rgba(0, 0, 0, .95);
+  --e-feature: 0 0 0 2px rgba(228, 238, 255, .55), 0 3px 8px rgba(0, 0, 0, .35), 0 30px 64px -26px rgba(0, 0, 0, .9);
+  --e-feature-hover: 0 0 0 2px rgba(240, 247, 255, .85), 0 6px 14px rgba(0, 0, 0, .35), 0 40px 74px -28px rgba(0, 0, 0, .95);
   --e-card: var(--e-elev-1);
 
   /* ---- the old design's names, pointed at the new system (every untouched rule inherits the new look) ---- */

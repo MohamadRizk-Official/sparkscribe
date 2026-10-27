@@ -25,7 +25,7 @@ html[data-theme="light"] .thunder-mark .tm-arc { background: linear-gradient(100
 /* the violet action: Explore Thunder */
 .btn.th-cta {
   color: #fff; background: linear-gradient(100deg, #8a55f5 0%, #a16bff 55%, #b98aff 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 1px 2px rgba(0, 0, 0, .25), 0 8px 22px -8px var(--e-glow-violet);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 22px -8px var(--e-glow-violet);
   text-decoration: none; position: relative; overflow: hidden;
 }
 .btn.th-cta svg { fill: currentColor; stroke: none; width: 16px; height: 16px; }
@@ -35,7 +35,7 @@ html[data-theme="light"] .thunder-mark .tm-arc { background: linear-gradient(100
   transform: translateX(-110%); opacity: 0;
 }
 .btn.th-cta:hover { background: linear-gradient(100deg, #8a55f5 0%, #a16bff 55%, #b98aff 100%); transform: translateY(-1px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 2px 4px rgba(0, 0, 0, .2), 0 14px 30px -10px var(--e-glow-violet), 0 0 0 4px color-mix(in srgb, var(--e-violet) 16%, transparent); }
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .2), 0 14px 30px -10px var(--e-glow-violet), 0 0 0 4px color-mix(in srgb, var(--e-violet) 16%, transparent); }
 .btn.th-cta:hover::after, .btn.th-cta:focus-visible::after { animation: e-th-cta 600ms cubic-bezier(.55, .05, .35, 1) 1; }
 @keyframes e-th-cta { 0% { transform: translateX(-110%); opacity: 1; } 100% { transform: translateX(110%); opacity: 1; } }
 html[data-theme="light"] .btn.th-cta, html[data-theme="light"] .btn.th-cta:hover { background: linear-gradient(100deg, #6232cf 0%, #7c4ae8 60%, #8d5cf0 100%); }

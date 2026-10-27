@@ -9,6 +9,7 @@ import { switchTheme } from '../lib/theme-toggle.js';
 import { mountMascot } from '../mascot/mascot.js';
 import { getBillingStatus, usageParts, usageLevel, dateText } from '../lib/billing.js';
 import { keepAudioPref, setKeepAudioPref, audioStorageInfo, clearAllAudio, fmtBytes } from '../lib/audio-store.js';
+import { quizSoundsOn, setQuizSounds, playAnswerSound } from '../lib/quiz-sound.js';
 
 const $ = (id) => document.getElementById(id);
 let signedIn = false;
@@ -264,6 +265,21 @@ themeSeg.addEventListener('keydown', (e) => {
   if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); chooseTheme(THEMES[(i + 2) % 3], true); }
 });
 paintTheme(getThemePref());
+
+// ---------- preferences: quiz sounds (this browser only, lib/quiz-sound.js) ----------
+const soundSeg = $('soundSeg');
+function paintSound(on) {
+  soundSeg.querySelectorAll('[role="radio"]').forEach((b) => { const sel = (b.dataset.v === 'on') === on; b.setAttribute('aria-checked', String(sel)); b.tabIndex = sel ? 0 : -1; });
+}
+function chooseSound(on, focus) {
+  setQuizSounds(on);
+  paintSound(on);
+  if (on) playAnswerSound(true); // a sample of what it sounds like
+  if (focus) soundSeg.querySelector(`[data-v="${on ? 'on' : 'off'}"]`)?.focus();
+}
+soundSeg.addEventListener('click', (e) => { const b = e.target.closest('[role="radio"]'); if (b) chooseSound(b.dataset.v === 'on'); });
+soundSeg.addEventListener('keydown', (e) => { if (/^Arrow/.test(e.key)) { e.preventDefault(); chooseSound(!quizSoundsOn(), true); } });
+paintSound(quizSoundsOn());
 
 // ---------- privacy: original audio kept on this device (lib/audio-store.js) ----------
 const audioSeg = $('audioSeg');

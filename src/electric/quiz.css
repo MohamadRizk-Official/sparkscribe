@@ -1,0 +1,123 @@
+/* ELECTRIC — Practice Quiz and the flashcard / study screens (tools.js .study…). The old styles drew 1–1.5px edges,
+   gradient fills, pill buttons and a dotted glow behind the whole panel. Here: one panel with the main surface edge,
+   answer cards with a 2px edge that brightens on hover, solid fills, plain buttons (no pills), and right / wrong
+   shown with a 2px edge in green / pink. Both themes. */
+
+/* the panel: the main working surface (tokens.css), no dotted glow behind it */
+.study { border: 0; border-radius: var(--e-r-xl); background: var(--e-main-bg); box-shadow: var(--e-main); color: var(--e-ink); padding: clamp(18px, 2.4vw, 26px); }
+html[data-theme="light"] .study { background: var(--e-main-bg); box-shadow: var(--e-main); }
+.study-crumb { color: var(--e-ink-3); }
+.study-crumb button { color: var(--e-cyan-ink); text-decoration-color: color-mix(in srgb, var(--e-cyan-ink) 40%, transparent); }
+.study-crumb [aria-current], .study-crumb button:hover { color: var(--e-ink); }
+
+/* inner cards: set apart by surface, not by an outline */
+.study-card { border: 0; border-radius: 20px; background: var(--e-s1); box-shadow: 0 18px 40px -26px rgba(0, 0, 0, .75); }
+html[data-theme="light"] .study-card { background: var(--e-s3); box-shadow: none; }
+.study-title, .q-text, .qr-title, .study-count { color: var(--e-ink); }
+.study-sub, .qr-msg { color: var(--e-ink-2); }
+
+/* setup choices: a solid selected option, no gradient, no outline round the group */
+.pick { border: 0; background: var(--e-s3); box-shadow: var(--e-inset); }
+html[data-theme="light"] .pick { background: #e8edf5; box-shadow: none; }
+.pick button { color: var(--e-ink-3); }
+.pick button:hover { color: var(--e-ink); background: color-mix(in srgb, var(--e-ink) 7%, transparent); }
+.pick button.on { color: #04131c; background: var(--e-cyan); box-shadow: 0 6px 16px -8px var(--e-glow-cyan); }
+html[data-theme="light"] .pick button.on { color: #fff; background: #2563eb; box-shadow: 0 6px 14px -8px rgba(37, 99, 235, .6); }
+
+/* "Level" info: a small button; the explanation opens on hover or keyboard focus */
+.info-tip { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; }
+.info-btn { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--e-ink-3); cursor: help; }
+.info-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.info-btn:hover, .info-btn:focus-visible { color: var(--e-cyan-ink); }
+.info-pop { position: absolute; z-index: 30; top: calc(100% + 8px); left: 50%; width: min(320px, 80vw); padding: 12px 14px; border-radius: 12px; transform: translate(-50%, 4px);
+  background: var(--e-s2); color: var(--e-ink-2); box-shadow: 0 0 0 2px rgba(110, 170, 255, .4), 0 18px 40px -16px rgba(0, 0, 0, .8);
+  font: 500 13.5px/1.55 var(--e-sans); letter-spacing: 0; text-transform: none; text-align: left;
+  opacity: 0; visibility: hidden; transition: opacity 180ms var(--e-ease), transform 200ms var(--e-ease), visibility 0s linear 200ms; }
+.info-pop b { color: var(--e-ink); font-weight: 700; }
+html[data-theme="light"] .info-pop { box-shadow: 0 0 0 2px rgba(30, 58, 138, .3), 0 16px 34px -16px rgba(25, 50, 110, .35); }
+.info-tip:hover .info-pop, .info-btn:focus-visible + .info-pop { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition-delay: 0s; }
+
+/* top of a running quiz: "End quiz" is a plain button, not a pill */
+.study-exit { border: 0; border-radius: 10px; padding: 8px 12px; color: var(--e-ink-2); background: color-mix(in srgb, var(--e-ink) 6%, transparent); box-shadow: none; transition: background-color 200ms var(--e-ease), color 200ms; }
+.study-exit:hover { color: var(--e-ink); background: color-mix(in srgb, var(--e-ink) 11%, transparent); }
+.study-score { color: var(--e-green); }
+html[data-theme="light"] .study-score { color: #047857; }
+
+/* answer cards: a 2px edge that brightens on hover; right / wrong get a 2px green / pink edge */
+.ans { border: 0; border-radius: 16px; background: #182841; color: var(--e-ink);
+  box-shadow: 0 0 0 2px rgba(110, 170, 255, .28); transition: transform 220ms var(--e-ease), box-shadow 220ms var(--e-ease), background-color 220ms var(--e-ease), opacity 250ms ease; }
+html[data-theme="light"] .ans { background: #fff; box-shadow: 0 0 0 2px rgba(30, 58, 138, .2); }
+.ans:not([aria-disabled]):hover { transform: translateY(-2px); background: #1d3150; box-shadow: 0 0 0 2px rgba(130, 188, 255, .7), 0 14px 28px -16px rgba(74, 123, 255, .55); border: 0; }
+html[data-theme="light"] .ans:not([aria-disabled]):hover { background: #fff; box-shadow: 0 0 0 2px rgba(37, 99, 235, .6), 0 12px 24px -16px rgba(30, 58, 138, .35); }
+.ans-key { color: #e6f0ff; background: #2a4775; box-shadow: none; }
+html[data-theme="light"] .ans-key { color: #1e3a8a; background: #e3ecfb; }
+.ans.right { background: rgba(52, 211, 153, .13); box-shadow: 0 0 0 2px #34d399; }
+.ans.wrong { background: rgba(244, 114, 182, .12); box-shadow: 0 0 0 2px #f472b6; }
+html[data-theme="light"] .ans.right { background: #ecfdf5; box-shadow: 0 0 0 2px #059669; }
+html[data-theme="light"] .ans.wrong { background: #fdf2f8; box-shadow: 0 0 0 2px #db2777; }
+.ans.right .ans-key { color: #04241a; background: #34d399; }
+.ans.wrong .ans-key { color: #2a0716; background: #f472b6; }
+html[data-theme="light"] .ans.right .ans-key { color: #fff; background: #059669; }
+html[data-theme="light"] .ans.wrong .ans-key { color: #fff; background: #db2777; }
+.ans.dim { opacity: .5; }
+
+/* a name spelled differently in the transcript: a quiet line under the question, not a box */
+.item-caution { padding: 0; border: 0; border-radius: 0; background: none; color: var(--e-ink-3); font-size: 13.5px; }
+
+/* feedback after an answer: 2px edge, solid tint */
+.fb { border: 0; border-radius: 16px; }
+.fb.right { background: rgba(52, 211, 153, .1); box-shadow: 0 0 0 2px rgba(52, 211, 153, .8); }
+.fb.wrong { background: rgba(244, 114, 182, .09); box-shadow: 0 0 0 2px rgba(244, 114, 182, .75); }
+.fb.close { background: rgba(251, 191, 36, .09); box-shadow: 0 0 0 2px rgba(251, 191, 36, .75); }
+html[data-theme="light"] .fb.right { background: #ecfdf5; box-shadow: 0 0 0 2px #059669; }
+html[data-theme="light"] .fb.wrong { background: #fdf2f8; box-shadow: 0 0 0 2px #db2777; }
+html[data-theme="light"] .fb.close { background: #fffbeb; box-shadow: 0 0 0 2px #d97706; }
+.fb-why, .fb-answer b { color: var(--e-ink); }
+.fb-answer span { color: var(--e-ink-3); }
+.fb-link { color: var(--e-cyan-ink); }
+
+/* "Hear it at…" and "Show the line": plain buttons (no pill, no tint gradient) */
+.hear-btn, .proof-line > summary { border: 0; border-radius: 10px; padding: 9px 14px; box-shadow: none; transition: background-color 200ms var(--e-ease), box-shadow 200ms var(--e-ease), color 200ms; }
+.hear-btn { color: #d7ecff; background: #1b3555; }
+.proof-line > summary { color: #e6e0ff; background: #2a2950; }
+.hear-btn:hover { background: #224168; box-shadow: 0 0 0 2px rgba(130, 188, 255, .55); }
+.proof-line > summary:hover { background: #33325f; box-shadow: 0 0 0 2px rgba(167, 139, 250, .55); }
+html[data-theme="light"] .hear-btn { color: #1e3a8a; background: #e3ecfb; }
+html[data-theme="light"] .proof-line > summary { color: #4c1d95; background: #efe9fd; }
+html[data-theme="light"] .hear-btn:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .5); }
+html[data-theme="light"] .proof-line > summary:hover { box-shadow: 0 0 0 2px rgba(124, 58, 237, .45); }
+.proof-line blockquote { background: color-mix(in srgb, var(--e-ink) 5%, transparent); color: var(--e-ink-2); }
+
+/* results: the score, then "6 strong · 2 to review" as plain counts (no chips) */
+.qr-split { gap: 28px; }
+.qr-chip { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.qr-chip span { color: var(--e-ink-3); }
+.qr-chip b { color: var(--e-ink); }
+.qr-chip.strong .ic, .qr-chip.strong svg { color: var(--e-green); }
+.qr-chip.review .ic, .qr-chip.review svg { color: #f472b6; }
+.qr-track { stroke: color-mix(in srgb, var(--e-ink) 12%, transparent); }
+.qr-num span { color: var(--e-ink-3); }
+.qr-eyebrow { color: var(--e-cyan-ink); }
+
+/* missed questions: 2px edges */
+.miss-card { border: 0; background: var(--e-s1); box-shadow: 0 0 0 2px rgba(244, 114, 182, .3); }
+html[data-theme="light"] .miss-card { background: #fff; box-shadow: 0 0 0 2px rgba(219, 39, 119, .25); }
+.miss-ans { border: 0; }
+.miss-ans.yours { background: rgba(244, 114, 182, .1); box-shadow: 0 0 0 2px rgba(244, 114, 182, .6); }
+.miss-ans.right { background: rgba(52, 211, 153, .1); box-shadow: 0 0 0 2px rgba(52, 211, 153, .65); }
+html[data-theme="light"] .miss-ans.yours { background: #fdf2f8; box-shadow: 0 0 0 2px #db2777; }
+html[data-theme="light"] .miss-ans.right { background: #ecfdf5; box-shadow: 0 0 0 2px #059669; }
+.miss-q, .miss-ans b { color: var(--e-ink); }
+
+/* Focused Review, on plans without it: one calm box with a 2px edge; the plan name as words, not a badge */
+.fr-upsell { border: 0; background: var(--e-s1); box-shadow: 0 0 0 2px rgba(110, 170, 255, .3); }
+html[data-theme="light"] .fr-upsell { background: #fff; box-shadow: 0 0 0 2px rgba(30, 58, 138, .22); }
+.fr-plan { margin-left: 4px; padding: 0; border: 0; border-radius: 0; background: none; font: 700 13px var(--e-sans); letter-spacing: 0; text-transform: none; color: #8ab4ff; }
+.fr-plan::before { content: "· "; color: var(--e-ink-4); }
+html[data-theme="light"] .fr-plan { color: #2563eb; }
+
+/* Meeting Recap and other tool views: the opening summary uses the full width; participants as plain names */
+.tool-lead { max-width: none; color: var(--e-ink); }
+.tool-names { margin: 0; font-size: 15px; color: var(--e-ink-2); }
+
+@media (prefers-reduced-motion: reduce) { .ans, .ans:not([aria-disabled]):hover { transform: none; } }

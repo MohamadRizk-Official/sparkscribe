@@ -56,27 +56,24 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   const key = tool.itemsKey;
   const { map, reused, sections } = await studyMap({ db, transcriptionId, segments, speakers, basis, call });
   const { selected, coverage } = selectConcepts(map, ctx.count, { focus: ctx.settings?.focus });
+  // a few spare concepts are written alongside, so an item the writer skips or a check drops is replaced without a
+  // second round of calls; the spares are the first to go when there are more items than asked for
+  const spares = selectConcepts(map, ctx.count + Math.ceil(ctx.count / 4), { focus: ctx.settings?.focus }).selected.filter((x) => !selected.includes(x));
+  const primary = new Set(selected.map((x) => x.id));
   const line = lineOf(speakers);
   const vctx = { ...ctx, rawConceptIds: new Set(map.concepts.map((c) => c.id)) };
   const validate = (items) => { const c = { concepts: map.concepts, [key]: items }; tool.validate(c, segments, vctx); return c; };
 
-  const write = async (concepts) => {
+  const write = async (concepts, tfLimit) => {
     const ids = excerptIds(concepts, segments);
     const r = await call({
       task: `${tool.task}:write`, schema: WRITE_SCHEMA[kind], body: `<transcript>\n${excerpt(segments, ids, line)}\n</transcript>`,
-      instructions: writeInstructions(kind, { concepts, topics: map.topics, settings: ctx.settings, dominant: ctx.dominant }),
+      instructions: writeInstructions(kind, { concepts, topics: map.topics, settings: ctx.settings, dominant: ctx.dominant, tfLimit }),
     });
     const items = r.json?.[key] || [];
     inheritRefs(items, { concepts });
     return tokenizeSpeakers(groundStructured({ [key]: items }, segments).content, speakers.codeOf)[key] || [];
   };
-
-  let raw = selected.length ? await write(selected) : [];
-  let c = validate(raw);
-  let firstQuality = c.quality;
-  // concepts the writer skipped (or whose item failed a check) get one more try, while time is left
-  const missing = selected.filter((s) => !c[key].some((x) => x.concept === s.id));
-  if (missing.length && Date.now() - started < 140_000) { raw = [...raw, ...await write(missing)]; c = validate(raw); firstQuality = c.quality; }
 
   // check every item against its own lines (and the concept's other lines, where its distractors may come from)
   const stats = {};
@@ -92,20 +89,22 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   // fixes are written with the speaker labels the model sees: turn them into speaker codes like everything else
   const tokenized = (items) => tokenizeSpeakers({ [key]: items }, speakers.codeOf)[key] || [];
   const addStats = (s) => { for (const [k, v] of Object.entries(s)) stats[k] = (stats[k] || 0) + v; };
-  if (c[key].length && Date.now() - started < 200_000) {
+  // one batch's items: checked, anything repaired checked once more (no further fixes); no time left = not shipped
+  const check = async (batch) => {
+    if (!batch.length) return [];
+    if (Date.now() - started >= 200_000) { addStats({ verify_skipped: 1 }); return batch; }
     let applied = null;
     try {
-      const r = await call({ task: `${tool.task}:verify`, schema: VERIFY_SCHEMA, body: c[key].map(blockOf).join('\n'), instructions: verifyInstructions(kind) });
-      applied = applyChecks(kind, c[key], r.json?.checks || []);
+      const r = await call({ task: `${tool.task}:verify`, schema: VERIFY_SCHEMA, body: batch.map(blockOf).join('\n'), instructions: verifyInstructions(kind) });
+      applied = applyChecks(kind, batch, r.json?.checks || []);
     } catch (err) {
       // a failed check must not throw away the paid work, nor ship choices nobody checked: keep only items without options
       console.warn('[study] verify failed:', err?.code || err?.name || 'error');
-      const keep = c[key].filter((it) => !(kind === 'quiz' && (it.type === 'multiple_choice' || it.type === 'true_false')));
-      applied = { items: keep, stats: { verify_failed: 1, ambiguous_dropped: c[key].length - keep.length }, recheck: [] };
+      const keep = batch.filter((it) => !(kind === 'quiz' && (it.type === 'multiple_choice' || it.type === 'true_false')));
+      applied = { items: keep, stats: { verify_failed: 1, ambiguous_dropped: batch.length - keep.length }, recheck: [] };
     }
     addStats(applied.stats);
     let items = tokenized(applied.items.map((x) => ({ ...x })));
-    // anything repaired is checked once more, with no further fixes allowed; no time left = not shipped
     if (applied.recheck.length) {
       const again = applied.recheck.map((i) => items[i]);
       let final = null;
@@ -115,16 +114,39 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
           final = applyChecks(kind, again, r2.json?.checks || [], { final: true });
         } catch (err) { console.warn('[study] recheck failed:', err?.code || err?.name || 'error'); }
       }
-      const passed = new Set((final?.items || []));
       if (final) { const { verify_dropped = 0, ambiguous_dropped = 0 } = final.stats; addStats({ recheck_dropped: verify_dropped + ambiguous_dropped }); }
       else addStats({ recheck_dropped: again.length });
       const kept = new Set(applied.recheck);
       items = items.filter((it, i) => !kept.has(i)).concat(final ? final.items : []);
-      items.sort((a, b) => (a.refs?.[0] ?? 0) - (b.refs?.[0] ?? 0));
-      void passed;
     }
-    c = validate(items);
-  } else stats.verify_skipped = 1;
+    return items;
+  };
+
+  // Written and checked in small batches that run at the same time: one long call writing (then checking) every
+  // item took minutes on a long lecture, and each batch only needs its own concepts' lines. The whole set is
+  // validated together at the end (duplicates across batches, the question count).
+  const BATCH = 3;
+  const toWrite = [...selected, ...spares].sort((a, b) => (a.refs?.[0] ?? 0) - (b.refs?.[0] ?? 0));
+  const batches = [];
+  for (let i = 0; i < toWrite.length; i += BATCH) batches.push(toWrite.slice(i, i + BATCH));
+  // a mixed quiz has at most two true/false questions in all: one each in the first two batches
+  const tfOf = (b) => (kind === 'quiz' && !['multiple_choice', 'true_false'].includes(ctx.settings?.types) ? (b < 2 ? 1 : 0) : undefined);
+  const firstQuality = {};
+  const sumFirst = (q) => { for (const [k, v] of Object.entries(q || {})) if (!['kept', 'core_uncovered'].includes(k)) firstQuality[k] = (firstQuality[k] || 0) + v; };
+  const runBatch = async (concepts, b) => {
+    const v = validate(await write(concepts, tfOf(b)));
+    sumFirst(v.quality);
+    return check(v[key]);
+  };
+  let checked = (await Promise.all(batches.map(runBatch))).flat();
+  // more than asked for: spares go first, then the last ones
+  if (checked.length > ctx.count) {
+    const extra = checked.filter((it) => !primary.has(it.concept));
+    const drop = new Set(extra.slice(0, checked.length - ctx.count));
+    checked = checked.filter((it) => !drop.has(it)).slice(0, ctx.count);
+  }
+  checked.sort((a, b) => (a.refs?.[0] ?? 0) - (b.refs?.[0] ?? 0));
+  let c = validate(checked);
   // drop reasons from both rounds of checks; what is kept is the final count
   const quality = { ...firstQuality };
   for (const [k, v] of Object.entries(c.quality || {})) quality[k] = ['kept', 'core_uncovered'].includes(k) ? v : (quality[k] || 0) + v;
@@ -135,7 +157,7 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   for (const it of c[key]) {
     const names = unseenNames([it.front || it.question, it.back || it.answer, it.explanation, ...(it.options || [])].filter(Boolean).join('\n'), words);
     if (names.length) {
-      it.caution = [it.caution, `Spelling not found in the transcript: ${names.map((n) => `“${n}”`).join(', ')}. Check the recording.`].filter(Boolean).join(' ');
+      it.caution = [it.caution, `Spelled differently in the transcript: ${names.map((n) => `“${n}”`).join(', ')}.`].filter(Boolean).join(' ');
       stats.unseen_names = (stats.unseen_names || 0) + 1;
     }
   }

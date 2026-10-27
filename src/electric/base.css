@@ -69,14 +69,14 @@ html[data-theme="light"] .e-circuit .ec-trace { stroke: rgba(20, 45, 90, .07); }
 /* primary: the charged action. One per view. */
 .btn-primary {
   color: var(--e-on-accent); background: var(--e-charge); background-size: 160% 100%; background-position: 0% 50%;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 1px 2px rgba(0, 0, 0, .25), 0 8px 22px -8px var(--e-glow-blue);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 8px 22px -8px var(--e-glow-blue);
   text-shadow: none; filter: none;
   transition: transform var(--e-t-press) var(--e-ease), box-shadow var(--e-t-hover) var(--e-ease), background-position 500ms var(--e-ease);
 }
 html[data-theme="light"] .btn-primary { --e-charge: linear-gradient(100deg, #0b78c0 0%, #3461f0 60%, #4a4ee0 100%); color: #fff; }
 .btn-primary:hover {
   background: var(--e-charge); background-size: 160% 100%; background-position: 70% 50%; transform: translateY(-1px); filter: none;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .32), 0 2px 4px rgba(0, 0, 0, .2), 0 14px 30px -10px var(--e-glow-blue), 0 0 0 4px rgba(32, 212, 244, .12);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .2), 0 14px 30px -10px var(--e-glow-blue), 0 0 0 4px rgba(32, 212, 244, .12);
 }
 html[data-theme="light"] .btn-primary:hover { background: linear-gradient(100deg, #0b78c0 0%, #3461f0 60%, #4a4ee0 100%); background-size: 160% 100%; background-position: 70% 50%; }
 .btn-primary:active { transform: translateY(0) scale(.98); }
