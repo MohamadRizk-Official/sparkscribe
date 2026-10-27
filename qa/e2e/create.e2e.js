@@ -67,10 +67,11 @@ export async function run() {
       create?.click();
       await waitFor(() => panel().querySelector('.fc'), { timeout: 15000, what: 'deck' });
       assert(/Covers all 1 main topic/.test(text()), `coverage note (panel: ${text().slice(0, 300)})`);
-      // the mock's "Mock School" is not in the transcript: the card that uses it carries a note
+      // the mock's "Mock School" is not in the transcript: the card that uses it carries a note (shown with the answer)
       let found = false;
       for (let i = 0; i < 4 && !found; i++) {
-        found = /Spelling not found in the transcript/.test(text());
+        if (!panel().querySelector('.fc.flipped')) { panel().querySelector('.fc')?.click(); await sleep(80); }
+        found = /Spelled differently in the transcript/.test(text());
         if (!found) { btn(/Next →/)?.click(); await sleep(80); }
       }
       assert(found, 'a card with a name the transcript lacks is labelled');
@@ -81,7 +82,7 @@ export async function run() {
       if (make !== 'done') make.click();
       await waitFor(() => $('.sum-tldr'), { timeout: 15000, what: 'summary' });
       $$('#transcript .grp')[0].querySelector('button.who').click();
-      const r = await waitFor(() => [...($('.menu')?.querySelectorAll('button') || [])].find((x) => /^Rename .* everywhere/.test(x.textContent)), { what: 'rename item' });
+      const r = await waitFor(() => [...($('.menu')?.querySelectorAll('button') || [])].find((x) => /^Edit name/.test(x.textContent.trim())), { what: 'rename item' });
       r.click();
       const dlg = await waitFor(() => document.querySelector('dialog[open]'), { what: 'rename dialog' });
       dlg.querySelector('input').value = 'Chair'; dlg.querySelector('form').requestSubmit();

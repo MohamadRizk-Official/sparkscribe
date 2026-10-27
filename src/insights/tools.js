@@ -14,6 +14,8 @@ import { readState, recordRun, markReviewed, flagQuestion, reviewList, openConce
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // small line icons for the study screens (decorative: every state is also said in words)
+// a spelling note saved with an item, in the current wording (older items said "Spelling not found … Check the recording.")
+const cautionText = (s) => String(s || '').replace(/Spelling not found in the transcript: (.+?)\. Check the recording\./g, 'Spelled differently in the transcript: $1.');
 const svg = (d) => `<svg class="ic" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${d}</svg>`;
 const ICON = {
   check: svg('<path d="M5 12.5 10 17.5 19.5 7"/>'),
@@ -133,7 +135,7 @@ export function artifactBlocks(kind, c, timeOf) {
         B.push({ t: 'p', text: `Q: ${k.front}` });
         B.push({ t: 'p', text: `A: ${k.back}`, time: timeOf(k.refs) });
         if (k.explanation) B.push({ t: 'p', text: `Why: ${k.explanation}` });
-        if (k.caution) B.push({ t: 'p', text: `Note: ${k.caution}` });
+        if (k.caution) B.push({ t: 'p', text: `Note: ${cautionText(k.caution)}` });
       });
       break;
     case 'quiz':
@@ -630,7 +632,7 @@ export function createToolsUI(api) {
         <span class="fc-text">${esc(d.flipped ? card.back : card.front)}</span>
         <span class="fc-hint">${d.flipped ? 'Tap to see the question' : 'Tap to reveal the answer'}</span>
       </button>
-      ${card.caution ? `<p class="item-caution" role="note">${esc(card.caution)}</p>` : ''}
+      ${d.flipped && card.caution ? `<p class="item-caution">${esc(cautionText(card.caution))}</p>` : ''}
       ${d.flipped && card.explanation ? `<details class="fc-more"><summary>Explain why</summary><p>${esc(card.explanation)}</p></details>` : ''}
       <div class="fc-src">${d.flipped && src ? `Explained at ${api.chips(card.refs, byId)}` : '&nbsp;'}</div>
       ${rateRow}
@@ -773,14 +775,17 @@ export function createToolsUI(api) {
       }).join('')}</div>`;
     }
     const close = ans?.verdict === 'close';
-    const fb = ans ? `<div class="fb ${close ? 'close' : ans.correct ? 'right' : 'wrong'}" role="status">
-        <p class="fb-head"><span class="fb-ic" aria-hidden="true">${close ? ICON.approx : ans.correct ? ICON.check : ICON.x}</span>${close ? 'Close enough' : ans.correct ? 'Correct' : 'Not quite'}</p>
+    // Continue sits at the top of the feedback, beside "Correct" / "Not quite": no scrolling down to move on
+    const fb = ans ? `<div class="fb ${close ? 'close' : ans.correct ? 'right' : 'wrong'}">
+        <div class="fb-top"><p class="fb-head" role="status"><span class="fb-ic" aria-hidden="true">${close ? ICON.approx : ans.correct ? ICON.check : ICON.x}</span>${close ? 'Close enough' : ans.correct ? 'Correct' : 'Not quite'}</p>
+        <button class="btn btn-primary study-continue" type="button" data-act="qnext">${run.i === total - 1 ? 'See results' : 'Continue'} <span aria-hidden="true">→</span></button></div>
         ${close ? `<p class="fb-why">The recording said <b>“${esc(q.answer)}”</b>, but your answer captures the main idea.</p>` : ''}
         ${ans.typo ? `<p class="fb-why">Counted as <b>“${esc(q.answer)}”</b> — just a spelling slip.</p>` : ''}
         ${!ans.correct ? `<p class="fb-answer"><span>Correct answer</span><b>${esc(q.answer)}</b></p>` : ''}
         ${q.explanation ? `<p class="fb-why">${esc(q.explanation)}</p>` : ''}
         ${proofHtml(q, byId)}
         ${q.type === 'short_answer' && !ans.correct && ans.given ? '<button class="fb-link" type="button" data-act="mark-right">My answer was right</button>' : ''}
+        ${q.caution ? `<p class="item-caution">${esc(cautionText(q.caution))}</p>` : ''}
       </div>` : '';
     return `<div class="study quiz${ans ? (close ? ' is-close' : ans.correct ? ' is-right' : ' is-wrong') : ''}" data-quiz="${a.id}">
       <header class="study-top">
@@ -791,11 +796,9 @@ export function createToolsUI(api) {
       <section class="study-card q-card">
         <p class="q-kind">${esc(kindLabel)}${run.kind === 'missed' ? ' · from your missed questions' : run.kind === 'focus' ? ' · Focused Review practice' : ''}</p>
         <h3 class="q-text" id="qText" tabindex="-1">${esc(q.question)}</h3>
-        ${q.caution ? `<p class="item-caution" role="note">${esc(q.caution)}</p>` : ''}
         ${answers}
         ${fb}
       </section>
-      ${ans ? `<div class="study-next"><button class="btn btn-primary study-continue" type="button" data-act="qnext">${run.i === total - 1 ? 'See results' : 'Continue'} <span aria-hidden="true">→</span></button></div>` : ''}
     </div>`;
   }
 
@@ -866,7 +869,7 @@ export function createToolsUI(api) {
     return `<aside class="fr-upsell" aria-label="Focused Review">
       <span class="fr-upsell-ic" aria-hidden="true">${ICON.loop}</span>
       <span class="fr-upsell-text"><b>Focused Review <span class="fr-plan">Bolt</span></b>
-        <span>Your missed answers come down to ${n} concept${n === 1 ? '' : 's'}. Focused Review shows each one with the exact lines from the recording, then lets you practise just those.</span></span>
+        <span>You can retake the questions you missed on any plan. Focused Review goes further: your misses come down to ${n} concept${n === 1 ? '' : 's'}, and it shows each one with the exact lines from the recording, then writes new questions on just those.</span></span>
       <a class="btn btn-ghost btn-sm" href="/pricing?plan=bolt">See Bolt</a>
     </aside>`;
   }
@@ -1277,8 +1280,19 @@ export function createToolsUI(api) {
             : f === 'setup' ? p.querySelector('[data-act="start"]')
               : f.startsWith('set:') ? p.querySelector(`[data-set="${f.slice(4)}"][aria-checked="true"]`) : null;
     el?.focus({ preventScroll: f.startsWith('set:') || f === 'continue' });
-    // the answer's feedback is the next thing to read: bring it (and the Continue button) into view
-    if (f === 'continue') p.querySelector('.fb')?.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    // the answer's feedback is the next thing to read: bring it into view, its top row (with Continue) always visible
+    if (f === 'continue') showFeedback(p.querySelector('.fb'));
+  }
+  // scrolls the least needed: the whole feedback when it fits above the audio player, else its top at the screen's top
+  function showFeedback(fb) {
+    if (!fb) return;
+    const r = fb.getBoundingClientRect();
+    const dock = [...document.querySelectorAll('.playerbar')].find((b) => b.offsetParent !== null)?.getBoundingClientRect();
+    const bottom = Math.min(innerHeight, dock?.top ?? innerHeight) - 12, top = 72;
+    let dy = 0;
+    if (r.bottom > bottom) dy = r.height <= bottom - top ? r.bottom - bottom : r.top - top;
+    else if (r.top < top) dy = r.top - top;
+    if (dy) scrollBy({ top: dy, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   return {

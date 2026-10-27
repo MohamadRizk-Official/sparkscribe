@@ -44,3 +44,7 @@
 @media (prefers-reduced-motion: reduce) {
   .m-stage { transition: none; }
 }
+/* phones have no mascot, and no setting for it (mascot.js doesn't start it there either) */
+@media (max-width: 767px) {
+  .mascot, .set-mascot { display: none !important; }
+}

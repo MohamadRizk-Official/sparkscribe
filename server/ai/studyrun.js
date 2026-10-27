@@ -64,11 +64,11 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   const vctx = { ...ctx, rawConceptIds: new Set(map.concepts.map((c) => c.id)) };
   const validate = (items) => { const c = { concepts: map.concepts, [key]: items }; tool.validate(c, segments, vctx); return c; };
 
-  const write = async (concepts, tfLimit) => {
+  const write = async (concepts, tfLimit, tfAnswers) => {
     const ids = excerptIds(concepts, segments);
     const r = await call({
       task: `${tool.task}:write`, schema: WRITE_SCHEMA[kind], body: `<transcript>\n${excerpt(segments, ids, line)}\n</transcript>`,
-      instructions: writeInstructions(kind, { concepts, topics: map.topics, settings: ctx.settings, dominant: ctx.dominant, tfLimit }),
+      instructions: writeInstructions(kind, { concepts, topics: map.topics, settings: ctx.settings, dominant: ctx.dominant, tfLimit, tfAnswers }),
     });
     const items = r.json?.[key] || [];
     inheritRefs(items, { concepts });
@@ -131,10 +131,15 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   for (let i = 0; i < toWrite.length; i += BATCH) batches.push(toWrite.slice(i, i + BATCH));
   // a mixed quiz has at most two true/false questions in all: one each in the first two batches
   const tfOf = (b) => (kind === 'quiz' && !['multiple_choice', 'true_false'].includes(ctx.settings?.types) ? (b < 2 ? 1 : 0) : undefined);
+  // left alone, true/false statements come out nearly all false: each one is told its answer, about half True, in
+  // an order that isn't a pattern (a true/false quiz: per concept; a mixed one: True in the first batch, False in the second)
+  const tfOnly = kind === 'quiz' && ctx.settings?.types === 'true_false';
+  const tfKeys = tfOnly ? toWrite.map((_, i) => (((i * 7 + 3) % 10) < 5 ? 'True' : 'False')) : [];
+  const tfAnswersOf = (b) => (tfOnly ? tfKeys.slice(b * BATCH, b * BATCH + BATCH) : tfOf(b) === 1 ? [b === 0 ? 'True' : 'False'] : undefined);
   const firstQuality = {};
   const sumFirst = (q) => { for (const [k, v] of Object.entries(q || {})) if (!['kept', 'core_uncovered'].includes(k)) firstQuality[k] = (firstQuality[k] || 0) + v; };
   const runBatch = async (concepts, b) => {
-    const v = validate(await write(concepts, tfOf(b)));
+    const v = validate(await write(concepts, tfOf(b), tfAnswersOf(b)));
     sumFirst(v.quality);
     return check(v[key]);
   };

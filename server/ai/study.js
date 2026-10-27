@@ -123,7 +123,7 @@ export const QUIZ_SCHEMA = obj({
 export const QUIZ_TYPES = {
   mixed: 'Mostly multiple_choice, plus a few short_answer (answers of a few words). Use true_false only for a meaningful distinction or a common misconception the recording corrects — never to restate a sentence — and at most two.',
   multiple_choice: 'Only multiple_choice questions.',
-  true_false: 'Only true_false questions. Each must test a meaningful distinction or a misconception (e.g. swapping two schools\' positions, reversing a cause and effect), never a sentence restated; a false statement must be clearly contradicted by the recording, not merely absent from it.',
+  true_false: 'Only true_false questions. Each must test a meaningful distinction or a misconception (e.g. swapping two schools\' positions, reversing a cause and effect), never a sentence restated; a false statement must be clearly contradicted by the recording, not merely absent from it. About half the statements are true: a true one states a point the recording makes, in different words.',
 };
 
 export function quizInstructions({ count, settings, dominant }) {

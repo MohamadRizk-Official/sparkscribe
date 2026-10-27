@@ -86,6 +86,11 @@ const mcq = { concept: 'c1', type: 'multiple_choice', question: 'Q?', answer: 'B
 const weak = M.applyChecks('quiz', [mcq], [{ ...base, index: 0, distractors_ok: false, fixed_options: ['B', 'Plausible 1', 'Plausible 2', 'Plausible 3'] }]);
 ok(weak.items[0].options.includes('Plausible 1') && weak.items[0].options.includes('B'), 'weak distractors are replaced when the check offers better ones');
 ok(M.applyChecks('quiz', [mcq], [{ ...base, index: 0, fixed_answer: 'Z' }]).items.length === 0, 'a "fixed" answer that is not among the options is not accepted');
+ok(M.applyChecks('quiz', [mcq], [{ ...base, index: 0, clear: false }]).items.length === 0, 'a vague question with no clear rewording is dropped');
+const reworded = M.applyChecks('quiz', [mcq], [{ ...base, index: 0, clear: false, fixed_question: 'According to the lecturer, why should people follow Ali?' }]);
+ok(reworded.items[0]?.question.startsWith('According') && reworded.recheck.length === 1, 'a vague question with a clear rewording is kept, reworded and checked again');
+const tfText = M.writeInstructions('quiz', { concepts: [{ id: 'c1' }, { id: 'c2' }], settings: { types: 'true_false' }, tfAnswers: ['True', 'False'] });
+ok(/c1: True, c2: False/.test(tfText), 'a true/false quiz tells each statement its answer (not all false)');
 // ---------- exactly one defensible answer ----------
 const mcq2 = { concept: 'c1', type: 'multiple_choice', question: 'What cannot replace exercise?', answer: 'Energy drinks', options: ['A balanced diet', 'Energy drinks', 'Enough sleep', 'Stretching'], refs: [1] };
 const verdicts = (fitting) => mcq2.options.map((o) => ({ option: o, fits: fitting.includes(o) ? 'yes' : 'no' }));

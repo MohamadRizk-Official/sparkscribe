@@ -37,8 +37,11 @@ const CANCEL = { cancelled: true };
 let instance = null;
 
 /** @param {{ page: 'home' | 'library' | 'transcript' | 'other' }} opts */
+// phones get no mascot at all (the screen is too small to share); tablets and computers do
+export const PHONE_Q = '(max-width: 767px)';
 export function mountMascot({ page = 'other' } = {}) {
   if (instance) return instance;
+  if (matchMedia(PHONE_Q).matches) return null;
   const calmQ = matchMedia('(prefers-reduced-motion: reduce)');
   const calm = () => calmQ.matches;
   const touch = matchMedia('(hover: none), (pointer: coarse)').matches || innerWidth < 640;

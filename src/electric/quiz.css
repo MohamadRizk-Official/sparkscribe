@@ -43,50 +43,91 @@ html[data-theme="light"] .info-pop { box-shadow: 0 0 0 2px rgba(30, 58, 138, .3)
 .study-score { color: var(--e-green); }
 html[data-theme="light"] .study-score { color: #047857; }
 
-/* answer cards: a 2px edge that brightens on hover; right / wrong get a 2px green / pink edge */
-.ans { border: 0; border-radius: 16px; background: #182841; color: var(--e-ink);
-  box-shadow: 0 0 0 2px rgba(110, 170, 255, .28); transition: transform 220ms var(--e-ease), box-shadow 220ms var(--e-ease), background-color 220ms var(--e-ease), opacity 250ms ease; }
-html[data-theme="light"] .ans { background: #fff; box-shadow: 0 0 0 2px rgba(30, 58, 138, .2); }
-.ans:not([aria-disabled]):hover { transform: translateY(-2px); background: #1d3150; box-shadow: 0 0 0 2px rgba(130, 188, 255, .7), 0 14px 28px -16px rgba(74, 123, 255, .55); border: 0; }
-html[data-theme="light"] .ans:not([aria-disabled]):hover { background: #fff; box-shadow: 0 0 0 2px rgba(37, 99, 235, .6), 0 12px 24px -16px rgba(30, 58, 138, .35); }
-.ans-key { color: #e6f0ff; background: #2a4775; box-shadow: none; }
+/* answer cards: one solid fill, a clearly visible 2px edge drawn inside the card (so nothing moves), brighter on
+   hover; after answering, the right one gets a 3px green edge and the picked wrong one a 3px pink edge. No tinted
+   washes or gradients: the colour is in the edge, the letter and the mark. */
+.ans { border: 0; border-radius: 16px; background: #172640; color: var(--e-ink);
+  box-shadow: inset 0 0 0 2px #3b5683; transition: transform 220ms var(--e-ease), box-shadow 220ms var(--e-ease), background-color 220ms var(--e-ease), opacity 250ms ease; }
+html[data-theme="light"] .ans { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
+.ans:not([aria-disabled]):hover { transform: translateY(-2px); background: #1b2d4b; box-shadow: inset 0 0 0 2px #7fb4ff, 0 14px 28px -16px rgba(74, 123, 255, .55); border: 0; }
+html[data-theme="light"] .ans:not([aria-disabled]):hover { background: #fff; box-shadow: inset 0 0 0 2px #2563eb, 0 12px 24px -16px rgba(30, 58, 138, .35); }
+.ans-key { color: #e6f0ff; background: #2c4a7a; box-shadow: none; }
 html[data-theme="light"] .ans-key { color: #1e3a8a; background: #e3ecfb; }
-.ans.right { background: rgba(52, 211, 153, .13); box-shadow: 0 0 0 2px #34d399; }
-.ans.wrong { background: rgba(244, 114, 182, .12); box-shadow: 0 0 0 2px #f472b6; }
-html[data-theme="light"] .ans.right { background: #ecfdf5; box-shadow: 0 0 0 2px #059669; }
-html[data-theme="light"] .ans.wrong { background: #fdf2f8; box-shadow: 0 0 0 2px #db2777; }
-.ans.right .ans-key { color: #04241a; background: #34d399; }
-.ans.wrong .ans-key { color: #2a0716; background: #f472b6; }
-html[data-theme="light"] .ans.right .ans-key { color: #fff; background: #059669; }
-html[data-theme="light"] .ans.wrong .ans-key { color: #fff; background: #db2777; }
-.ans.dim { opacity: .5; }
+.answers.tf .ans:last-child .ans-key { background: #2c4a7a; }
+html[data-theme="light"] .answers.tf .ans:last-child .ans-key { background: #e3ecfb; }
+.ans.right, .ans.wrong { background: #172640; color: var(--e-ink); }
+.ans.right { box-shadow: inset 0 0 0 3px #34d399; }
+.ans.wrong { box-shadow: inset 0 0 0 3px #f472b6; }
+html[data-theme="light"] .ans.right, html[data-theme="light"] .ans.wrong { background: #fff; }
+html[data-theme="light"] .ans.right { box-shadow: inset 0 0 0 3px #059669; }
+html[data-theme="light"] .ans.wrong { box-shadow: inset 0 0 0 3px #db2777; }
+.ans.right .ans-key, .answers.tf .ans.right:last-child .ans-key { color: #04241a; background: #34d399; }
+.ans.wrong .ans-key, .answers.tf .ans.wrong:last-child .ans-key { color: #2a0716; background: #f472b6; }
+html[data-theme="light"] .ans.right .ans-key, html[data-theme="light"] .answers.tf .ans.right:last-child .ans-key { color: #fff; background: #059669; }
+html[data-theme="light"] .ans.wrong .ans-key, html[data-theme="light"] .answers.tf .ans.wrong:last-child .ans-key { color: #fff; background: #db2777; }
+.ans.right .ans-mark { color: #34d399; }
+.ans.wrong .ans-mark { color: #f472b6; }
+html[data-theme="light"] .ans.right .ans-mark { color: #059669; }
+html[data-theme="light"] .ans.wrong .ans-mark { color: #db2777; }
+/* the options you didn't pick: quieter text, but the edge stays fully drawn (no faded lines) */
+.ans.dim { opacity: 1; color: var(--e-ink-3); }
+.ans.dim .ans-key { opacity: .55; }
 
-/* a name spelled differently in the transcript: a quiet line under the question, not a box */
-.item-caution { padding: 0; border: 0; border-radius: 0; background: none; color: var(--e-ink-3); font-size: 13.5px; }
+/* your typed short answer: the same solid card and edges */
+.sa-given { border: 0; background: #172640; box-shadow: inset 0 0 0 2px #3b5683; }
+.sa-given.right { background: #172640; box-shadow: inset 0 0 0 3px #34d399; }
+.sa-given.wrong { background: #172640; box-shadow: inset 0 0 0 3px #f472b6; }
+.sa-given.close { background: #172640; box-shadow: inset 0 0 0 3px #fbbf24; }
+html[data-theme="light"] .sa-given { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
+html[data-theme="light"] .sa-given.right { box-shadow: inset 0 0 0 3px #059669; }
+html[data-theme="light"] .sa-given.wrong { box-shadow: inset 0 0 0 3px #db2777; }
+html[data-theme="light"] .sa-given.close { box-shadow: inset 0 0 0 3px #d97706; }
+.sa-input { border: 0; background: #101c31; box-shadow: inset 0 0 0 2px #3b5683; }
+.sa-input:focus { border: 0; box-shadow: inset 0 0 0 2px #7fb4ff; }
+html[data-theme="light"] .sa-input { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
+html[data-theme="light"] .sa-input:focus { box-shadow: inset 0 0 0 2px #2563eb; }
 
-/* feedback after an answer: 2px edge, solid tint */
-.fb { border: 0; border-radius: 16px; }
-.fb.right { background: rgba(52, 211, 153, .1); box-shadow: 0 0 0 2px rgba(52, 211, 153, .8); }
-.fb.wrong { background: rgba(244, 114, 182, .09); box-shadow: 0 0 0 2px rgba(244, 114, 182, .75); }
-.fb.close { background: rgba(251, 191, 36, .09); box-shadow: 0 0 0 2px rgba(251, 191, 36, .75); }
-html[data-theme="light"] .fb.right { background: #ecfdf5; box-shadow: 0 0 0 2px #059669; }
-html[data-theme="light"] .fb.wrong { background: #fdf2f8; box-shadow: 0 0 0 2px #db2777; }
-html[data-theme="light"] .fb.close { background: #fffbeb; box-shadow: 0 0 0 2px #d97706; }
+/* a name spelled differently in the transcript: one quiet line at the end of the feedback, not a box */
+.item-caution { margin: 0; max-width: none; padding: 0; border: 0; border-radius: 0; background: none; color: var(--e-ink-3); font-size: 13.5px; line-height: 1.5; }
+
+/* feedback after an answer: a solid panel (no tinted wash, no outline) with a thick coloured bar on the left;
+   its top row holds the verdict and Continue */
+.fb, .fb.right, .fb.wrong, .fb.close { border: 0; border-radius: 16px; background: #1a2b47; gap: 12px; }
+.fb.right { box-shadow: inset 5px 0 0 #34d399; }
+.fb.wrong { box-shadow: inset 5px 0 0 #f472b6; }
+.fb.close { box-shadow: inset 5px 0 0 #fbbf24; }
+html[data-theme="light"] .fb, html[data-theme="light"] .fb.right, html[data-theme="light"] .fb.wrong, html[data-theme="light"] .fb.close { background: #eef3fb; }
+html[data-theme="light"] .fb.right { box-shadow: inset 5px 0 0 #059669; }
+html[data-theme="light"] .fb.wrong { box-shadow: inset 5px 0 0 #db2777; }
+html[data-theme="light"] .fb.close { box-shadow: inset 5px 0 0 #d97706; }
+.fb-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
+.fb.right .fb-head { color: #6ee7b7; }
+.fb.wrong .fb-head { color: #f9a8d4; }
+.fb.close .fb-head { color: #fcd34d; }
+html[data-theme="light"] .fb.right .fb-head { color: #047857; }
+html[data-theme="light"] .fb.wrong .fb-head { color: #be185d; }
+html[data-theme="light"] .fb.close .fb-head { color: #b45309; }
+.fb.right .fb-ic, .fb.wrong .fb-ic, .fb.close .fb-ic { box-shadow: none; }
+.fb.close .fb-ic { background: #fbbf24; }
+html[data-theme="light"] .fb.right .fb-ic { background: #059669; color: #fff; }
+html[data-theme="light"] .fb.wrong .fb-ic { background: #db2777; color: #fff; }
+.study-continue { min-width: 0; padding: 12px 22px; border-radius: 12px; font-size: 16px; }
 .fb-why, .fb-answer b { color: var(--e-ink); }
 .fb-answer span { color: var(--e-ink-3); }
 .fb-link { color: var(--e-cyan-ink); }
 
-/* "Hear it at…" and "Show the line": plain buttons (no pill, no tint gradient) */
-.hear-btn, .proof-line > summary { border: 0; border-radius: 10px; padding: 9px 14px; box-shadow: none; transition: background-color 200ms var(--e-ease), box-shadow 200ms var(--e-ease), color 200ms; }
-.hear-btn { color: #d7ecff; background: #1b3555; }
-.proof-line > summary { color: #e6e0ff; background: #2a2950; }
-.hear-btn:hover { background: #224168; box-shadow: 0 0 0 2px rgba(130, 188, 255, .55); }
-.proof-line > summary:hover { background: #33325f; box-shadow: 0 0 0 2px rgba(167, 139, 250, .55); }
-html[data-theme="light"] .hear-btn { color: #1e3a8a; background: #e3ecfb; }
-html[data-theme="light"] .proof-line > summary { color: #4c1d95; background: #efe9fd; }
-html[data-theme="light"] .hear-btn:hover { box-shadow: 0 0 0 2px rgba(37, 99, 235, .5); }
-html[data-theme="light"] .proof-line > summary:hover { box-shadow: 0 0 0 2px rgba(124, 58, 237, .45); }
-.proof-line blockquote { background: color-mix(in srgb, var(--e-ink) 5%, transparent); color: var(--e-ink-2); }
+/* "Hear it at…" and "Show the line": solid buttons with a 2px edge (no pill, no tint gradient) */
+.hear-btn, .proof-line > summary { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; transition: background-color 200ms var(--e-ease), box-shadow 200ms var(--e-ease), color 200ms; }
+.hear-btn { color: #d7ecff; background: #1d3a60; box-shadow: inset 0 0 0 2px #3f6aa3; }
+.proof-line > summary { color: #e6e0ff; background: #2b2a55; box-shadow: inset 0 0 0 2px #5a52a0; }
+.hear-btn:hover { background: #234571; box-shadow: inset 0 0 0 2px #7fb4ff; }
+.proof-line > summary:hover { background: #343366; box-shadow: inset 0 0 0 2px #a78bfa; }
+html[data-theme="light"] .hear-btn { color: #1e3a8a; background: #e3ecfb; box-shadow: inset 0 0 0 2px #93b4e8; }
+html[data-theme="light"] .proof-line > summary { color: #4c1d95; background: #efe9fd; box-shadow: inset 0 0 0 2px #c4b5fd; }
+html[data-theme="light"] .hear-btn:hover { box-shadow: inset 0 0 0 2px #2563eb; }
+html[data-theme="light"] .proof-line > summary:hover { box-shadow: inset 0 0 0 2px #7c3aed; }
+.proof-line blockquote { border-left: 4px solid #a78bfa; background: color-mix(in srgb, var(--e-ink) 5%, transparent); color: var(--e-ink-2); }
+html[data-theme="light"] .proof-line blockquote { border-left-color: #7c3aed; }
 
 /* results: the score, then "6 strong · 2 to review" as plain counts (no chips) */
 .qr-split { gap: 28px; }
@@ -100,18 +141,19 @@ html[data-theme="light"] .proof-line > summary:hover { box-shadow: 0 0 0 2px rgb
 .qr-eyebrow { color: var(--e-cyan-ink); }
 
 /* missed questions: 2px edges */
-.miss-card { border: 0; background: var(--e-s1); box-shadow: 0 0 0 2px rgba(244, 114, 182, .3); }
-html[data-theme="light"] .miss-card { background: #fff; box-shadow: 0 0 0 2px rgba(219, 39, 119, .25); }
-.miss-ans { border: 0; }
-.miss-ans.yours { background: rgba(244, 114, 182, .1); box-shadow: 0 0 0 2px rgba(244, 114, 182, .6); }
-.miss-ans.right { background: rgba(52, 211, 153, .1); box-shadow: 0 0 0 2px rgba(52, 211, 153, .65); }
-html[data-theme="light"] .miss-ans.yours { background: #fdf2f8; box-shadow: 0 0 0 2px #db2777; }
-html[data-theme="light"] .miss-ans.right { background: #ecfdf5; box-shadow: 0 0 0 2px #059669; }
+.miss-card { border: 0; background: var(--e-s1); box-shadow: inset 0 0 0 2px #3b5683; }
+html[data-theme="light"] .miss-card { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
+.miss-ans, .miss-ans.yours, .miss-ans.right { border: 0; background: #172640; }
+.miss-ans.yours { box-shadow: inset 0 0 0 3px #f472b6; }
+.miss-ans.right { box-shadow: inset 0 0 0 3px #34d399; }
+html[data-theme="light"] .miss-ans, html[data-theme="light"] .miss-ans.yours, html[data-theme="light"] .miss-ans.right { background: #fff; }
+html[data-theme="light"] .miss-ans.yours { box-shadow: inset 0 0 0 3px #db2777; }
+html[data-theme="light"] .miss-ans.right { box-shadow: inset 0 0 0 3px #059669; }
 .miss-q, .miss-ans b { color: var(--e-ink); }
 
 /* Focused Review, on plans without it: one calm box with a 2px edge; the plan name as words, not a badge */
-.fr-upsell { border: 0; background: var(--e-s1); box-shadow: 0 0 0 2px rgba(110, 170, 255, .3); }
-html[data-theme="light"] .fr-upsell { background: #fff; box-shadow: 0 0 0 2px rgba(30, 58, 138, .22); }
+.fr-upsell { border: 0; background: var(--e-s1); box-shadow: inset 0 0 0 2px #3b5683; }
+html[data-theme="light"] .fr-upsell { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
 .fr-plan { margin-left: 4px; padding: 0; border: 0; border-radius: 0; background: none; font: 700 13px var(--e-sans); letter-spacing: 0; text-transform: none; color: #8ab4ff; }
 .fr-plan::before { content: "· "; color: var(--e-ink-4); }
 html[data-theme="light"] .fr-plan { color: #2563eb; }
@@ -119,5 +161,34 @@ html[data-theme="light"] .fr-plan { color: #2563eb; }
 /* Meeting Recap and other tool views: the opening summary uses the full width; participants as plain names */
 .tool-lead { max-width: none; color: var(--e-ink); }
 .tool-names { margin: 0; font-size: 15px; color: var(--e-ink-2); }
+
+/* phones: tighter boxes and type so a question, its answers and the feedback need as little scrolling as possible */
+@media (max-width: 720px) {
+  /* one box, not a box in a box: the outer panel steps back and the question card uses the full width */
+  .study, html[data-theme="light"] .study { padding: 4px 0 0; gap: 12px; border-radius: 0; background: none; box-shadow: none; }
+  .ans-mark:empty { display: none; }
+  .study-top { gap: 8px; }
+  .study-count { font-size: 15px; }
+  .study-bar { height: 8px; }
+  .study-card, .q-card { padding: 16px 14px; gap: 14px; border-radius: 16px; }
+  .q-kind { font-size: 11.5px; }
+  .q-text { margin: -6px 0 0; font-size: clamp(19px, 5.4vw, 22px); line-height: 1.3; }
+  .answers { gap: 8px; }
+  .ans { min-height: 0; gap: 12px; padding: 12px 14px; border-radius: 13px; font-size: 15.5px; line-height: 1.35; }
+  .ans-key { width: 32px; height: 32px; border-radius: 9px; font-size: 14px; }
+  .ans-mark { width: 24px; height: 24px; }
+  .ans-mark .ic { width: 22px; height: 22px; }
+  .answers.tf .ans { min-height: 0; padding: 14px 10px; font-size: 18px; flex-direction: row; gap: 10px; }
+  .answers.tf .ans-key { width: 34px; height: 34px; }
+  .fb { padding: 14px 14px 14px 18px; gap: 10px; border-radius: 14px; }
+  .fb-head { font-size: 18px; gap: 10px; }
+  .fb-ic { width: 28px; height: 28px; }
+  .fb-answer b { font-size: 16px; }
+  .fb-why { font-size: 15px; line-height: 1.5; }
+  .study-continue { width: auto; padding: 10px 16px; font-size: 15px; }
+  .hear-btn, .proof-line > summary { padding: 9px 13px; font-size: 14px; }
+  .sa-given { padding: 12px 14px; font-size: 16px; }
+  .sa-input { padding: 13px 14px; font-size: 17px; }
+}
 
 @media (prefers-reduced-motion: reduce) { .ans, .ans:not([aria-disabled]):hover { transform: none; } }

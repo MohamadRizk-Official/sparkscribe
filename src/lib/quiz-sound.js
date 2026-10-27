@@ -41,13 +41,13 @@ export function playAnswerSound(correct) {
   try {
     if (correct) {
       // "ding": two bright partials, the second a fifth above, starting a moment later
-      note(ac, { freq: 1046.5, dur: 0.55, gain: 0.09 });
-      note(ac, { freq: 1568, start: 0.07, dur: 0.7, gain: 0.08 });
-      note(ac, { freq: 3136, start: 0.07, dur: 0.25, gain: 0.015 });
+      note(ac, { freq: 1046.5, dur: 0.55, gain: 0.15 });
+      note(ac, { freq: 1568, start: 0.07, dur: 0.7, gain: 0.13 });
+      note(ac, { freq: 3136, start: 0.07, dur: 0.25, gain: 0.025 });
     } else {
       // a soft, low "nope": two short falling notes
-      note(ac, { freq: 233, to: 196, dur: 0.18, gain: 0.09, type: 'triangle' });
-      note(ac, { freq: 185, to: 147, start: 0.17, dur: 0.32, gain: 0.09, type: 'triangle' });
+      note(ac, { freq: 233, to: 196, dur: 0.18, gain: 0.16, type: 'triangle' });
+      note(ac, { freq: 185, to: 147, start: 0.17, dur: 0.32, gain: 0.16, type: 'triangle' });
     }
   } catch { /* no audio on this device */ }
 }

@@ -5,7 +5,10 @@
 .segctl button { border: 0; border-radius: var(--e-r-sm); padding: 9px 16px; min-height: 38px; background: none; box-shadow: none; cursor: pointer;
   font: 600 14px var(--e-sans); color: var(--e-ink-3); transition: background-color var(--e-t-hover) var(--e-ease), color var(--e-t-hover), box-shadow var(--e-t-hover); }
 .segctl button:hover { color: var(--e-ink); }
+/* the chosen option: a solid fill you can see at a glance (white on pale gray was nearly invisible) */
 .segctl button[aria-checked="true"] { color: var(--e-ink); background: var(--e-s1); box-shadow: var(--e-elev-1); }
+.set-card .segctl button[aria-checked="true"] { color: #04131c; background: var(--e-cyan); box-shadow: none; }
+html[data-theme="light"] .set-card .segctl button[aria-checked="true"] { color: #fff; background: #2563eb; }
 
 /* ---------- Settings: a sticky section rail on the left, the sections as calm panels ---------- */
 .set-app { max-width: 1040px; width: 100%; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); column-gap: 32px; row-gap: 18px; align-items: start; }
