@@ -1,7 +1,7 @@
 /* ELECTRIC — Practice Quiz and the flashcard / study screens (tools.js .study…). The old styles drew 1–1.5px edges,
    gradient fills, pill buttons and a dotted glow behind the whole panel. Here: one panel with the main surface edge,
-   answer cards with a 2px edge that brightens on hover, solid fills, plain buttons (no pills), and right / wrong
-   shown with a 2px edge in green / pink. Both themes. */
+   answer cards with a 3px edge that brightens on hover, solid fills, plain buttons (no pills), and right / wrong
+   shown with a 5px edge in green / pink. Both themes. */
 
 /* the panel: the main working surface (tokens.css), no dotted glow behind it */
 .study { border: 0; border-radius: var(--e-r-xl); background: var(--e-main-bg); box-shadow: var(--e-main); color: var(--e-ink); padding: clamp(18px, 2.4vw, 26px); }
@@ -43,24 +43,24 @@ html[data-theme="light"] .info-pop { box-shadow: 0 0 0 2px rgba(30, 58, 138, .3)
 .study-score { color: var(--e-green); }
 html[data-theme="light"] .study-score { color: #047857; }
 
-/* answer cards: one solid fill, a clearly visible 2px edge drawn inside the card (so nothing moves), brighter on
-   hover; after answering, the right one gets a 3px green edge and the picked wrong one a 3px pink edge. No tinted
+/* answer cards: one solid fill, a heavy 3px edge drawn inside the card (so nothing moves), brighter on
+   hover; after answering, the right one gets a 5px green edge and the picked wrong one a 5px pink edge. No tinted
    washes or gradients: the colour is in the edge, the letter and the mark. */
 .ans { border: 0; border-radius: 16px; background: #172640; color: var(--e-ink);
-  box-shadow: inset 0 0 0 2px #3b5683; transition: transform 220ms var(--e-ease), box-shadow 220ms var(--e-ease), background-color 220ms var(--e-ease), opacity 250ms ease; }
-html[data-theme="light"] .ans { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
-.ans:not([aria-disabled]):hover { transform: translateY(-2px); background: #1b2d4b; box-shadow: inset 0 0 0 2px #7fb4ff, 0 14px 28px -16px rgba(74, 123, 255, .55); border: 0; }
-html[data-theme="light"] .ans:not([aria-disabled]):hover { background: #fff; box-shadow: inset 0 0 0 2px #2563eb, 0 12px 24px -16px rgba(30, 58, 138, .35); }
+  box-shadow: inset 0 0 0 3px #3b5683; transition: transform 220ms var(--e-ease), box-shadow 220ms var(--e-ease), background-color 220ms var(--e-ease), opacity 250ms ease; }
+html[data-theme="light"] .ans { background: #fff; box-shadow: inset 0 0 0 3px #b4c3de; }
+.ans:not([aria-disabled]):hover { transform: translateY(-2px); background: #1b2d4b; box-shadow: inset 0 0 0 3px #7fb4ff, 0 14px 28px -16px rgba(74, 123, 255, .55); border: 0; }
+html[data-theme="light"] .ans:not([aria-disabled]):hover { background: #fff; box-shadow: inset 0 0 0 3px #2563eb, 0 12px 24px -16px rgba(30, 58, 138, .35); }
 .ans-key { color: #e6f0ff; background: #2c4a7a; box-shadow: none; }
 html[data-theme="light"] .ans-key { color: #1e3a8a; background: #e3ecfb; }
 .answers.tf .ans:last-child .ans-key { background: #2c4a7a; }
 html[data-theme="light"] .answers.tf .ans:last-child .ans-key { background: #e3ecfb; }
 .ans.right, .ans.wrong { background: #172640; color: var(--e-ink); }
-.ans.right { box-shadow: inset 0 0 0 3px #34d399; }
-.ans.wrong { box-shadow: inset 0 0 0 3px #f472b6; }
+.ans.right { box-shadow: inset 0 0 0 5px #34d399; }
+.ans.wrong { box-shadow: inset 0 0 0 5px #f472b6; }
 html[data-theme="light"] .ans.right, html[data-theme="light"] .ans.wrong { background: #fff; }
-html[data-theme="light"] .ans.right { box-shadow: inset 0 0 0 3px #059669; }
-html[data-theme="light"] .ans.wrong { box-shadow: inset 0 0 0 3px #db2777; }
+html[data-theme="light"] .ans.right { box-shadow: inset 0 0 0 5px #059669; }
+html[data-theme="light"] .ans.wrong { box-shadow: inset 0 0 0 5px #db2777; }
 .ans.right .ans-key, .answers.tf .ans.right:last-child .ans-key { color: #04241a; background: #34d399; }
 .ans.wrong .ans-key, .answers.tf .ans.wrong:last-child .ans-key { color: #2a0716; background: #f472b6; }
 html[data-theme="light"] .ans.right .ans-key, html[data-theme="light"] .answers.tf .ans.right:last-child .ans-key { color: #fff; background: #059669; }
@@ -74,32 +74,32 @@ html[data-theme="light"] .ans.wrong .ans-mark { color: #db2777; }
 .ans.dim .ans-key { opacity: .55; }
 
 /* your typed short answer: the same solid card and edges */
-.sa-given { border: 0; background: #172640; box-shadow: inset 0 0 0 2px #3b5683; }
-.sa-given.right { background: #172640; box-shadow: inset 0 0 0 3px #34d399; }
-.sa-given.wrong { background: #172640; box-shadow: inset 0 0 0 3px #f472b6; }
-.sa-given.close { background: #172640; box-shadow: inset 0 0 0 3px #fbbf24; }
-html[data-theme="light"] .sa-given { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
-html[data-theme="light"] .sa-given.right { box-shadow: inset 0 0 0 3px #059669; }
-html[data-theme="light"] .sa-given.wrong { box-shadow: inset 0 0 0 3px #db2777; }
-html[data-theme="light"] .sa-given.close { box-shadow: inset 0 0 0 3px #d97706; }
-.sa-input { border: 0; background: #101c31; box-shadow: inset 0 0 0 2px #3b5683; }
-.sa-input:focus { border: 0; box-shadow: inset 0 0 0 2px #7fb4ff; }
-html[data-theme="light"] .sa-input { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
-html[data-theme="light"] .sa-input:focus { box-shadow: inset 0 0 0 2px #2563eb; }
+.sa-given { border: 0; background: #172640; box-shadow: inset 0 0 0 3px #3b5683; }
+.sa-given.right { background: #172640; box-shadow: inset 0 0 0 5px #34d399; }
+.sa-given.wrong { background: #172640; box-shadow: inset 0 0 0 5px #f472b6; }
+.sa-given.close { background: #172640; box-shadow: inset 0 0 0 5px #fbbf24; }
+html[data-theme="light"] .sa-given { background: #fff; box-shadow: inset 0 0 0 3px #b4c3de; }
+html[data-theme="light"] .sa-given.right { box-shadow: inset 0 0 0 5px #059669; }
+html[data-theme="light"] .sa-given.wrong { box-shadow: inset 0 0 0 5px #db2777; }
+html[data-theme="light"] .sa-given.close { box-shadow: inset 0 0 0 5px #d97706; }
+.sa-input { border: 0; background: #101c31; box-shadow: inset 0 0 0 3px #3b5683; }
+.sa-input:focus { border: 0; box-shadow: inset 0 0 0 3px #7fb4ff; }
+html[data-theme="light"] .sa-input { background: #fff; box-shadow: inset 0 0 0 3px #b4c3de; }
+html[data-theme="light"] .sa-input:focus { box-shadow: inset 0 0 0 3px #2563eb; }
 
 /* a name spelled differently in the transcript: one quiet line at the end of the feedback, not a box */
 .item-caution { margin: 0; max-width: none; padding: 0; border: 0; border-radius: 0; background: none; color: var(--e-ink-3); font-size: 13.5px; line-height: 1.5; }
 
-/* feedback after an answer: a solid panel (no tinted wash, no outline) with a thick coloured bar on the left;
+/* feedback after an answer: a solid panel (no tinted wash, no outline) with an 8px coloured bar on the left;
    its top row holds the verdict and Continue */
 .fb, .fb.right, .fb.wrong, .fb.close { border: 0; border-radius: 16px; background: #1a2b47; gap: 12px; }
-.fb.right { box-shadow: inset 5px 0 0 #34d399; }
-.fb.wrong { box-shadow: inset 5px 0 0 #f472b6; }
-.fb.close { box-shadow: inset 5px 0 0 #fbbf24; }
+.fb.right { box-shadow: inset 8px 0 0 #34d399; }
+.fb.wrong { box-shadow: inset 8px 0 0 #f472b6; }
+.fb.close { box-shadow: inset 8px 0 0 #fbbf24; }
 html[data-theme="light"] .fb, html[data-theme="light"] .fb.right, html[data-theme="light"] .fb.wrong, html[data-theme="light"] .fb.close { background: #eef3fb; }
-html[data-theme="light"] .fb.right { box-shadow: inset 5px 0 0 #059669; }
-html[data-theme="light"] .fb.wrong { box-shadow: inset 5px 0 0 #db2777; }
-html[data-theme="light"] .fb.close { box-shadow: inset 5px 0 0 #d97706; }
+html[data-theme="light"] .fb.right { box-shadow: inset 8px 0 0 #059669; }
+html[data-theme="light"] .fb.wrong { box-shadow: inset 8px 0 0 #db2777; }
+html[data-theme="light"] .fb.close { box-shadow: inset 8px 0 0 #d97706; }
 .fb-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; }
 .fb.right .fb-head { color: #6ee7b7; }
 .fb.wrong .fb-head { color: #f9a8d4; }
@@ -118,15 +118,15 @@ html[data-theme="light"] .fb.wrong .fb-ic { background: #db2777; color: #fff; }
 
 /* "Hear it at…" and "Show the line": solid buttons with a 2px edge (no pill, no tint gradient) */
 .hear-btn, .proof-line > summary { border: 0; border-radius: 10px; padding: 10px 16px; font-weight: 700; transition: background-color 200ms var(--e-ease), box-shadow 200ms var(--e-ease), color 200ms; }
-.hear-btn { color: #d7ecff; background: #1d3a60; box-shadow: inset 0 0 0 2px #3f6aa3; }
-.proof-line > summary { color: #e6e0ff; background: #2b2a55; box-shadow: inset 0 0 0 2px #5a52a0; }
-.hear-btn:hover { background: #234571; box-shadow: inset 0 0 0 2px #7fb4ff; }
-.proof-line > summary:hover { background: #343366; box-shadow: inset 0 0 0 2px #a78bfa; }
-html[data-theme="light"] .hear-btn { color: #1e3a8a; background: #e3ecfb; box-shadow: inset 0 0 0 2px #93b4e8; }
-html[data-theme="light"] .proof-line > summary { color: #4c1d95; background: #efe9fd; box-shadow: inset 0 0 0 2px #c4b5fd; }
-html[data-theme="light"] .hear-btn:hover { box-shadow: inset 0 0 0 2px #2563eb; }
-html[data-theme="light"] .proof-line > summary:hover { box-shadow: inset 0 0 0 2px #7c3aed; }
-.proof-line blockquote { border-left: 4px solid #a78bfa; background: color-mix(in srgb, var(--e-ink) 5%, transparent); color: var(--e-ink-2); }
+.hear-btn { color: #d7ecff; background: #1d3a60; box-shadow: inset 0 0 0 3px #3f6aa3; }
+.proof-line > summary { color: #e6e0ff; background: #2b2a55; box-shadow: inset 0 0 0 3px #5a52a0; }
+.hear-btn:hover { background: #234571; box-shadow: inset 0 0 0 3px #7fb4ff; }
+.proof-line > summary:hover { background: #343366; box-shadow: inset 0 0 0 3px #a78bfa; }
+html[data-theme="light"] .hear-btn { color: #1e3a8a; background: #e3ecfb; box-shadow: inset 0 0 0 3px #93b4e8; }
+html[data-theme="light"] .proof-line > summary { color: #4c1d95; background: #efe9fd; box-shadow: inset 0 0 0 3px #c4b5fd; }
+html[data-theme="light"] .hear-btn:hover { box-shadow: inset 0 0 0 3px #2563eb; }
+html[data-theme="light"] .proof-line > summary:hover { box-shadow: inset 0 0 0 3px #7c3aed; }
+.proof-line blockquote { border-left: 6px solid #a78bfa; background: color-mix(in srgb, var(--e-ink) 5%, transparent); color: var(--e-ink-2); }
 html[data-theme="light"] .proof-line blockquote { border-left-color: #7c3aed; }
 
 /* results: the score, then "6 strong · 2 to review" as plain counts (no chips) */
@@ -141,19 +141,19 @@ html[data-theme="light"] .proof-line blockquote { border-left-color: #7c3aed; }
 .qr-eyebrow { color: var(--e-cyan-ink); }
 
 /* missed questions: 2px edges */
-.miss-card { border: 0; background: var(--e-s1); box-shadow: inset 0 0 0 2px #3b5683; }
-html[data-theme="light"] .miss-card { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
+.miss-card { border: 0; background: var(--e-s1); box-shadow: inset 0 0 0 3px #3b5683; }
+html[data-theme="light"] .miss-card { background: #fff; box-shadow: inset 0 0 0 3px #b4c3de; }
 .miss-ans, .miss-ans.yours, .miss-ans.right { border: 0; background: #172640; }
-.miss-ans.yours { box-shadow: inset 0 0 0 3px #f472b6; }
-.miss-ans.right { box-shadow: inset 0 0 0 3px #34d399; }
+.miss-ans.yours { box-shadow: inset 0 0 0 5px #f472b6; }
+.miss-ans.right { box-shadow: inset 0 0 0 5px #34d399; }
 html[data-theme="light"] .miss-ans, html[data-theme="light"] .miss-ans.yours, html[data-theme="light"] .miss-ans.right { background: #fff; }
-html[data-theme="light"] .miss-ans.yours { box-shadow: inset 0 0 0 3px #db2777; }
-html[data-theme="light"] .miss-ans.right { box-shadow: inset 0 0 0 3px #059669; }
+html[data-theme="light"] .miss-ans.yours { box-shadow: inset 0 0 0 5px #db2777; }
+html[data-theme="light"] .miss-ans.right { box-shadow: inset 0 0 0 5px #059669; }
 .miss-q, .miss-ans b { color: var(--e-ink); }
 
 /* Focused Review, on plans without it: one calm box with a 2px edge; the plan name as words, not a badge */
-.fr-upsell { border: 0; background: var(--e-s1); box-shadow: inset 0 0 0 2px #3b5683; }
-html[data-theme="light"] .fr-upsell { background: #fff; box-shadow: inset 0 0 0 2px #b4c3de; }
+.fr-upsell { border: 0; background: var(--e-s1); box-shadow: inset 0 0 0 3px #3b5683; }
+html[data-theme="light"] .fr-upsell { background: #fff; box-shadow: inset 0 0 0 3px #b4c3de; }
 .fr-plan { margin-left: 4px; padding: 0; border: 0; border-radius: 0; background: none; font: 700 13px var(--e-sans); letter-spacing: 0; text-transform: none; color: #8ab4ff; }
 .fr-plan::before { content: "· "; color: var(--e-ink-4); }
 html[data-theme="light"] .fr-plan { color: #2563eb; }

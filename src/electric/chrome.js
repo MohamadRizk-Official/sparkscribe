@@ -15,6 +15,7 @@ const TRACES = [
 ];
 const NODES = [[1100, 262], [1232, 388], [266, 780], [90, 900]];
 
+const NO_CIRCUIT = true;
 export function mountAmbient() {
   let bg = document.querySelector('body > .bg');
   if (!bg) {
@@ -24,7 +25,8 @@ export function mountAmbient() {
     bg.innerHTML = '<div class="bg-glow bg-glow-a"></div><div class="bg-glow bg-glow-b"></div><div class="bg-noise"></div>';
     document.body.prepend(bg);
   }
-  if (bg.querySelector('.e-circuit')) return;
+  // the background is one solid colour now (edges.css): the circuit lines and their moving current are not drawn
+  if (NO_CIRCUIT || bg.querySelector('.e-circuit')) return;
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('class', 'e-circuit');
   svg.setAttribute('viewBox', '0 0 1440 900');

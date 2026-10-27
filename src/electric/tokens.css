@@ -57,7 +57,7 @@
   --e-on-accent: #04111c;              /* text on a lit (cyan/amber) fill */
 
   --e-charge: linear-gradient(100deg, #22d8f6 0%, #3f8cff 55%, #5b6dff 100%);   /* the brand current */
-  --e-charge-soft: linear-gradient(100deg, rgba(32, 212, 244, .16), rgba(74, 123, 255, .16));
+  --e-charge-soft: rgba(58, 150, 250, .16);   /* a solid tint, not a gradient */
   --e-glow-cyan: rgba(32, 212, 244, .28);
   --e-glow-blue: rgba(74, 123, 255, .3);
   --e-glow-violet: rgba(161, 107, 255, .3);
@@ -75,10 +75,11 @@
      feature  — recommended / premium cards: more depth and a brighter edge, stronger again on hover
      card     — interactive items in a list: soft shadow, no edge; hover raises them
      overlays and utility controls keep elev-2/3 and the inset well */
-  --e-main-bg: linear-gradient(180deg, #13243a 0, #102033 160px, #0f1e30 100%);
-  --e-main: 0 0 0 2px rgba(98, 160, 255, .42), 0 0 30px -12px rgba(74, 123, 255, .42), 0 2px 6px rgba(0, 0, 0, .35), 0 28px 60px -26px rgba(0, 0, 0, .85);
-  --e-main-hover: 0 0 0 2px rgba(120, 178, 255, .7), 0 0 38px -8px rgba(74, 123, 255, .6), 0 4px 10px rgba(0, 0, 0, .35), 0 32px 64px -26px rgba(0, 0, 0, .9);
-  --e-feature-bg: linear-gradient(180deg, #16293f 0, #112236 100%);
+  /* solid fills (no gradient) and a heavy 3px solid edge with no glow */
+  --e-main-bg: #112137;
+  --e-main: 0 0 0 3px #355a8f, 0 2px 6px rgba(0, 0, 0, .35), 0 28px 60px -26px rgba(0, 0, 0, .85);
+  --e-main-hover: 0 0 0 3px #5f92d6, 0 4px 10px rgba(0, 0, 0, .35), 0 32px 64px -26px rgba(0, 0, 0, .9);
+  --e-feature-bg: #142740;
   --e-feature: 0 0 0 2px rgba(228, 238, 255, .55), 0 3px 8px rgba(0, 0, 0, .35), 0 30px 64px -26px rgba(0, 0, 0, .9);
   --e-feature-hover: 0 0 0 2px rgba(240, 247, 255, .85), 0 6px 14px rgba(0, 0, 0, .35), 0 40px 74px -28px rgba(0, 0, 0, .95);
   --e-card: var(--e-elev-1);
@@ -141,7 +142,7 @@ html[data-theme="light"] {
   --e-on-accent: #ffffff;
 
   --e-charge: linear-gradient(100deg, #10b8da 0%, #3367f2 60%, #4b55e8 100%);
-  --e-charge-soft: linear-gradient(100deg, rgba(14, 181, 214, .12), rgba(52, 97, 240, .12));
+  --e-charge-soft: rgba(37, 99, 235, .12);
   --e-glow-cyan: rgba(14, 181, 214, .22);
   --e-glow-blue: rgba(52, 97, 240, .22);
   --e-glow-violet: rgba(124, 74, 232, .2);
@@ -155,8 +156,8 @@ html[data-theme="light"] {
 
   /* light: white surfaces with a confident graphite edge (not pale gray) and a natural shadow */
   --e-main-bg: #ffffff;
-  --e-main: 0 0 0 2px rgba(30, 58, 138, .36), 0 1px 2px rgba(15, 23, 42, .06), 0 16px 36px -20px rgba(30, 58, 138, .28);
-  --e-main-hover: 0 0 0 2px rgba(37, 99, 235, .7), 0 0 0 6px rgba(52, 97, 240, .1), 0 20px 40px -20px rgba(30, 58, 138, .34);
+  --e-main: 0 0 0 3px #a9bbdb, 0 1px 2px rgba(15, 23, 42, .06), 0 16px 36px -20px rgba(30, 58, 138, .28);
+  --e-main-hover: 0 0 0 3px #2563eb, 0 20px 40px -20px rgba(30, 58, 138, .34);
   --e-feature-bg: #ffffff;
   --e-feature: 0 0 0 2px rgba(15, 23, 42, .55), 0 2px 4px rgba(15, 23, 42, .07), 0 22px 44px -20px rgba(15, 23, 42, .34);
   --e-feature-hover: 0 0 0 2px rgba(15, 23, 42, .78), 0 4px 8px rgba(15, 23, 42, .08), 0 30px 56px -22px rgba(15, 23, 42, .4);

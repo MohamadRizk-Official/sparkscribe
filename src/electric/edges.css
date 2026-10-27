@@ -54,5 +54,10 @@ html[data-theme="light"] .ask-q { background: #e3edfb; }
 /* "Writing your study guide…": steady text (no sliding sheen) */
 .ins-loading span:last-child { background: none; -webkit-background-clip: border-box; background-clip: border-box; color: var(--e-ink-2); animation: none; }
 
+/* the page background: one solid colour. No coloured light pools, no darkened corners, and no thin circuit lines
+   drawn behind the content (base.css / ambient.js add them; the owner wants none of it) */
+.bg .bg-glow, .bg .bg-noise, .e-circuit { display: none !important; }
+.bg::after { content: none; }
+
 /* the plan comparison table and the across-recordings tab strip drew a 1px frame */
 .pz-table, .ax-tabs { border: 0; }
