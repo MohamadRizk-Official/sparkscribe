@@ -12,7 +12,8 @@ import { mountMascot } from './mascot/mascot.js';
 import { mascotSignal, mascotTravel } from './mascot/bus.js';
 import { confirmDialog, promptDialog } from './library/dialogs.js';
 import { putAudio, rekeyAudio, deleteAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
-import { envelopeFromSamples, paragraphStart, paragraphIndexAt } from './lib/breath.js';
+import { envelopeFromSamples, paragraphStart, paragraphIndexAt, splitSentences } from './lib/breath.js';
+import { createSentenceTiming } from './lib/sentence-timing.js';
 import { mountDashboard } from './home/dashboard.js';
 import { attachSpeedMenu } from './electric/speed-menu.js';
 import { loadPlans, getBillingStatus, authorizeTranscription, startCheckout, allowanceLabel, usageText, usageLevel, durationText, dateText } from './lib/billing.js';
@@ -316,6 +317,7 @@ function reset({ restartWorker = !!run && !state?.lines } = {}) {
   els.player.removeAttribute('src');
   if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
   state = null; currentFile = null; run = null;
+  timing.reset();
   resetSave();
   if (location.pathname !== '/') history.replaceState(history.state, '', '/');
   insights.reset();
@@ -894,12 +896,9 @@ function renderTranscript() {
       p.className = state.lines[i].uncertain ? 'seg uncertain' : 'seg';
       p.dataset.i = i;
       p.title = state.lines[i].uncertain ? `${fmtTime(state.lines[i].start)} · low model confidence, worth double-checking` : fmtTime(state.lines[i].start);
-      if (re) {
-        const html = esc(lineText(i)).replace(new RegExp(escRe(esc(q)), 'gi'), (m) => { matches++; return `<mark>${m}</mark>`; });
-        p.innerHTML = html;
-      } else {
-        p.textContent = lineText(i);
-      }
+      // each sentence is its own click target (lib/sentence-timing.js says where it starts); search marks inside
+      const mark = re ? (h) => h.replace(new RegExp(escRe(esc(q)), 'gi'), (m) => { matches++; return `<mark>${m}</mark>`; }) : (h) => h;
+      p.innerHTML = splitSentences(lineText(i)).map((x, k) => `<span class="snt" data-k="${k}">${mark(esc(x.text))}</span>`).join('');
       state.segEls[i] = p;
       body.appendChild(p);
     }
@@ -919,17 +918,24 @@ function renderTranscript() {
 els.transcript.addEventListener('click', (e) => {
   const p = e.target.closest('.seg');
   if (!p || window.getSelection()?.toString()) return; // allow selecting text to copy
-  playParagraph(Number(p.dataset.i));
+  const sn = e.target.closest('.snt');
+  playParagraph(Number(p.dataset.i), sn ? Number(sn.dataset.k) : 0, sn);
 });
+
+// sentence starts: word timing in the background for the paragraphs in view (lib/sentence-timing.js)
+const timing = createSentenceTiming({ getSegs: () => state?.lines || [], getEnv: () => state?.env || null, getBlob: () => (state?.lines ? currentFile : null) });
+timing.observe(els.transcript);
 
 // Clicking a paragraph or a reference starts in the breath before its words (lib/breath.js). The clicked paragraph
 // stays highlighted through that short lead-in.
 let pinned = null; // { idx, until }
-function playParagraph(i) {
+function playParagraph(i, k = 0, sentenceEl = null) {
   if (!state?.lines?.[i]) return;
-  const t = paragraphStart(state.lines, i, state.env);
-  pinned = { idx: i, from: t - 0.1, until: state.lines[i].start + 1 };
+  timing.activate();
+  const t = k > 0 ? timing.startOf(i, k, lineText(i)) : paragraphStart(state.lines, i, state.env);
+  pinned = { idx: i, from: t - 0.1, until: Math.max(state.lines[i].start, t) + 1 };
   seek(t, true, true);
+  if (sentenceEl) { sentenceEl.classList.remove('snt-on'); void sentenceEl.offsetWidth; sentenceEl.classList.add('snt-on'); setTimeout(() => sentenceEl.classList.remove('snt-on'), 1900); }
 }
 
 function openReassignMenu(anchor, g) {
@@ -1094,7 +1100,7 @@ function seek(t, play = false, keepPin = false) {
 els.playBtn.addEventListener('click', () => (els.player.paused ? els.player.play().catch(() => {}) : els.player.pause()));
 els.backBtn.addEventListener('click', () => seek(els.player.currentTime - 10));
 els.fwdBtn.addEventListener('click', () => seek(els.player.currentTime + 10));
-els.player.addEventListener('play', () => { els.playBtn.classList.add('playing'); mascotSignal('audio-play'); });
+els.player.addEventListener('play', () => { els.playBtn.classList.add('playing'); mascotSignal('audio-play'); timing.activate(); });
 els.player.addEventListener('pause', () => { els.playBtn.classList.remove('playing'); mascotSignal('audio-pause'); });
 els.player.addEventListener('timeupdate', () => { updatePlayhead(); updateActive(false); });
 els.pbSeek.addEventListener('input', () => {
@@ -1418,7 +1424,7 @@ async function doSave() {
   try {
     const id = await saveTranscript(savePayload());
     // the original audio stays on this device (IndexedDB, never uploaded) so the saved copy can play along later
-    if (file) putAudio(id, file, state?.env).then((ok) => { if (ok && save.id === id) { save.audioKept = true; renderSaveBar(); } });
+    if (file) putAudio(id, file, state?.env).then((ok) => { if (ok && save.id === id) { save.audioKept = true; renderSaveBar(); timing.setKey(id); } });
     if (gen !== save.gen) return; // the user started over: that recording is saved; nothing on screen belongs to it
     save.id = id;
     save.status = 'saved';

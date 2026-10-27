@@ -13,7 +13,8 @@ import { toggleDetails } from '../lib/details-pop.js';
 import { relatedMaterialHtml, bindRelatedMaterial } from '../lib/related-material.js';
 import { cleanText } from '../lib/clean.js';
 import { getAudio, putAudio, putEnvelope, keepAudioPref } from '../lib/audio-store.js';
-import { envelopeFromBlob, paragraphStart, paragraphIndexAt } from '../lib/breath.js';
+import { envelopeFromSamples, paragraphStart, paragraphIndexAt, splitSentences } from '../lib/breath.js';
+import { createSentenceTiming } from '../lib/sentence-timing.js';
 import { mountInsights } from '../insights/insights.js';
 import { mountTransport } from '../electric/transport.js';
 import { courseTone } from '../lib/course-tone.js';
@@ -105,6 +106,8 @@ function initials(name) {
   const rtl = RTL_LANGS.has(row.language);
   let view = 'original';
   const text = (s) => (view === 'clean' ? cleanText(s.text) : s.text);
+  // each sentence is its own click target (lib/sentence-timing.js says where it starts)
+  const sentencesHtml = (t) => splitSentences(t).map((p, k) => `<span class="snt" data-k="${k}">${esc(p.text)}</span>`).join('');
   function renderTranscript() {
     if (!segments.length) {
       // not in the usual format: show it as plain text
@@ -123,7 +126,7 @@ function initials(name) {
         <div class="avatar">${esc(initials(g.speaker))}</div>
         <div class="grp-body">
           <div class="grp-head">${coarse ? `<span class="who static">${esc(g.speaker)}</span>` : `<button class="who" type="button" data-g="${g.items[0].id}" aria-haspopup="menu" title="Change or rename this speaker"><span class="who-name">${esc(g.speaker)}</span>${CHEVRON}</button>`}<span class="grp-time">${fmtClock(g.items[0].start)}</span></div>
-          ${g.items.map((s) => `<p class="seg${player.getAttribute('src') ? '' : ' static'}" data-i="${s.id}" title="${fmtClock(s.start)}">${esc(text(s))}</p>`).join('')}
+          ${g.items.map((s) => `<p class="seg${player.getAttribute('src') ? '' : ' static'}" data-i="${s.id}" title="${fmtClock(s.start)}">${sentencesHtml(text(s))}</p>`).join('')}
         </div>
       </div>`).join('');
   }
@@ -142,6 +145,8 @@ function initials(name) {
   let audioSource = null; // 'stored' (on this device) | 'attached' (this visit only) | null
   let env = null; // loudness envelope of the open audio (lib/breath.js): links start in the pause before the words
   let pinned = null; // the clicked paragraph stays highlighted through the short lead-in
+  let audioBlob = null;
+  const timing = createSentenceTiming({ getSegs: () => segments, getEnv: () => env, getBlob: () => audioBlob });
   let following = true;
   let lastUserScroll = 0;
   player.addEventListener('play', () => mascotSignal('audio-play'));
@@ -167,15 +172,16 @@ function initials(name) {
     if (player.src) URL.revokeObjectURL(player.src);
     player.src = URL.createObjectURL(blob);
     audioSource = source;
+    audioBlob = blob;
     env = knownEnv;
     // audio kept before envelopes existed: make it once, when the page is idle, and keep it with the audio
     if (!env) {
       const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
       idle(async () => {
-        const made = await envelopeFromBlob(blob);
-        if (!made || player.src === '' || audioSource == null) return;
-        env = made;
-        if (audioSource === 'stored') putEnvelope(row.id, made);
+        const d = await timing.ensureDecoded();
+        if (!d || audioBlob !== blob) return;
+        env = envelopeFromSamples(d.pcm, d.rate, 1 / 32768);
+        if (audioSource === 'stored') putEnvelope(row.id, env);
       });
     }
     if (startAt != null && !player.dataset.started) { player.dataset.started = '1'; player.currentTime = startAt; }
@@ -229,16 +235,22 @@ function initials(name) {
     if (who) { openSpeakerMenu(who, Number(who.dataset.g)); return; }
     const p = e.target.closest('.seg');
     if (!p || !player.getAttribute('src') || window.getSelection()?.toString()) return;
-    playParagraph(Number(p.dataset.i));
+    const sn = e.target.closest('.snt');
+    playParagraph(Number(p.dataset.i), sn ? Number(sn.dataset.k) : 0, sn);
   });
-  function playParagraph(i) {
+  // a paragraph (k = 0) or one of its sentences: starts in the breath just before the words
+  function playParagraph(i, k = 0, sentenceEl = null) {
     const s = segments[i];
     if (!s) return;
-    const t = paragraphStart(segments, i, env);
-    pinned = { id: s.id, from: t - 0.1, until: s.start + 1 };
+    timing.activate();
+    const t = k > 0 ? timing.startOf(i, k, text(s)) : paragraphStart(segments, i, env);
+    pinned = { id: s.id, from: t - 0.1, until: Math.max(s.start, t) + 1 };
     player.currentTime = t;
     player.play().catch(() => {});
+    if (sentenceEl) { sentenceEl.classList.remove('snt-on'); void sentenceEl.offsetWidth; sentenceEl.classList.add('snt-on'); setTimeout(() => sentenceEl.classList.remove('snt-on'), 1900); }
   }
+  player.addEventListener('play', () => timing.activate());
+  timing.observe($('transcript'));
   player.addEventListener('seeking', () => { if (pinned && (player.currentTime < pinned.from || player.currentTime >= pinned.until)) pinned = null; });
   let lastActive = null;
   function showActiveLine(force) {
@@ -424,7 +436,8 @@ function initials(name) {
   else if (['summary', 'notes', 'ask', 'create'].includes(askedTab)) ui.showTab(askedTab);
   // the original audio, if this device kept it when the recording was transcribed
   const stored = segments.length ? await getAudio(row.id) : null;
-  if (stored) openAudio(stored.blob, 'stored', stored.env || null);
+  if (stored) { timing.load(stored.align, row.id); openAudio(stored.blob, 'stored', stored.env || null); }
+  else timing.load(null, row.id);
   if (segments.length) { paintAudioButton(); renderHeader(); }
   if (coarse && segments.length) {
     $('transcript').insertAdjacentHTML('beforebegin', '<p class="hint coarse-note">Saved before line-level timestamps were added, so links point to the start of each paragraph.</p>');

@@ -1,7 +1,8 @@
 // Ask answers (src/insights/answer-format.js) and playback starts (src/lib/breath.js): safe rendering, citation
 // numbering that is stable for saved answers, grouping, invalid ids, and seeks that start in a pause.
 import { renderAnswer, extractCitations, bestExcerpt } from '../src/insights/answer-format.js';
-import { envelopeFromSamples, breathBefore, paragraphStart, ENV_HZ } from '../src/lib/breath.js';
+import { envelopeFromSamples, breathBefore, paragraphStart, sentenceStartsTimed, splitSentences, ENV_HZ } from '../src/lib/breath.js';
+import { alignWords } from '../src/lib/align-words.js';
 
 let failed = 0, passed = 0;
 const ok = (cond, msg) => { if (cond) { passed++; console.log(`ok - ${msg}`); } else { failed++; console.log(`FAIL - ${msg}`); } };
@@ -51,18 +52,36 @@ for (let i = 0; i < s.length; i++) {
 }
 const env = envelopeFromSamples(s, SR);
 ok(env.length === sec * ENV_HZ, 'envelope: 20 values a second');
+// starts are "half a second into the breath before the words", never before the breath began
 const st = breathBefore(env, 10.5); // mid-word just after the 9.6–10.1 pause
-ok(st >= 9.9 && st <= 10.1, `a seek just after a pause starts in that pause (${st.toFixed(2)})`);
-const st2 = breathBefore(env, 15.0); // just before a pause: the next words start at 15.5 (0.5 s later)
-ok(st2 >= 15.3 && st2 <= 15.5, `a cut right before a pause starts at that pause, not a sentence earlier (${st2.toFixed(2)})`);
-const st3 = breathBefore(env, 19.0); // no pause within reach
-ok(Math.abs(st3 - 18.75) < 0.01, `no pause nearby: a short lead-in only (${st3.toFixed(2)})`);
+ok(st >= 9.6 && st <= 9.7, `a seek just after a breath starts in that breath, ~0.5 s before the words (${st.toFixed(2)})`);
+const st2 = breathBefore(env, 15.0); // just before a breath: the next words start at 15.5
+ok(st2 >= 15.2 && st2 <= 15.3, `a cut right before a breath starts in that breath, not a sentence earlier (${st2.toFixed(2)})`);
+const st3 = breathBefore(env, 19.0); // no breath within reach
+ok(Math.abs(st3 - 18.85) < 0.01, `no breath nearby: a short lead-in only (${st3.toFixed(2)})`);
 const segs = [{ start: 0, end: 9.8, speaker: 'A' }, { start: 9.8, end: 16, speaker: 'A' }, { start: 16, end: 30, speaker: 'B' }];
-ok(Math.abs(paragraphStart(segs, 1, env) - 9.98) < 0.06, `a paragraph cut inside a pause starts where its words begin (${paragraphStart(segs, 1, env).toFixed(2)})`);
+const ps = paragraphStart(segs, 1, env);
+ok(ps >= 9.6 && ps <= 9.7, `a paragraph cut inside a breath starts in that breath (${ps.toFixed(2)})`);
 const split = [{ start: 0, end: 12, speaker: 'A' }, { start: 12, end: 20, speaker: 'A' }];
 const sp = paragraphStart(split, 1, env);
 ok(sp >= 11.6 && sp <= 13.2, `a cut through speech starts near the cut, in the breath before its own words (${sp.toFixed(2)})`);
 ok(paragraphStart(segs, 1, null).toFixed(2) === '9.70', 'without an envelope: the paragraph start with a 0.1 s lead-in');
+
+// ---- sentences: splitting, word matching, timed starts
+ok(splitSentences('Okay. Hello, everybody. I am Sarah.').length === 3, 'sentences are split at . ! ?');
+ok(splitSentences('Mr. Smith said 3.5 percent, e.g. this. Fine!').map((x) => x.text.trim()).join('|') === 'Mr. Smith said 3.5 percent, e.g. this.|Fine!', 'abbreviations, initials and decimals don’t end a sentence');
+const m = alignWords(['We', 'agreed', 'on', 'seven', 'ninety-nine.', 'Great.'], [{ w: 'we' }, { w: 'agree' }, { w: 'on' }, { w: 'seven' }, { w: 'ninety' }, { w: 'nine' }, { w: 'great' }]);
+ok(m[0] === 0 && m[2] === 2 && m[3] === 3 && m[5] === 6, `text words find their timed counterparts despite spelling differences (${m.join(',')})`);
+const tseg = [{ start: 4.4, end: 15.2, speaker: 'A', text: 'First sentence here. Second one starts after the breath.' }];
+// timed words: "Second" at 10.25 (+0.15 aligner lateness): its breath is 9.6–10.1
+const timedW = [['First', 4.6, 4.9], ['sentence', 4.9, 5.5], ['here.', 5.5, 9.5], ['Second', 10.25, 10.6], ['one', 10.6, 11], ['starts', 11, 11.5]];
+const ts = sentenceStartsTimed(tseg, 0, env, timedW);
+ok(ts.length === 2 && ts[1] >= 9.6 && ts[1] <= 10.1, `a timed sentence starts in the breath before its first word (${ts[1]?.toFixed(2)})`);
+const ts2 = sentenceStartsTimed(tseg, 0, env, null);
+ok(ts2.length === 2 && ts2[1] > tseg[0].start && ts2[1] < tseg[0].end, `without timings, the envelope estimate is used (${ts2[1]?.toFixed(2)})`);
+const runOn = [{ start: 0, end: 4, speaker: 'A', text: 'One two three. Four five.' }];
+const tsR = sentenceStartsTimed(runOn, 0, env, [['One', 0.5, 0.8], ['two', 0.8, 1.1], ['three.', 1.1, 2.1], ['Four', 2.25, 2.6], ['five.', 2.6, 3]]);
+ok(tsR[1] >= 1.3 && tsR[1] < 2.1, `sentences that run together: starts after the previous word, not inside it (${tsR[1]?.toFixed(2)})`);
 
 console.log(`\n${passed} checks passed${failed ? `, ${failed} FAILED` : ''}`);
 if (failed) process.exit(1);

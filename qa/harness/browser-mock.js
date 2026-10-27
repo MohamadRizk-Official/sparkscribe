@@ -369,6 +369,13 @@
   };
   const RealWorker = window.Worker;
   window.Worker = function QaWorker(url, opts) {
+    // the word-timing worker (src/align-worker.js): real with knob align: 'real' (downloads its small model), otherwise
+    // a stand-in that times nothing, so pages fall back to their estimate
+    if (/align-worker/.test(String(url))) {
+      if (knobs().align === 'real') return new RealWorker(url, opts);
+      const fake = { onmessage: null, onerror: null, terminate() {}, postMessage(msg) { if (msg?.type === 'align') setTimeout(() => fake.onmessage?.({ data: { type: 'aligned', id: msg.id, words: [] } }), 30); } };
+      return fake;
+    }
     if (knobs().worker === 'real' || !/worker/i.test(String(url))) return new RealWorker(url, opts);
     const listeners = { message: [], error: [] };
     let dead = false;

@@ -35,7 +35,7 @@ function open() {
   return dbPromise;
 }
 
-// one transaction, one request; resolves to undefined/false on any failure
+// one transaction, one request; resolves to undefined on any failure (a put resolves to the record's key)
 async function run(mode, fn) {
   const db = await open();
   if (!db) return undefined;
@@ -66,7 +66,7 @@ export async function putAudio(key, file, env = null) {
   try { navigator.storage?.persist?.().catch(() => {}); } catch { /* unsupported */ }
   const rec = { blob: file, name: file.name || 'recording', type: file.type || '', size: file.size, savedAt: Date.now(), ...(env && { env }) };
   const ok = await run('readwrite', (s) => s.put(rec, String(key)));
-  return ok === true;
+  return ok !== undefined;
 }
 
 // Add the envelope to audio stored before envelopes existed (made once, on this device).
@@ -74,10 +74,18 @@ export async function putEnvelope(key, env) {
   if (!key || !env) return false;
   const rec = await run('readonly', (s) => s.get(String(key)));
   if (!rec?.blob) return false;
-  return (await run('readwrite', (s) => s.put({ ...rec, env }, String(key)))) === true;
+  return (await run('readwrite', (s) => s.put({ ...rec, env }, String(key)))) !== undefined;
 }
 
-// The stored audio for a recording: { blob, name, type, size, savedAt, env? } or null.
+// Word timings for clicking a sentence (lib/sentence-timing.js), kept with the recording's audio on this device.
+export async function putAlign(key, align) {
+  if (!key || !align) return false;
+  const rec = await run('readonly', (s) => s.get(String(key)));
+  if (!rec?.blob) return false;
+  return (await run('readwrite', (s) => s.put({ ...rec, align }, String(key)))) !== undefined;
+}
+
+// The stored audio for a recording: { blob, name, type, size, savedAt, env?, align? } or null.
 export async function getAudio(key) {
   if (!key) return null;
   const rec = await run('readonly', (s) => s.get(String(key)));
