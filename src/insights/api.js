@@ -135,5 +135,9 @@ export const gradeAnswer = (id, artifactId, index, answer) =>
 export const requestFollowups = (id, artifactId, concepts) =>
   call('/api/tools', { method: 'POST', body: JSON.stringify({ action: 'followups', transcriptionId: id, artifactId, concepts }) });
 
+// Create tab opened: build the recording's study map ahead of time (no-op when one exists or is being built)
+export const prepareStudyMap = (id) =>
+  call('/api/tools', { method: 'POST', body: JSON.stringify({ action: 'prepare', transcriptionId: id }) });
+
 export const requestTool = (id, kind, settings = {}, force = false) =>
   call('/api/tools', { method: 'POST', body: JSON.stringify({ transcriptionId: id, kind, settings, force }) });

@@ -4,7 +4,7 @@
 // Requires a signed-in user (Authorization: Bearer <Supabase access token>); everything runs as that user,
 // so Row Level Security decides which recordings and outputs exist for them.
 import { authenticate, readJson, sendJson, sendError, isUuid } from '../server/http.js';
-import { generateArtifact, gradeShortAnswer, generateFollowups } from '../server/ai/service.js';
+import { generateArtifact, gradeShortAnswer, generateFollowups, prepareStudyMap } from '../server/ai/service.js';
 import { AIError } from '../server/ai/provider.js';
 
 export default async function handler(req, res) {
@@ -26,6 +26,8 @@ export default async function handler(req, res) {
       if (!isUuid(body.artifactId)) throw new AIError('Invalid quiz.', { status: 400, code: 'bad_request' });
       return sendJson(res, 200, await generateFollowups(db, { transcriptionId: body.transcriptionId, artifactId: body.artifactId, conceptIds: body.concepts, userId: user.id }));
     }
+    // { action: 'prepare' }: build the recording's study map ahead of time (sent when the Create tab opens)
+    if (body.action === 'prepare') return sendJson(res, 200, await prepareStudyMap(db, { transcriptionId: body.transcriptionId, userId: user.id }));
     const settings = body.settings && typeof body.settings === 'object' && !Array.isArray(body.settings) ? body.settings : {};
     const out = await generateArtifact(db, {
       transcriptionId: body.transcriptionId, kind: String(body.kind || ''), settings, force: body.force === true, userId: user.id,

@@ -21,11 +21,22 @@ function excerpt(segments, ids, line) {
   return out.join('\n');
 }
 
-// One study map per transcript: reused from any other engine-3 result for the same words and speakers.
-export async function studyMap({ db, transcriptionId, segments, speakers, basis, call }) {
-  const stored = (await db.listArtifacts(transcriptionId))
-    .filter((a) => a.status === 'ready' && a.content?.engine >= 3 && a.content?.map?.concepts && sameBasis(a.content.basis, basis))
-    .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0];
+// One study map per transcript: reused from any other engine-3 result for the same words and speakers, including
+// the map built ahead of time when the Create tab opened (kind 'study_map', service.js prepareStudyMap).
+export const MAP_WAIT_MS = 90_000;
+export const storedMap = (artifacts, basis) => artifacts
+  .filter((a) => a.status === 'ready' && a.content?.engine >= 3 && a.content?.map?.concepts && sameBasis(a.content.basis, basis))
+  .sort((a, b) => String(b.updated_at).localeCompare(String(a.updated_at)))[0] || null;
+export async function studyMap({ db, transcriptionId, segments, speakers, basis, call, wait = true }) {
+  let arts = await db.listArtifacts(transcriptionId);
+  let stored = storedMap(arts, basis);
+  // the map is being built ahead of time right now: wait for it (polling) rather than pay to build it twice
+  const building = (list) => list.some((a) => a.kind === 'study_map' && a.status === 'generating' && Date.now() - new Date(a.updated_at).getTime() < MAP_WAIT_MS);
+  for (let t0 = Date.now(); wait && !stored && building(arts) && Date.now() - t0 < MAP_WAIT_MS;) {
+    await new Promise((r) => setTimeout(r, 1500));
+    arts = await db.listArtifacts(transcriptionId);
+    stored = storedMap(arts, basis);
+  }
   if (stored) return { map: stored.content.map, reused: true, sections: stored.content.quality?.sections ?? null };
 
   const line = lineOf(speakers);

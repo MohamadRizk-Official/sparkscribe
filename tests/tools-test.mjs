@@ -151,6 +151,19 @@ ok(mcOnly.artifact.settingsKey === 'g2;diff=harder;types=multiple_choice' && mcO
 const ins = await svc.generate(db, { transcriptionId: T, kind: 'insights', recordingType: 'lecture' });
 ok(Array.isArray(ins.insight.content.exam_points), 'lecture notes: exam points present (validated)');
 
+// the study map ahead of time (Create opened): built once, never listed as a result, reused by the quiz
+const TM = '22222222-4444-4444-8444-444444444444';
+db.seed({ id: TM, title: 'Membranes again', duration_seconds: 1500, transcript_text: 'x', segments: seg, recording_type: 'lecture' });
+const prep = await svc.prepareStudyMap(db, { transcriptionId: TM });
+ok(prep.ready && !prep.cached && (await db.listArtifacts(TM)).some((a) => a.kind === 'study_map' && a.status === 'ready' && a.content.map.concepts.length), 'opening Create builds and saves the study map');
+ok((await svc.prepareStudyMap(db, { transcriptionId: TM })).cached === true, 'opening Create again costs nothing');
+ok(!(await svc.getState(db, TM)).artifacts.some((a) => a.kind === 'study_map'), 'the map is not shown as a result');
+const quick = await svc.generateArtifact(db, { transcriptionId: TM, kind: 'quiz' });
+ok(quick.artifact.content.quality.map_reused === 1, 'a quiz after it reuses the map: no mapping step');
+const TMEET = '22222222-5555-4555-8555-555555555555';
+db.seed({ id: TMEET, title: 'Team sync', duration_seconds: 600, transcript_text: 'x', segments: seg, recording_type: 'meeting' });
+ok((await svc.prepareStudyMap(db, { transcriptionId: TMEET })).skipped === true, 'meetings get no study map ahead of time');
+
 // details check unit
 ok(tools.unverifiedDetails('See you Friday at 3pm, budget $500', 'we meet friday').join() === '3pm,$500', 'unverifiedDetails flags only what the recording lacks');
 ok(tools.EXAM_RE.test('this will be on the midterm') && !tools.EXAM_RE.test('this is really important'), 'exam wording detector');

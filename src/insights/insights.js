@@ -4,7 +4,7 @@
 // Used by the live result page (src/main.js) and the saved transcript page (src/pages/transcript.js).
 // The transcript stays the source of truth: everything here is generated from it on request, stored with
 // it, and every reference points back to a real line and timestamp.
-import { fetchState, requestInsight, requestTool, requestFollowups, askQuestion, gradeAnswer, ApiError } from './api.js';
+import { fetchState, requestInsight, requestTool, requestFollowups, askQuestion, gradeAnswer, prepareStudyMap, ApiError } from './api.js';
 import { createToolsUI, artifactBlocks, blocksToText, TOOL_INFO, toolsFor } from './tools.js';
 import { openExportDialog } from './export.js';
 import { watchNames, renameInText } from '../lib/speaker-names.js';
@@ -858,7 +858,17 @@ export function mountInsights({ tabBar, transcriptEls, host, ctx }) {
   function renderCreate() {
     const p = panels.create;
     if (gate(p)) return;
+    prepareMap();
     tools.render(p);
+  }
+  // Opening Create asks the server to build the recording's study map now (once per recording per page), so a
+  // quiz or flashcards started next skip that step. Only a head start: if it fails, the tools build the map themselves.
+  let mapAskedFor = null;
+  function prepareMap() {
+    const id = ctx.getId();
+    if (!id || mapAskedFor === id) return;
+    mapAskedFor = id;
+    prepareStudyMap(id).catch(() => {});
   }
 
   // ---------- Export (no AI; built in the browser from what this page already loaded) ----------

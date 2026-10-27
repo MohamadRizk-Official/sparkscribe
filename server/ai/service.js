@@ -22,7 +22,7 @@ import { GRADE_SYSTEM, GRADE_SCHEMA, gradeInstructions, ANALYST_SYSTEM, ASK_SYST
 import { groundStructured, groundChapters, groundAnswer } from './grounding.js';
 import { TOOLS, ARTIFACT_KINDS, normalizeSettings, cardCount, questionCount, examBacked } from './tools.js';
 import { FILL_SCHEMA, fillInstructions, uncoveredConcepts, inheritRefs } from './study.js';
-import { studyItems, studyGuide, followupQuestions } from './studyrun.js';
+import { studyItems, studyGuide, followupQuestions, studyMap, storedMap } from './studyrun.js';
 import { INSTRUCTIONS_MISSING } from '../../src/lib/tool-settings.js';
 import { selectContext, needsRetrieval, formatExcerpts } from './retrieve.js';
 import { askAcross, guideAcross } from './across.js';
@@ -246,7 +246,8 @@ export async function getState(db, transcriptionId) {
     recordingType: RECORDING_TYPES.includes(row.recording_type) ? row.recording_type : null,
     insights: insights.map(publicInsight),
     questions: questions.map((q) => ({ id: q.id, question: q.question, answer: q.answer, refs: q.refs, found: q.found, sourceVersion: q.source_version, createdAt: q.created_at })),
-    artifacts: artifacts.map(publicArtifact),
+    // the study map built ahead of time is internal (the study tools read it), never a result to show
+    artifacts: artifacts.filter((a) => a.kind !== 'study_map').map(publicArtifact),
   };
 }
 
@@ -294,15 +295,7 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
     if (tool.engine === 3) {
       // study engine 3 (studyrun.js): several smaller calls, metered one by one, results summed here
       r = { usage: { input: 0, output: 0 }, model: null };
-      const call = async ({ task, schema, body, instructions }) => {
-        const ai = getProvider();
-        const x = await meter.call(task, () => ai.complete({
-          task, ...taskConfig(task), system: ANALYST_SYSTEM, schema,
-          messages: [{ role: 'user', content: [{ type: 'text', text: `${codedHeader(row, segments, speakers)}${body ? `\n${body}` : ''}` }, { type: 'text', text: instructions }] }],
-        }));
-        r.usage.input += x.usage.input; r.usage.output += x.usage.output; r.model = x.model;
-        return x;
-      };
+      const call = engineCall({ row, segments, speakers, meter, r });
       const args = { kind, tool, db, transcriptionId, segments, speakers, basis, ctx, call, started };
       const out = kind === 'study_guide' ? await studyGuide(args) : await studyItems(args);
       g = { content: out.content, dropped: 0 };
@@ -350,6 +343,56 @@ export async function generateArtifact(db, { transcriptionId, kind, settings, fo
     const message = err instanceof AIError ? err.message : 'Generation failed.';
     await meter.finish({ error: message });
     await db.failArtifact(claimed.id, message, previous).catch(() => {});
+    throw err instanceof AIError ? err : new AIError(message);
+  }
+}
+
+// one model call of study engine 3, metered on its own; the tokens add up in r (the result's usage and model)
+function engineCall({ row, segments, speakers, meter, r }) {
+  return async ({ task, schema, body, instructions }) => {
+    const ai = getProvider();
+    const x = await meter.call(task, () => ai.complete({
+      task, ...taskConfig(task), system: ANALYST_SYSTEM, schema,
+      messages: [{ role: 'user', content: [{ type: 'text', text: `${codedHeader(row, segments, speakers)}${body ? `\n${body}` : ''}` }, { type: 'text', text: instructions }] }],
+    }));
+    r.usage.input += x.usage.input; r.usage.output += x.usage.output; r.model = x.model;
+    return x;
+  };
+}
+
+// The study map ahead of time (owner decision 2026-10-27): the Create tab asks for it when it opens, so a quiz or
+// flashcards started a moment later skip the slowest step. Saved as a 'study_map' row (never shown, see getState)
+// that studyMap() reuses like the map of any engine-3 result, and a quiz started while it is being built waits for
+// it. Nothing is done (and nothing reserved or paid) when a current map already exists or one is being built.
+export const STUDY_MAP_KEY = 'g2';
+export async function prepareStudyMap(db, { transcriptionId, userId = null }) {
+  const { row, segments } = await loadTranscript(db, transcriptionId);
+  // only where the study tools are what Create offers first: not for meetings, interviews, podcasts or voice notes
+  if (['meeting', 'interview', 'podcast', 'voice_message'].includes(normalizeRecordingType(row.recording_type))) return { ready: false, skipped: true };
+  const basis = transcriptBasis(segments);
+  const arts = await db.listArtifacts(transcriptionId);
+  if (storedMap(arts, basis)) return { ready: true, cached: true };
+  const existing = arts.find((a) => a.kind === 'study_map' && a.settings_key === STUDY_MAP_KEY) || null;
+  if (existing?.status === 'generating' && Date.now() - new Date(existing.updated_at).getTime() < ARTIFACT_TAKEOVER_MS) return { ready: false, building: true };
+  const meter = createMeter({ feature: 'tool:study_map', transcriptionId, userId });
+  await reserveAi(db, meter, promptTokensOf(segments, { whole: true }));
+  let claimed;
+  // a refused claim (e.g. the database doesn't know this kind yet) settles the reservation: nothing is counted
+  try { claimed = await db.startArtifact(existing, { transcriptionId, kind: 'study_map', settings: {}, settingsKey: STUDY_MAP_KEY, version: row.content_version }); }
+  catch (err) { await meter.finish({ error: 'The study map could not be saved.' }); throw err; }
+  if (!claimed) { await meter.finish({ cached: true }); return { ready: false, building: true }; }
+  try {
+    const speakers = speakerTable(segments);
+    const r = { usage: { input: 0, output: 0 }, model: null };
+    const { map, sections } = await studyMap({ db, transcriptionId, segments, speakers, basis, call: engineCall({ row, segments, speakers, meter, r }), wait: false });
+    const content = { engine: 3, map, basis, speakers: speakers.table, quality: { sections } };
+    await db.finishArtifact(claimed.id, { content, model: r.model, usage: r.usage });
+    await meter.finish({});
+    return { ready: true, cached: false };
+  } catch (err) {
+    const message = err instanceof AIError ? err.message : 'The study map could not be built.';
+    await meter.finish({ error: message });
+    await db.failArtifact(claimed.id, message, existing?.content ? existing.source_version : null).catch(() => {});
     throw err instanceof AIError ? err : new AIError(message);
   }
 }
