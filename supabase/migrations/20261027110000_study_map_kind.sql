@@ -1,3 +1,4 @@
+-- Applied to production 2026-10-27 (owner-approved).
 -- Study map ahead of time (owner decision 2026-10-27): opening the Create tab builds the recording's study map in
 -- the background, so a quiz or flashcards started a moment later only write and check their items. The map is kept
 -- as one more kind of saved result, 'study_map' (one per recording, settings_key 'g2'), which the study tools reuse

@@ -1,3 +1,4 @@
+-- Applied to production 2026-10-27 (owner-approved); the two accounts were added by SQL (emails are not kept here).
 -- Unlimited accounts (owner decision 2026-10-27): a short, owner-kept list of accounts that use SparkScribe like a
 -- Thunder customer (every Thunder feature, Thunder shown as their plan, the normal dashboard and meters) but whose
 -- transcription time and AI use never run out and who never pay.
