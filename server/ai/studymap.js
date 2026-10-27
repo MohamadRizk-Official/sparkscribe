@@ -245,7 +245,7 @@ export function excerptIds(concepts, segments, pad = 3) {
 // ---------------- 4. writing and checking ----------------
 export const WRITE_SCHEMA = { flashcards: obj({ cards: list(FLASHCARD) }), quiz: obj({ questions: list(QUESTION) }) };
 
-export function writeInstructions(kind, { concepts, topics, settings, dominant, tfLimit, tfAnswers }) {
+export function writeInstructions(kind, { concepts, topics, settings, dominant, tfLimit }) {
   const topicTitle = new Map((topics || []).map((t) => [t.id, t.title]));
   const brief = concepts.map((c) => ({ id: c.id, topic: topicTitle.get(c.topic) || '', name: c.name, kind: c.kind, importance: c.importance, stance: c.stance, held_by: c.held_by, summary: c.summary, reasoning: c.reasoning }));
   const what = kind === 'quiz' ? 'question' : 'flashcard';
@@ -253,9 +253,9 @@ export function writeInstructions(kind, { concepts, topics, settings, dominant, 
 <concepts>
 ${JSON.stringify(brief, null, 1)}
 </concepts>
-${kind === 'quiz' ? `- ${tfLimit === 0 && !['multiple_choice', 'true_false'].includes(settings?.types) ? 'Mostly multiple_choice, plus a few short_answer (answers of a few words). No true_false in this set.' : tfLimit === 1 && !['multiple_choice', 'true_false'].includes(settings?.types) ? `Mostly multiple_choice, plus a few short_answer (answers of a few words). At most one true_false, only for a meaningful distinction or a common misconception the recording corrects${tfAnswers?.length === 1 ? `; if you write one, its answer is ${tfAnswers[0]}` : ''}.` : QUIZ_TYPES[settings?.types] || QUIZ_TYPES.mixed}
+${kind === 'quiz' ? `- ${tfLimit === 0 && !['multiple_choice', 'true_false'].includes(settings?.types) ? 'Mostly multiple_choice, plus a few short_answer (answers of a few words). No true_false in this set.' : tfLimit === 1 && !['multiple_choice', 'true_false'].includes(settings?.types) ? `Mostly multiple_choice, plus a few short_answer (answers of a few words). At most one true_false, only for a meaningful distinction or a common misconception the recording corrects; write it true, with its false version in false_statement.` : QUIZ_TYPES[settings?.types] || QUIZ_TYPES.mixed}
 - ${settings?.difficulty === 'harder' ? 'Challenge level: reasoning, application, distinction and misconception questions, with close distractors.' : 'Standard level: the important ideas, clearly asked.'}
-${tfAnswers?.length && settings?.types === 'true_false' ? `- True or false answers in this set, in concept order: ${tfAnswers.map((a, i) => `${concepts[i]?.id}: ${a}`).join(', ')}. A true statement is one the lines clearly state or establish; a false one is clearly contradicted by them (a swapped position, a reversed cause, a changed detail), never merely absent. Don't make every statement false.\n` : ''}- Test understanding, reasoning, distinctions, cause and effect, application or misconceptions — not whether a sentence was said. "skill" says which.
+- Test understanding, reasoning, distinctions, cause and effect, application or misconceptions — not whether a sentence was said. "skill" says which.
 - Each question must make sense on its own to a student reading it cold. Name every person, text and thing it is about: no "him", "he", "it", "this" or "the hadith" whose referent the question doesn't state, and never two people a pronoun could mean ("why is Ali ibn Abi Talib a reason to follow him?" is unclear; "According to the hadith the lecturer reads from Nahjul Balagha, why should people follow Ali ibn Abi Talib?" is clear). Call people by the name the transcript gives them ("Marie Curie", "Ali ibn Abi Talib"), never "the woman", "the man" or "the figure described in the lecture". Ask one thing, in plain words a student would use.
 - The correct answer must be what the speaker says in the lines. Ask "why" or "how" only when the speaker gives the reason or the way in the lines, and make the answer that stated reason: never a reason inferred, interpreted or taken from general knowledge of the subject.
 - multiple_choice: exactly 4 options and ONE unambiguously correct answer according to the lines. Each distractor must be a believable answer to this exact question (asked for a reason, it is a reason someone could give; asked for a cause of death, it is a cause of death), so that only someone who listened carefully can rule it out. Draw them from the lecture where you can: another reason the speaker gives for something else, a view the speaker rejects; the other school's position on the same question; a reversed cause and effect; a close misreading of this passage; a common misconception. Never a lecture fact that is no kind of answer to the question (asked why they refused a patent, "because she took over his teaching post"). Every option reads on its own: no "them" or "it" that points outside the option. Every distractor must be clearly wrong for the question exactly as worded: never an option that is also true of the question's subject, in the lecture or in general (asked "what cannot replace exercise?", a balanced diet is also a correct answer). If the answer is one of several things that would fit, ask what the lecture specifically says about it instead (which example the lecturer gave, what the lecturer criticized, who claimed it).
@@ -286,7 +286,7 @@ export const VERIFY_SCHEMA = obj({
     attribution_ok: bool('Positions are attributed correctly: a school\'s / person\'s view is not stated as fact or as the lecturer\'s own; a criticized view is presented as criticized'),
     distractors_ok: bool('Multiple choice: the wrong options are plausible, not absurd, and do not give the answer away; true for other items'),
     option_checks: list(obj({
-      option: str('The exact text of one option (true/false: "True" or "False")'),
+      option: str('The letter of one option, as shown: "A", "B", "C" or "D" (true/false: "A" = True, "B" = False)'),
       fits: enumOf(['yes', 'arguably', 'no'], 'Is this option a correct answer to the question EXACTLY as worded? arguably = a careful student could defend it'),
     }), 'Multiple choice and true/false: one entry for EVERY option, each judged on its own; empty for other items'),
     uncertain_terms: list(str(), 'Words or names in the item that look like transcription errors in the lines (keep their exact spelling); empty if none'),
@@ -320,6 +320,18 @@ ${final ? 'These items were already corrected once: do not fix anything (keep ev
 // accepts no further fixes: anything still failing is dropped. Items the check didn't return are unverified.
 const optKey = (s) => String(s ?? '').toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 const hasChoices = (kind, it) => kind === 'quiz' && (it.type === 'multiple_choice' || it.type === 'true_false');
+const choicesOf = (it) => (it.type === 'true_false' ? ['True', 'False'] : it.options || []);
+// the options as the check sees them, lettered: the check answers with the letter, not a copy of the text (a third
+// of its output, and the slowest part of a quiz)
+export const optionsLine = (it) => {
+  const opts = it.type === 'true_false' || it.type === 'multiple_choice' ? choicesOf(it) : [];
+  return opts.length ? `Options: ${opts.map((o, k) => `(${String.fromCharCode(65 + k)}) ${o}`).join('  ')}\n` : '';
+};
+// a judged option -> its text: a letter (A, B…) means that option; anything else is taken as the option's own text
+const optionText = (it, o) => {
+  const s = String(o ?? '').trim().replace(/^\(?([A-Ea-e])\)?\.?$/, '$1');
+  return /^[A-Ea-e]$/.test(s) ? choicesOf(it)[s.toUpperCase().charCodeAt(0) - 65] ?? s : o;
+};
 export function applyChecks(kind, items, checks, { final = false } = {}) {
   let list = checks || [];
   // a model that numbered the items from 1 instead of using their index attribute: realign rather than misapply
@@ -353,7 +365,7 @@ export function applyChecks(kind, items, checks, { final = false } = {}) {
       if (!next.options.includes(next.answer)) { stats.verify_dropped++; return; }
     }
     if (hasChoices(kind, next)) {
-      const verdict = new Map((c.option_checks || []).map((o) => [optKey(o.option), o.fits]));
+      const verdict = new Map((c.option_checks || []).map((o) => [optKey(optionText(it, o.option)), o.fits]));
       // judged against the options the check saw (the item's own), not replacement options it proposed
       const options = next.type === 'true_false' ? ['True', 'False'] : it.options || [];
       const fits = (o) => ['yes', 'arguably'].includes(verdict.get(optKey(o)));

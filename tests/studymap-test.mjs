@@ -89,8 +89,17 @@ ok(M.applyChecks('quiz', [mcq], [{ ...base, index: 0, fixed_answer: 'Z' }]).item
 ok(M.applyChecks('quiz', [mcq], [{ ...base, index: 0, clear: false }]).items.length === 0, 'a vague question with no clear rewording is dropped');
 const reworded = M.applyChecks('quiz', [mcq], [{ ...base, index: 0, clear: false, fixed_question: 'According to the lecturer, why should people follow Ali?' }]);
 ok(reworded.items[0]?.question.startsWith('According') && reworded.recheck.length === 1, 'a vague question with a clear rewording is kept, reworded and checked again');
-const tfText = M.writeInstructions('quiz', { concepts: [{ id: 'c1' }, { id: 'c2' }], settings: { types: 'true_false' }, tfAnswers: ['True', 'False'] });
-ok(/c1: True, c2: False/.test(tfText), 'a true/false quiz tells each statement its answer (not all false)');
+const S = await import(root + 'server/ai/study.js');
+const tfItems = [
+  { concept: 'c1', type: 'true_false', question: 'A causes B.', answer: 'True', false_statement: 'B causes A.' },
+  { concept: 'c2', type: 'true_false', question: 'X is red.', answer: 'True', false_statement: 'X is blue.' },
+  { concept: 'c3', type: 'multiple_choice', question: 'Q?', answer: 'B', options: ['A', 'B', 'C', 'D'], false_statement: null },
+];
+const picked = S.pickTrueFalse(tfItems, (q) => (q.concept === 'c1' ? 'False' : 'True'));
+ok(picked[0].question === 'B causes A.' && picked[0].answer === 'False' && picked[1].question === 'X is red.' && picked[1].answer === 'True', 'true/false: the server picks the true or the false version');
+ok(picked.every((q) => !('false_statement' in q)), 'the false version is not kept on the saved item');
+const keys = S.shuffledKeys(9);
+ok(keys.filter((k) => k === 'False').length === 4 && keys.filter((k) => k === 'True').length === 5, 'answers are balanced: about half True, half False');
 // ---------- exactly one defensible answer ----------
 const mcq2 = { concept: 'c1', type: 'multiple_choice', question: 'What cannot replace exercise?', answer: 'Energy drinks', options: ['A balanced diet', 'Energy drinks', 'Enough sleep', 'Stretching'], refs: [1] };
 const verdicts = (fitting) => mcq2.options.map((o) => ({ option: o, fits: fitting.includes(o) ? 'yes' : 'no' }));

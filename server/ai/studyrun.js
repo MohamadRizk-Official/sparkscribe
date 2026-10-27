@@ -4,12 +4,12 @@
 import { groundStructured } from './grounding.js';
 import { tokenizeSpeakers, codedLine, sameBasis } from '../../src/lib/speaker-refs.js';
 import { fmtClock, estimateTokens } from '../../src/lib/segments.js';
-import { inheritRefs, keepsAttribution, validateQuiz, sameQuestion } from './study.js';
+import { inheritRefs, keepsAttribution, validateQuiz, sameQuestion, pickTrueFalse, shuffledKeys } from './study.js';
 import { examBacked } from './tools.js';
 import { str, obj, list } from './prompts.js';
 import {
   sectionize, SECTION_SCHEMA, sectionInstructions, CONSOLIDATE_SCHEMA, consolidateInstructions, buildMap, selectConcepts,
-  excerptIds, WRITE_SCHEMA, writeInstructions, VERIFY_SCHEMA, verifyInstructions, applyChecks, unseenNames, transcriptWordSet,
+  excerptIds, WRITE_SCHEMA, writeInstructions, VERIFY_SCHEMA, verifyInstructions, applyChecks, optionsLine, unseenNames, transcriptWordSet,
 } from './studymap.js';
 
 const lineOf = (speakers) => (s) => codedLine(s, speakers.codeOf, fmtClock);
@@ -64,13 +64,13 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   const vctx = { ...ctx, rawConceptIds: new Set(map.concepts.map((c) => c.id)) };
   const validate = (items) => { const c = { concepts: map.concepts, [key]: items }; tool.validate(c, segments, vctx); return c; };
 
-  const write = async (concepts, tfLimit, tfAnswers) => {
+  const write = async (concepts, tfLimit) => {
     const ids = excerptIds(concepts, segments);
     const r = await call({
       task: `${tool.task}:write`, schema: WRITE_SCHEMA[kind], body: `<transcript>\n${excerpt(segments, ids, line)}\n</transcript>`,
-      instructions: writeInstructions(kind, { concepts, topics: map.topics, settings: ctx.settings, dominant: ctx.dominant, tfLimit, tfAnswers }),
+      instructions: writeInstructions(kind, { concepts, topics: map.topics, settings: ctx.settings, dominant: ctx.dominant, tfLimit }),
     });
-    const items = r.json?.[key] || [];
+    const items = kind === 'quiz' ? pickTrueFalse(r.json?.[key], (q) => tfKeyOf(q.concept)) : r.json?.[key] || [];
     inheritRefs(items, { concepts });
     return tokenizeSpeakers(groundStructured({ [key]: items }, segments).content, speakers.codeOf)[key] || [];
   };
@@ -82,7 +82,7 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
     const con = byId.get(it.concept);
     const lines = excerptIds([{ refs: [...new Set([...(it.refs || []), ...(con?.refs || [])])] }], segments, 2);
     const fields = kind === 'quiz'
-      ? `Question (${it.type}): ${it.question}\n${it.options?.length ? `Options: ${it.options.map((o) => `[${o}]`).join(' ')}\n` : it.type === 'true_false' ? 'Options: [True] [False]\n' : ''}Answer: ${it.answer}`
+      ? `Question (${it.type}): ${it.question}\n${optionsLine(it)}Answer: ${it.answer}`
       : `Question: ${it.front}\nAnswer: ${it.back}`;
     return `<item index="${i}">\n${fields}\nExplanation: ${it.explanation || '(none)'}\nPosition: ${con ? `${con.stance}${con.held_by ? `, held by ${con.held_by}` : ''}` : 'own'}\nLines:\n${excerpt(segments, lines, line)}\n</item>`;
   };
@@ -125,21 +125,21 @@ export async function studyItems({ kind, tool, db, transcriptionId, segments, sp
   // Written and checked in small batches that run at the same time: one long call writing (then checking) every
   // item took minutes on a long lecture, and each batch only needs its own concepts' lines. The whole set is
   // validated together at the end (duplicates across batches, the question count).
-  const BATCH = 3;
+  const BATCH = 2;
   const toWrite = [...selected, ...spares].sort((a, b) => (a.refs?.[0] ?? 0) - (b.refs?.[0] ?? 0));
   const batches = [];
   for (let i = 0; i < toWrite.length; i += BATCH) batches.push(toWrite.slice(i, i + BATCH));
   // a mixed quiz has at most two true/false questions in all: one each in the first two batches
   const tfOf = (b) => (kind === 'quiz' && !['multiple_choice', 'true_false'].includes(ctx.settings?.types) ? (b < 2 ? 1 : 0) : undefined);
-  // left alone, true/false statements come out nearly all false: each one is told its answer, about half True, in
-  // an order that isn't a pattern (a true/false quiz: per concept; a mixed one: True in the first batch, False in the second)
-  const tfOnly = kind === 'quiz' && ctx.settings?.types === 'true_false';
-  const tfKeys = tfOnly ? toWrite.map((_, i) => (((i * 7 + 3) % 10) < 5 ? 'True' : 'False')) : [];
-  const tfAnswersOf = (b) => (tfOnly ? tfKeys.slice(b * BATCH, b * BATCH + BATCH) : tfOf(b) === 1 ? [b === 0 ? 'True' : 'False'] : undefined);
+  // true or false: each concept gets its answer from a shuffled, balanced run (about half True, in random order);
+  // every statement is written true with a false version, and pickTrueFalse asks the one this says
+  const tfKeys = shuffledKeys(toWrite.length);
+  const tfIndex = new Map(toWrite.map((c, i) => [String(c.id), i]));
+  const tfKeyOf = (concept) => tfKeys[tfIndex.get(String(concept))] ?? (Math.random() < 0.5 ? 'True' : 'False');
   const firstQuality = {};
   const sumFirst = (q) => { for (const [k, v] of Object.entries(q || {})) if (!['kept', 'core_uncovered'].includes(k)) firstQuality[k] = (firstQuality[k] || 0) + v; };
   const runBatch = async (concepts, b) => {
-    const v = validate(await write(concepts, tfOf(b), tfAnswersOf(b)));
+    const v = validate(await write(concepts, tfOf(b)));
     sumFirst(v.quality);
     return check(v[key]);
   };
@@ -251,7 +251,7 @@ export async function followupQuestions({ concepts, map, segments, speakers, ctx
 - These are FOLLOW-UP questions for a learner who already answered the questions below and got them wrong. Test the same idea from a different angle (another skill: application, a distinction, cause and effect, a misconception). Never reword these questions and never reuse their answer or options:
 ${avoid || '- (none)'}`,
   });
-  let items = r.json?.questions || [];
+  let items = pickTrueFalse(r.json?.questions, () => (Math.random() < 0.5 ? 'True' : 'False'));
   inheritRefs(items, { concepts });
   items = tokenizeSpeakers(groundStructured({ questions: items }, segments).content, speakers.codeOf).questions || [];
   const validate = (list) => {
@@ -266,7 +266,7 @@ ${avoid || '- (none)'}`,
   const blockOf = (it, i) => {
     const con = byId.get(it.concept);
     const lines = excerptIds([{ refs: [...new Set([...(it.refs || []), ...(con?.refs || [])])] }], segments, 2);
-    const opts = it.options?.length ? `Options: ${it.options.map((o) => `[${o}]`).join(' ')}\n` : it.type === 'true_false' ? 'Options: [True] [False]\n' : '';
+    const opts = optionsLine(it);
     return `<item index="${i}">\nQuestion (${it.type}): ${it.question}\n${opts}Answer: ${it.answer}\nExplanation: ${it.explanation || '(none)'}\nPosition: ${con ? `${con.stance}${con.held_by ? `, held by ${con.held_by}` : ''}` : 'own'}\nLines:\n${excerpt(segments, lines, line)}\n</item>`;
   };
   const tokenized = (list) => tokenizeSpeakers({ questions: list }, speakers.codeOf).questions || [];

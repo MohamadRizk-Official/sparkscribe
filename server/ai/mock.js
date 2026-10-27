@@ -196,13 +196,15 @@ function studyEngine3(base, step, text) {
     // =ambig0: another option of the first item also fits (=ambig0fix: and the check re-words the question)
     const blocks = [...text.matchAll(/<item index="(\d+)">([\s\S]*?)<\/item>/g)].map((m) => m[2]);
     const optionChecks = (b, i) => {
-      const opts = [...((b.match(/^Options: (.*)$/m) || [, ''])[1].matchAll(/\[([^\]]*)\]/g))].map((m) => m[1]);
+      // options are shown lettered, "(A) text  (B) text"; the check answers with the letter
+      const opts = ((b.match(/^Options: (.*)$/m) || [, ''])[1]).split(/\s*\(([A-E])\)\s+/).slice(1);
+      const pairs = []; for (let k = 0; k < opts.length; k += 2) pairs.push([opts[k], opts[k + 1].trim()]);
       const ans = (b.match(/^Answer: (.*)$/m) || [, ''])[1].trim();
       let other = false;
-      return opts.map((o) => {
-        const isKey = o.trim() === ans;
+      return pairs.map(([letter, o]) => {
+        const isKey = o === ans;
         const fits = isKey ? 'yes' : (!other && i === 0 && /^ambig0/.test(mode) && !text.includes('already corrected once')) ? ((other = true), 'yes') : 'no';
-        return { option: o, fits };
+        return { option: letter, fits };
       });
     };
     return { checks: Array.from({ length: n }, (_, i) => ({ index: i, matches: true, supported: !(mode === 'drop0' && i === 0), explanation_supported: true, attribution_ok: true, distractors_ok: true, option_checks: optionChecks(blocks[i] || '', i), uncertain_terms: [], drop: false, fixed_question: mode === 'ambig0fix' && i === 0 && !text.includes('already corrected once') ? '[Mock] Which example did the lecturer specifically give?' : null, fixed_answer: mode === 'fix0' && i === 0 ? '[Mock] A corrected answer that matches the question.' : null, fixed_explanation: null, fixed_options: [] })) };

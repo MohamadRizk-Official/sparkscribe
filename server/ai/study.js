@@ -114,16 +114,36 @@ export const QUESTION = obj({
   accept: list(str(), 'short_answer only: other acceptable answers'),
   explanation: nullableStr('Shown after answering: the principle or reasoning that makes the answer right (and, when useful, why a tempting option is wrong). null only for a trivial question'),
   refs,
+  false_statement: nullableStr('true_false only: the same statement made FALSE by one meaningful change the recording clearly contradicts (a swapped position, a reversed cause, a changed detail); null for other types'),
 });
+
+// True or false: the model writes every statement true, plus a false version of it (false_statement), and the server
+// decides which one is asked. Asked to vary the answers itself, it made nearly all of them False. keyFor(item, i)
+// says "True" or "False" for each true/false item; items without a usable false version are left as written.
+export function pickTrueFalse(items, keyFor) {
+  return (items || []).map((it, i) => {
+    const { false_statement: alt, ...q } = it || {};
+    if (q.type !== 'true_false') return q;
+    const altText = typeof alt === 'string' ? alt.trim() : '';
+    if (!/^true$/i.test(String(q.answer)) || !altText || altText === String(q.question).trim()) return q;
+    return keyFor(q, i) === 'False' ? { ...q, question: altText, answer: 'False' } : { ...q, answer: 'True' };
+  });
+}
+// a balanced, shuffled run of answers: about half True, in random order
+export function shuffledKeys(n, rand = Math.random) {
+  const keys = Array.from({ length: n }, (_, i) => (i % 2 ? 'False' : 'True'));
+  for (let i = keys.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [keys[i], keys[j]] = [keys[j], keys[i]]; }
+  return keys;
+}
 export const QUIZ_SCHEMA = obj({
   concepts: list(CONCEPT, 'The knowledge map, in the order taught'),
   questions: list(QUESTION),
 });
 
 export const QUIZ_TYPES = {
-  mixed: 'Mostly multiple_choice, plus a few short_answer (answers of a few words). Use true_false only for a meaningful distinction or a common misconception the recording corrects — never to restate a sentence — and at most two.',
+  mixed: 'Mostly multiple_choice, plus a few short_answer (answers of a few words). Use true_false only for a meaningful distinction or a common misconception the recording corrects — never to restate a sentence — and at most two; write a true_false statement true, with its false version in false_statement.',
   multiple_choice: 'Only multiple_choice questions.',
-  true_false: 'Only true_false questions. Each must test a meaningful distinction or a misconception (e.g. swapping two schools\' positions, reversing a cause and effect), never a sentence restated; a false statement must be clearly contradicted by the recording, not merely absent from it. About half the statements are true: a true one states a point the recording makes, in different words.',
+  true_false: 'Only true_false questions. Each must test a meaningful distinction or a misconception (e.g. swapping two schools\' positions, reversing a cause and effect), never a sentence restated. Write each statement TRUE (answer "True": a point the recording makes, in different words) and give false_statement: the same statement made false by one meaningful change the recording clearly contradicts, never merely something it doesn\'t mention.',
 };
 
 export function quizInstructions({ count, settings, dominant }) {

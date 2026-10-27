@@ -13,7 +13,8 @@ const rejects = async (p, re, m) => { let err = null; try { await p; } catch (e)
 const MIG = '20261017300000_yearly_billing.sql';
 const file = (p) => readFileSync(new URL(`../../supabase/${p}`, import.meta.url), 'utf8');
 
-const P = await freshDb({ only: (n) => n !== MIG });
+// the database as it was just before this migration (later ones replace the same functions)
+const P = await freshDb({ only: (n) => n < MIG });
 const { db } = P;
 const iso = (d) => new Date(d).toISOString();
 const DAY = 86400e3, now = Date.now();
