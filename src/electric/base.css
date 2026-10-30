@@ -38,6 +38,23 @@ html[data-theme="light"] .bg .bg-glow-a { background: radial-gradient(closest-si
 html[data-theme="light"] .bg .bg-glow-b { background: radial-gradient(closest-side, rgba(124, 74, 232, .11), rgba(52, 97, 240, .04) 55%, transparent); }
 html[data-theme="light"] .bg .bg-noise { opacity: .025; }
 .e-circuit { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
+
+/* the study room (chrome.js mountBooks): big book outlines in the side margins, behind everything. One solid stroke
+   (never a hairline) and a fill a step lighter than the canvas, so the books read as shapes without pulling focus */
+.bg-books { position: absolute; z-index: 1; height: auto; pointer-events: none; overflow: visible;
+  --bk-line: #22395a; --bk-fill: #0a1726; --bk-page: #0c1b2c; --bk-ribbon: #1f5370; --bk-ac: #173f57; --bk-ac2: #2c2758; }
+.bg-books * { fill: none; stroke: var(--bk-line); stroke-width: 2.5px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.bg-books .bk { fill: var(--bk-fill); }
+.bg-books .pg { fill: var(--bk-page); }
+.bg-books .rb { stroke: var(--bk-ribbon); fill: var(--bk-ribbon); }
+.bg-books .ac { fill: var(--bk-ac); }
+.bg-books .ac2 { fill: var(--bk-ac2); }
+/* sized to the margin beside the ~1200px content column, pinned to the outer edges */
+.bg-books-l { left: 24px; bottom: 3vh; width: clamp(220px, calc(50vw - 640px), 380px); }
+.bg-books-r { right: 24px; top: 18vh; width: clamp(210px, calc(50vw - 650px), 360px); }
+html[data-theme="light"] .bg-books { --bk-line: #c3d0e3; --bk-fill: #f5f8fc; --bk-page: #ffffff; --bk-ribbon: #9fc2e6; --bk-ac: #d6e6f7; --bk-ac2: #e4ddf8; }
+/* only where the margins beside the content are wide enough to hold them; narrower, they'd sit under text and cards */
+@media (max-width: 1679px) { .bg-books { display: none; } }
 /* no mask and no filters: a full-viewport masked or filtered layer is repainted on every frame the current runs */
 .e-circuit .ec-trace { fill: none; stroke: rgba(170, 196, 235, .07); stroke-width: 1; }
 .e-circuit .ec-node { fill: var(--e-canvas); stroke: rgba(170, 196, 235, .14); stroke-width: 1; }

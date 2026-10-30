@@ -15,6 +15,35 @@ const TRACES = [
 ];
 const NODES = [[1100, 262], [1232, 388], [266, 780], [90, 900]];
 
+// The study room: large book outlines in the empty side margins, so the background is never bare (owner request
+// 2026-10-30). Left: a stack of three books with an open book and its ribbon on top. Right: a shelf of standing books,
+// one leaning, and a mug. Drawn once; solid strokes and fills only (base.css colours them for each theme).
+const BOOK = (x, y, w, h, extra = '') => `<rect class="bk" x="${x}" y="${y}" width="${w}" height="${h}" rx="9"/>${extra}`;
+const BOOKS_LEFT = `<svg class="bg-books bg-books-l" viewBox="0 0 420 640" aria-hidden="true" focusable="false">
+  ${BOOK(40, 520, 340, 64, '<path d="M72 520v64M348 520v64"/><rect class="ac" x="160" y="538" width="100" height="28" rx="5"/>')}
+  ${BOOK(70, 462, 290, 58, '<path d="M98 462v58M332 462v58"/><circle class="ac2" cx="215" cy="491" r="11"/>')}
+  ${BOOK(55, 410, 300, 52, '<path d="M83 410v52M327 410v52M170 430h70M178 444h54"/>')}
+  <path class="bk" d="M52 326v72c60-8 120-4 153 12 33-16 93-20 153-12v-72"/>
+  <path class="pg" d="M205 404c-30-16-85-20-143-12v-74c58-8 113-4 143 14z"/>
+  <path class="pg" d="M205 404c30-16 85-20 143-12v-74c-58-8-113-4-143 14z"/>
+  <path d="M205 332v72M82 338c40-6 80-4 108 8M82 354c40-6 80-4 108 8M82 370c34-5 64-4 84 3M328 338c-40-6-80-4-108 8M328 354c-40-6-80-4-108 8M328 370c-34-5-64-4-84 3"/>
+  <path class="rb" d="M211 404v40l7-8 7 8v-42"/>
+</svg>`;
+const BOOKS_RIGHT = `<svg class="bg-books bg-books-r" viewBox="0 0 400 640" aria-hidden="true" focusable="false">
+  ${BOOK(40, 300, 46, 260, '<path d="M40 330h46M40 530h46"/><rect x="51" y="384" width="24" height="60" rx="4"/>')}
+  ${BOOK(86, 260, 58, 300, '<path d="M86 292h58M86 528h58"/><circle class="ac2" cx="115" cy="352" r="12"/><path d="M103 392h24M106 406h18"/>')}
+  ${BOOK(144, 320, 40, 240, '<path d="M144 348h40M144 534h40"/>')}
+  ${BOOK(184, 280, 52, 280, '<path d="M184 310h52M184 530h52"/><rect class="ac" x="196" y="370" width="28" height="44" rx="4"/>')}
+  <g transform="translate(330 560) rotate(-12.5)">${BOOK(-44, -240, 44, 240, '<path d="M-44 -212h44M-44 -26h44"/>')}</g>
+  <rect class="bk" x="342" y="514" width="36" height="46" rx="7"/>
+  <path d="M378 524c15 0 15 24 0 24M352 502c-6-8 6-14 0-22M366 502c-6-8 6-14 0-22"/>
+  <rect class="bk" x="20" y="560" width="370" height="16" rx="4"/>
+</svg>`;
+function mountBooks(bg) {
+  if (bg.querySelector('.bg-books')) return;
+  bg.insertAdjacentHTML('beforeend', BOOKS_LEFT + BOOKS_RIGHT);
+}
+
 const NO_CIRCUIT = true;
 export function mountAmbient() {
   let bg = document.querySelector('body > .bg');
@@ -25,6 +54,7 @@ export function mountAmbient() {
     bg.innerHTML = '<div class="bg-glow bg-glow-a"></div><div class="bg-glow bg-glow-b"></div><div class="bg-noise"></div>';
     document.body.prepend(bg);
   }
+  mountBooks(bg);
   // the background is one solid colour now (edges.css): the circuit lines and their moving current are not drawn
   if (NO_CIRCUIT || bg.querySelector('.e-circuit')) return;
   const svg = document.createElementNS(SVG_NS, 'svg');
