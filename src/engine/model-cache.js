@@ -12,7 +12,18 @@ const keyOf = (k) => (typeof k === 'string' ? k : k.url);
 // Cache Storage ignores URL fragments when matching, so parts are told apart by a query parameter
 const partKey = (key, i) => `${key}${key.includes('?') ? '&' : '?'}sparkscribe-part=${i}`;
 
-export function chunkedCache(cacheName = 'transformers-cache', { partBytes = PART_BYTES } = {}) {
+// A browser whose Cache Storage is broken (a damaged profile, a full disk: caches.open throws "Unexpected internal
+// error") still works: a failed lookup counts as not cached and a failed store is skipped, so models are downloaded
+// each time instead of the whole transcription failing.
+export function chunkedCache(cacheName = 'transformers-cache', opts = {}) {
+  const inner = rawChunkedCache(cacheName, opts);
+  return {
+    async match(request) { try { return await inner.match(request); } catch { return undefined; } },
+    async put(request, response) { try { await inner.put(request, response); } catch { /* not kept: downloaded again next time */ } },
+  };
+}
+
+function rawChunkedCache(cacheName, { partBytes = PART_BYTES } = {}) {
   const open = () => caches.open(cacheName);
   return {
     async match(request) {
