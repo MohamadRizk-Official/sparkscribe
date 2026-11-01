@@ -12,7 +12,7 @@ import { mountMascot } from './mascot/mascot.js';
 import { mascotSignal, mascotTravel } from './mascot/bus.js';
 import { confirmDialog, promptDialog } from './library/dialogs.js';
 import { putAudio, rekeyAudio, deleteAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
-import { envelopeFromSamples, paragraphStart, paragraphIndexAt, splitSentences } from './lib/breath.js';
+import { envelopeFromSamples, paragraphIndexAt, splitSentences } from './lib/breath.js';
 import { createSentenceTiming } from './lib/sentence-timing.js';
 import { mountDashboard } from './home/dashboard.js';
 import { attachSpeedMenu } from './electric/speed-menu.js';
@@ -68,6 +68,8 @@ function markCached(key) { try { const s = cachedModels(); s.add(key); localStor
 const STAGE_SPAN = { decode: [0, 6], analyze: [6, 8], load: [8, 18], speakers: [18, 32], run: [32, 92], review: [92, 99], done: [100, 100] };
 // one-time model downloads shown to the user (MB, rounded): Whisper + speaker models
 const DOWNLOAD_MB = { fast: { webgpu: 200, wasm: 110 }, best: { webgpu: 600, wasm: 280 } };
+// the sentence-timing model (align-worker.js), downloaded after the first transcript, in the background
+const TIMING_MB = 190;
 const QUALITY_LABEL = { good: 'Good', fair: 'Fair', difficult: 'Difficult' };
 const MODEL_LABEL = { tiny: 'Whisper tiny', base: 'Whisper base', small: 'Whisper small', turbo: 'Whisper large-v3 turbo' };
 const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
@@ -128,7 +130,7 @@ function updateModeNote() {
   const parts = [];
   if (custom) parts.push('Using the model chosen in Advanced settings.');
   else if (mode === 'best' && dev !== 'webgpu') parts.push('Without a GPU, Best Accuracy uses a lighter model so it finishes in reasonable time.');
-  if (!custom && !cachedModels().has(modelKey())) parts.push(`Your first recording sets up the speech model once (about ${DOWNLOAD_MB[mode][dev === 'webgpu' ? 'webgpu' : 'wasm']} MB). After that, recordings start right away.`);
+  if (!custom && !cachedModels().has(modelKey())) parts.push(`Your first recording sets up the speech model once (about ${DOWNLOAD_MB[mode][dev === 'webgpu' ? 'webgpu' : 'wasm']} MB, then about ${TIMING_MB} MB more for jumping to a sentence). After that, recordings start right away.`);
   els.modeNote.textContent = parts.join(' ');
 }
 [els.modelSelect, els.speakersSelect].forEach((s) => s.addEventListener('change', () => { savePrefs(); updateSettingsUI(); }));
@@ -696,6 +698,7 @@ function renderAll() {
   renderTranscript();
   drawTimeline();
   updatePlayhead();
+  timing.prepare(); // the paragraphs on screen are word-timed before anyone clicks one
 }
 
 function pruneSpeakers() {
@@ -926,16 +929,21 @@ els.transcript.addEventListener('click', (e) => {
 const timing = createSentenceTiming({ getSegs: () => state?.lines || [], getEnv: () => state?.env || null, getBlob: () => (state?.lines ? currentFile : null) });
 timing.observe(els.transcript);
 
-// Clicking a paragraph or a reference starts in the breath before its words (lib/breath.js). The clicked paragraph
-// stays highlighted through that short lead-in.
+// Clicking a paragraph or a reference starts just before its first word (lib/sentence-timing.js); a paragraph not
+// word-timed yet is timed first (about a second at most), and the latest click wins. The clicked paragraph stays
+// highlighted through the short lead-in.
 let pinned = null; // { idx, until }
-function playParagraph(i, k = 0, sentenceEl = null) {
+let clickSeq = 0;
+async function playParagraph(i, k = 0, sentenceEl = null) {
   if (!state?.lines?.[i]) return;
+  const mine = ++clickSeq;
+  if (sentenceEl) { sentenceEl.classList.remove('snt-on'); void sentenceEl.offsetWidth; sentenceEl.classList.add('snt-on'); setTimeout(() => sentenceEl.classList.remove('snt-on'), 1900); }
   timing.activate();
-  const t = k > 0 ? timing.startOf(i, k, lineText(i)) : paragraphStart(state.lines, i, state.env);
+  if (!timing.isTimed(i)) await timing.timeNow(i);
+  if (mine !== clickSeq || !state?.lines?.[i]) return;
+  const t = timing.startOf(i, k, lineText(i));
   pinned = { idx: i, from: t - 0.1, until: Math.max(state.lines[i].start, t) + 1 };
   seek(t, true, true);
-  if (sentenceEl) { sentenceEl.classList.remove('snt-on'); void sentenceEl.offsetWidth; sentenceEl.classList.add('snt-on'); setTimeout(() => sentenceEl.classList.remove('snt-on'), 1900); }
 }
 
 function openReassignMenu(anchor, g) {

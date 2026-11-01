@@ -13,7 +13,7 @@ import { toggleDetails } from '../lib/details-pop.js';
 import { relatedMaterialHtml, bindRelatedMaterial } from '../lib/related-material.js';
 import { cleanText } from '../lib/clean.js';
 import { getAudio, putAudio, putEnvelope, keepAudioPref } from '../lib/audio-store.js';
-import { envelopeFromSamples, paragraphStart, paragraphIndexAt, splitSentences } from '../lib/breath.js';
+import { envelopeFromSamples, paragraphIndexAt, splitSentences } from '../lib/breath.js';
 import { createSentenceTiming } from '../lib/sentence-timing.js';
 import { mountInsights } from '../insights/insights.js';
 import { mountTransport } from '../electric/transport.js';
@@ -174,6 +174,7 @@ function initials(name) {
     audioSource = source;
     audioBlob = blob;
     env = knownEnv;
+    timing.prepare(); // the paragraphs on screen are word-timed before anyone clicks one
     // audio kept before envelopes existed: make it once, when the page is idle, and keep it with the audio
     if (!env) {
       const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
@@ -238,16 +239,21 @@ function initials(name) {
     const sn = e.target.closest('.snt');
     playParagraph(Number(p.dataset.i), sn ? Number(sn.dataset.k) : 0, sn);
   });
-  // a paragraph (k = 0) or one of its sentences: starts in the breath just before the words
-  function playParagraph(i, k = 0, sentenceEl = null) {
+  // a paragraph (k = 0) or one of its sentences: starts just before its first word (lib/sentence-timing.js). A paragraph
+  // not word-timed yet is timed first (about a second at most); the latest click wins if several come in meanwhile.
+  let clickSeq = 0;
+  async function playParagraph(i, k = 0, sentenceEl = null) {
     const s = segments[i];
     if (!s) return;
+    const mine = ++clickSeq;
+    if (sentenceEl) { sentenceEl.classList.remove('snt-on'); void sentenceEl.offsetWidth; sentenceEl.classList.add('snt-on'); setTimeout(() => sentenceEl.classList.remove('snt-on'), 1900); }
     timing.activate();
-    const t = k > 0 ? timing.startOf(i, k, text(s)) : paragraphStart(segments, i, env);
+    if (!timing.isTimed(i)) await timing.timeNow(i);
+    if (mine !== clickSeq) return;
+    const t = timing.startOf(i, k, text(s));
     pinned = { id: s.id, from: t - 0.1, until: Math.max(s.start, t) + 1 };
     player.currentTime = t;
     player.play().catch(() => {});
-    if (sentenceEl) { sentenceEl.classList.remove('snt-on'); void sentenceEl.offsetWidth; sentenceEl.classList.add('snt-on'); setTimeout(() => sentenceEl.classList.remove('snt-on'), 1900); }
   }
   player.addEventListener('play', () => timing.activate());
   timing.observe($('transcript'));
@@ -277,7 +283,7 @@ function initials(name) {
     if (player.getAttribute('src')) {
       const i = ref != null && segments[ref]?.id === Number(ref) ? Number(ref) : paragraphIndexAt(segments, seconds);
       if (!instant && i >= 0) { playParagraph(i); return; }
-      player.currentTime = i >= 0 ? paragraphStart(segments, i, env) : seconds;
+      player.currentTime = i >= 0 ? timing.startOf(i, 0, text(segments[i])) : seconds;
       if (!instant) { player.play().catch(() => {}); return; }
     }
     ui.showTab('transcript');

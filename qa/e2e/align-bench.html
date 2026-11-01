@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Aligner browser timing</title>
+</head>
+<body>
+<!-- QA harness only (never built): window.alignBench({ device, dtype, seconds }) loads the word-timing model
+     (Xenova/wav2vec2-base-960h) the way src/align-worker.js does and times one paragraph-length clip of the private
+     local test recording, three times (the first includes warm-up). Results go to window.__align and the page. -->
+<h1>Aligner in the browser</h1>
+<pre id="out">ready</pre>
+<script type="module">
+import { AutoProcessor, AutoModelForCTC } from '@huggingface/transformers';
+const out = document.getElementById('out');
+window.__align = [];
+async function clip(url, from, seconds) {
+  const b = new DataView(await (await fetch(url)).arrayBuffer());
+  const a = new Float32Array(seconds * 16000);
+  for (let i = 0; i < a.length; i++) a[i] = b.getInt16(44 + 2 * (from * 16000 + i), true) / 32768;
+  return a;
+}
+window.alignBench = async ({ device = 'wasm', dtype = 'q8', seconds = 20, audio = '/accuracy/testset/private/diary_ceo.wav' } = {}) => {
+  const r = { device, dtype, seconds };
+  try {
+    const t0 = performance.now();
+    const [processor, model] = await Promise.all([AutoProcessor.from_pretrained('Xenova/wav2vec2-base-960h'), AutoModelForCTC.from_pretrained('Xenova/wav2vec2-base-960h', { device, dtype })]);
+    r.loadS = +((performance.now() - t0) / 1000).toFixed(1);
+    const a = await clip(audio, 60, seconds);
+    r.runS = [];
+    for (let k = 0; k < 3; k++) { const t = performance.now(); const { logits } = await model(await processor(a)); r.runS.push(+((performance.now() - t) / 1000).toFixed(2)); r.frames = logits.dims[1]; }
+  } catch (err) { r.error = String(err?.message || err).slice(0, 300); }
+  window.__align.push(r);
+  out.textContent += '\n' + JSON.stringify(r);
+  return r;
+};
+</script>
+</body>
+</html>
