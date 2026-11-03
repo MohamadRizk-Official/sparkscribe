@@ -8,14 +8,14 @@
 import * as ort from 'onnxruntime-web/webgpu';
 import { nemotronDiarize } from './engine/nemotron.js';
 import { cachedModel } from './engine/fetch-model.js';
-import { NEMOTRON_BASE, NEMOTRON_FILES, NEMOTRON_F16_BASE, nemotronGpuSteps } from './engine/nemotron-files.js';
+import { NEMOTRON_BASE, NEMOTRON_FILES, NEMOTRON_F16_SOURCES, nemotronGpuSteps } from './engine/nemotron-files.js';
 
 async function load(dev, f16, onProgress) {
   const get = ([name, sha], base = NEMOTRON_BASE) => cachedModel(base + name, sha, { onProgress });
   const f32 = (buf) => new Float32Array(buf);
   const [embedBuf, mel, silence] = await Promise.all([get(NEMOTRON_FILES.embed), get(NEMOTRON_FILES.mel).then(f32), get(NEMOTRON_FILES.silence).then(f32)]);
   if (dev === 'webgpu') {
-    for (const [base, file, precision] of nemotronGpuSteps(f16, NEMOTRON_F16_BASE, self.navigator?.deviceMemory || 8)) {
+    for (const [base, file, precision] of nemotronGpuSteps(f16, NEMOTRON_F16_SOURCES, self.navigator?.deviceMemory || 8)) {
       let stepBuf;
       try { stepBuf = await get(file, base); } catch (err) { console.warn(`Second speaker model (${precision}) could not be downloaded:`, err); continue; }
       try {

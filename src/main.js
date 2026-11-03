@@ -132,7 +132,7 @@ function updateModeNote() {
   const custom = els.modelSelect.value;
   const parts = [];
   const sp = els.speakersSelect.value;
-  const check = mode === 'best' && sp !== 'off' && sp !== '1' && !(+sp > 4); // the speaker double-check (worker.js doubleCheck)
+  const check = mode === 'best' && sp !== 'off' && sp !== '1' && !(+sp > 4) && (navigator.deviceMemory ?? 8) >= 4; // the speaker double-check (worker.js doubleCheck)
   // measured (PROTOCOL.md addendum 8, development recordings): on a GPU about a sixth more time in all; on the processor
   // about a fifth (the second model, then word timing of the lines where the speaker changes)
   const lighter = !custom && mode === 'best' && dev !== 'webgpu';

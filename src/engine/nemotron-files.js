@@ -16,20 +16,35 @@ export const NEMOTRON_FILES = {
   mel: ['mel_filters.bin', 'bce5ec5f194a5913f6508cee5a85512e7bad2352db8fc28f5c6ff75af8b09137'],
   silence: ['silence_embeds.bin', 'd4417b3c0eabdf7c47032fac2b5b5a7ee83d819a6ddda8fd8eaf74e2b5cc4ac7'],
 };
-export const NEMOTRON_F16_BASE = import.meta.env?.VITE_NEMOTRON_F16_BASE ?? 'https://w5aulmrlwl9althj.public.blob.vercel-storage.com/nemotron-3-diarization/fp16-ae823473/';
-export const NEMOTRON_F16 = [import.meta.env?.VITE_NEMOTRON_F16_BASE ? 'step_fp16.onnx' : 'step_fp16-FYjtTpNzIhrZr8m9n9MUhMaRCstm2N.onnx', 'ae823473c08de435a19b29a48c6dd0dde167f9130eee107e7fa83fd2fe219d04'];
+// Half-precision copies of the step, tried in order (each checked by SHA-256): SparkScribe's Hugging Face repository
+// (no download allowance; until its files are uploaded the request simply fails), then SparkScribe's Vercel Blob copy
+// (free up to a monthly allowance on the current plan). VITE_NEMOTRON_F16_BASE replaces both (local tests).
+const F16_SHA = 'ae823473c08de435a19b29a48c6dd0dde167f9130eee107e7fa83fd2fe219d04';
+export const NEMOTRON_F16_SOURCES = import.meta.env?.VITE_NEMOTRON_F16_BASE
+  ? [[import.meta.env.VITE_NEMOTRON_F16_BASE, ['step_fp16.onnx', F16_SHA]]]
+  : [
+      ['https://huggingface.co/Moerizz/nemotron-3-diarization-step-fp16-onnx/resolve/main/', ['step_fp16.onnx', F16_SHA]],
+      ['https://w5aulmrlwl9althj.public.blob.vercel-storage.com/nemotron-3-diarization/fp16-ae823473/', ['step_fp16-FYjtTpNzIhrZr8m9n9MUhMaRCstm2N.onnx', F16_SHA]],
+    ];
+export const NEMOTRON_F16_BASE = NEMOTRON_F16_SOURCES[0][0]; // (set: a half-precision copy is offered)
+
+// Room for the second model at all: the browser reports memory rounded down to 0.25, 0.5, 1, 2, 4 or 8 GB (unknown: assume
+// enough). Under 4 GB the first speaker model works alone, as before.
+export const enoughMemory = (deviceMemory) => (deviceMemory ?? 8) >= 4;
 
 // GPU steps to try, best first: [base, [file, sha256], precision]
-export function nemotronGpuSteps(f16, f16Base = NEMOTRON_F16_BASE, memoryGB = 8) {
+export function nemotronGpuSteps(f16, sources = NEMOTRON_F16_SOURCES, memoryGB = 8) {
   const steps = [];
-  if (f16 && f16Base && memoryGB >= 4) steps.push([f16Base, NEMOTRON_F16, 'fp16']);
+  if (f16 && memoryGB >= 4) for (const [base, file] of sources) steps.push([base, file, 'fp16']);
   if (memoryGB >= 8) steps.push([NEMOTRON_BASE, NEMOTRON_FILES.stepGpu, 'fp32']);
   return steps;
 }
 
-// the files a device will use first: [url, sha256] (downloaded ahead, during "Get ready")
+// what to download ahead, during "Get ready": [[url, sha256] | [[url, sha256], …] (alternatives, first that works)]
+// (the full-precision step is only fetched ahead when it is the GPU's first choice)
 export function nemotronFilesFor(dev, f16, memoryGB = 8) {
   const at = ([name, sha], base = NEMOTRON_BASE) => [base + name, sha];
-  const gpu = dev === 'webgpu' ? nemotronGpuSteps(f16, NEMOTRON_F16_BASE, memoryGB)[0] : null;
-  return [at(NEMOTRON_FILES.embed), at(NEMOTRON_FILES.mel), at(NEMOTRON_FILES.silence), gpu ? at(gpu[1], gpu[0]) : at(NEMOTRON_FILES.stepCpu)];
+  const steps = dev === 'webgpu' ? nemotronGpuSteps(f16, NEMOTRON_F16_SOURCES, memoryGB) : [];
+  const ahead = steps.some((x) => x[2] === 'fp16') ? steps.filter((x) => x[2] === 'fp16') : steps.slice(0, 1);
+  return [at(NEMOTRON_FILES.embed), at(NEMOTRON_FILES.mel), at(NEMOTRON_FILES.silence), ahead.length ? ahead.map(([base, file]) => at(file, base)) : at(NEMOTRON_FILES.stepCpu)];
 }

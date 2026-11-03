@@ -36,7 +36,7 @@ import { SR, UNKNOWN, configureDiarizer, diarize, embedClips, frameEnergy, energ
 import { combineSpeakers } from './engine/combine.js';
 import { voiceSamples, centroidsOf, mergeSameVoices, useCombined, peopleIn, SAME_VOICE, MAX_PEOPLE } from './engine/voice-guard.js';
 import { prefetchModel } from './engine/fetch-model.js';
-import { NEMOTRON_F16_BASE, nemotronFilesFor } from './engine/nemotron-files.js';
+import { NEMOTRON_F16_BASE, nemotronFilesFor, enoughMemory } from './engine/nemotron-files.js';
 import { labelMap, planLines, splitLine, wordsOf } from './engine/speaker-words.js';
 import { loadTiming, timeClip } from './engine/word-timing.js';
 
@@ -224,8 +224,10 @@ async function loadModels(modelKey, diarize, progress_callback, doubleCheck = fa
   // the second speaker model is only downloaded here (first time, so it is part of "Get ready"); it is loaded and run in
   // its own worker (speaker-check-worker.js)
   if (diarize && doubleCheck) {
-    for (const [url, sha] of nemotronFilesFor(dev, hasF16, self.navigator?.deviceMemory || 8)) {
-      try { await prefetchModel(url, sha, { onProgress: progress_callback }); } catch (err) { console.warn('Second speaker model could not be downloaded now:', err); }
+    for (const entry of nemotronFilesFor(dev, hasF16, self.navigator?.deviceMemory || 8)) {
+      for (const [url, sha] of Array.isArray(entry[0]) ? entry : [entry]) { // alternatives: the first that downloads
+        try { await prefetchModel(url, sha, { onProgress: progress_callback }); break; } catch (err) { console.warn('Second speaker model could not be downloaded now:', err); }
+      }
     }
   }
   return dev;
@@ -634,8 +636,8 @@ self.addEventListener('message', async (e) => {
     const modelKey = resolveModel(mode, dev0, modelOverride);
     post({ type: 'stage', stage: 'load' });
     // Best Accuracy double-checks who spoke when with the second model (SPEAKER_DOUBLE_CHECK); Fast, one person, five
-    // or more chosen, or no speaker labels skip it (and its download)
-    const doubleCheck = SPEAKER_DOUBLE_CHECK && speakerCheck && wantDiarize && mode === 'best' && numSpeakers !== 1 && numSpeakers <= MAX_PEOPLE;
+    // or more chosen, no speaker labels, or a computer with under 4 GB of memory skip it (and its download)
+    const doubleCheck = SPEAKER_DOUBLE_CHECK && speakerCheck && wantDiarize && mode === 'best' && numSpeakers !== 1 && numSpeakers <= MAX_PEOPLE && enoughMemory(self.navigator?.deviceMemory);
     const dev = await loadModels(modelKey, wantDiarize, (p) => post({ type: 'progress', ...p }), doubleCheck);
     post({ type: 'device', device: dev, reason: gpuReason, f16Speakers: hasF16 && !!NEMOTRON_F16_BASE });
 
