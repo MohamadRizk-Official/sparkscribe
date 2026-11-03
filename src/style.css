@@ -1085,6 +1085,9 @@ button.grp-time:hover { color: var(--cyan); background: var(--k-22d3ee-08); }
 .seg:hover { background: var(--k-8ca0ff-06); color: var(--text); }
 .seg.active { background: color-mix(in srgb, var(--c) 11%, transparent); color: var(--k-ffffff); box-shadow: inset 2px 0 0 var(--c); }
 .seg .ts { display: none; }
+/* a speaker change inside a sentence (lib/continuation.js): "…" where one person stops and the other carries on */
+.seg.cut::after { content: '\00a0…'; color: var(--muted); }
+.seg.cont::before { content: '…\00a0'; color: var(--muted); }
 .grp[dir="rtl"] .seg { text-align: right; }
 mark { background: var(--k-fbbf24-25); color: var(--k-ffffff); border-radius: 3px; padding: 0 1px; box-shadow: 0 0 0 1px var(--k-fbbf24-40); }
 mark.cur { background: var(--k-fbbf24-60); }

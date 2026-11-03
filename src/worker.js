@@ -14,11 +14,15 @@
 //      own length, and a guard that stops runaway repetition; output is read only up to <|endoftext|>
 //   7. Best Accuracy: turns Whisper itself was unsure about (avg log-prob, repetition, a stopped loop)
 //      are retried; clips Whisper judges to be non-speech produce no text
+//   8. Best Accuracy: a second speaker model, combined with the first and checked, decides who said each word of
+//      the finished lines (lines split where it hears a speaker change); the clips and the text stay as in 4-7
 import {
   pipeline,
   AutoProcessor,
   AutoModel,
   AutoModelForAudioFrameClassification,
+  AutoModelForCTC,
+  AutoTokenizer,
   LogitsProcessorList,
   Tensor,
   env,
@@ -28,7 +32,13 @@ import { analyzeAudio, preprocess } from './engine/preprocess.js';
 import { mergeOverlap } from './engine/merge.js';
 import { TokenLogprobRecorder, WhisperControl, compressionRatio } from './engine/decoding.js';
 import { tailRepetition, cutTextLoop, wordKeys, tidy, tidyCut } from './engine/loops.js';
-import { SR, UNKNOWN, configureDiarizer, diarize, frameEnergy, energyRuns, subtract } from './engine/diarize.js';
+import { SR, UNKNOWN, configureDiarizer, diarize, embedClips, frameEnergy, energyRuns, subtract } from './engine/diarize.js';
+import { combineSpeakers } from './engine/combine.js';
+import { voiceSamples, centroidsOf, mergeSameVoices, useCombined, peopleIn, SAME_VOICE, MAX_PEOPLE } from './engine/voice-guard.js';
+import { prefetchModel } from './engine/fetch-model.js';
+import { NEMOTRON_F16_BASE, nemotronFilesFor } from './engine/nemotron-files.js';
+import { labelMap, planLines, splitLine, wordsOf } from './engine/speaker-words.js';
+import { loadTiming, timeClip } from './engine/word-timing.js';
 
 const ASR_MODELS = {
   tiny: 'onnx-community/whisper-tiny',
@@ -42,6 +52,15 @@ if (typeof caches !== 'undefined') { env.useCustomCache = true; env.customCache 
 
 const SEG_MODEL = 'onnx-community/pyannote-segmentation-3.0';
 const EMB_MODEL = 'onnx-community/wespeaker-voxceleb-resnet34-LM';
+
+// Second speaker model (engine/nemotron.js), combined with the first (engine/combine.js): measured to give far fewer
+// words to the wrong person, above all around speaker changes (accuracy/research/speaker-2026-10-30). It runs in a
+// worker of its own (speaker-check-worker.js), ended after each recording so its memory is freed; files and which runs
+// where: engine/nemotron-files.js. If it can't load or run, the first model's result is used as before.
+// Best Accuracy only, with the same-voice check after it (engine/voice-guard.js): passed its pre-registered test on fresh
+// one- to three-person recordings (PROTOCOL.md addendum 6). Rollback without a code change: build with
+// VITE_SPEAKER_CHECK=off (or open a page with ?speakers=v1 to compare in one browser): the first model alone, as before.
+export const SPEAKER_DOUBLE_CHECK = import.meta.env?.VITE_SPEAKER_CHECK !== 'off';
 
 // Turn building
 const MIN_TURN_S = 0.3; // ignore blips shorter than this
@@ -157,7 +176,7 @@ async function loadOnBestDevice(load, gpuOpts, cpuOpts) {
   return [await load(cpuOpts), 'wasm'];
 }
 
-async function loadModels(modelKey, diarize, progress_callback) {
+async function loadModels(modelKey, diarize, progress_callback, doubleCheck = false) {
   let dev = await detectDevice();
   const key = `${modelKey}:${dev}:${turboVariant}`;
   if (asrKey !== key) {
@@ -202,7 +221,33 @@ async function loadModels(modelKey, diarize, progress_callback) {
       { device: 'wasm', dtype: 'q8' },
     );
   }
+  // the second speaker model is only downloaded here (first time, so it is part of "Get ready"); it is loaded and run in
+  // its own worker (speaker-check-worker.js)
+  if (diarize && doubleCheck) {
+    for (const [url, sha] of nemotronFilesFor(dev, hasF16, self.navigator?.deviceMemory || 8)) {
+      try { await prefetchModel(url, sha, { onProgress: progress_callback }); } catch (err) { console.warn('Second speaker model could not be downloaded now:', err); }
+    }
+  }
   return dev;
+}
+
+// The short-lived workers (speaker-check-worker.js, word-timing-worker.js): started for one job, ended after it, so all
+// they loaded is freed (in this worker the runtime keeps freed GPU buffers pooled). Their download and progress messages
+// go to the page; a failure or a crash resolves to null and the caller goes on without them. (Each caller writes
+// new Worker(new URL(...)) out in full: that is how the build finds and bundles a worker.)
+function inOwnWorker(start, message, transfer = []) {
+  return new Promise((resolve) => {
+    let w;
+    try { w = start(); } catch (err) { console.warn('Worker could not start:', err); resolve(null); return; }
+    const end = (result) => { w.terminate(); resolve(result); };
+    w.onmessage = ({ data }) => {
+      if (data.type === 'progress' || data.type === 'run-progress') post(data);
+      else if (data.type === 'failed') { console.warn('Worker failed:', data.message); end(null); }
+      else end(data);
+    };
+    w.onerror = (e) => { console.warn('Worker crashed:', e.message || e); end(null); };
+    w.postMessage(message, transfer);
+  });
 }
 
 // ---------- 4. turns ----------
@@ -512,10 +557,54 @@ function mergeSplitPieces(turns, results) {
   return removed;
 }
 
+// ---------- 8. who said each word ----------
+// Lines are production's clips with Whisper's text; the checked speaker result relabels each line, and a line where it
+// hears a speaker change is split at its words' times (engine/speaker-words.js). Only those lines are word-timed, with
+// the sentence-click timing model (align-worker.js: same file, same browser cache, so no extra download once it has
+// been used; engine/word-timing.js: on a GPU in a worker of its own, on the processor here). If timing is
+// unavailable, those lines keep one label: whoever the result hears most in them. The text is never changed.
+const TIMING_PAD_S = 0.2;
+async function assignSpeakers(audio, lines, first, final, dev) {
+  const t0 = performance.now();
+  const plan = planLines(lines, final, { map: labelMap(first, final, UNKNOWN), unknown: UNKNOWN });
+  const mixed = plan.map((p, i) => (p.runs.length > 1 ? i : -1)).filter((i) => i >= 0);
+  const times = new Map();
+  let timing = null;
+  if (mixed.length) {
+    status('Matching words to speakers…');
+    const clips = mixed.map((i) => {
+      const a = Math.max(0, Math.floor((lines[i].start - TIMING_PAD_S) * SR)), b = Math.min(audio.length, Math.ceil((lines[i].end + TIMING_PAD_S) * SR));
+      return { audio: audio.slice(a, b), offset: a / SR, words: wordsOf(lines[i].text) };
+    });
+    if (dev === 'webgpu') timing = await inOwnWorker(() => new Worker(new URL('./word-timing-worker.js', import.meta.url), { type: 'module' }), { type: 'time', clips, dev }, clips.map((c) => c.audio.buffer));
+    else {
+      try {
+        const m = await loadTiming(dev, () => {});
+        const t = [];
+        for (const [k, clip] of clips.entries()) {
+          try { t.push(await timeClip(m, clip)); } catch (err) { console.warn('Word timing failed for a line:', err); t.push(null); }
+          post({ type: 'run-progress', done: k + 1, total: clips.length });
+        }
+        try { await m.model.dispose(); } catch { /* freed with the worker anyway */ }
+        timing = { times: t, device: m.device };
+      } catch (err) { console.warn('Word timing unavailable, lines keep one speaker each:', err); }
+    }
+    if (timing?.times) mixed.forEach((i, k) => { if (timing.times[k]) times.set(i, timing.times[k]); });
+  }
+  const out = [];
+  let split = 0, relabelled = 0;
+  lines.forEach((l, i) => {
+    const p = plan[i];
+    const pieces = times.has(i) ? splitLine(l, times.get(i), p.runs) : null;
+    if (pieces && pieces.length > 1) split++;
+    for (const q of pieces || [{ ...l, speaker: p.speaker }]) { if (q.speaker !== l.speaker) relabelled++; out.push(q); }
+  });
+  return { lines: out, stats: { linesWithChange: mixed.length, linesWordTimed: times.size, linesSplit: split, piecesRelabelled: relabelled, timingDevice: timing?.device ?? null, wordSeconds: +((performance.now() - t0) / 1000).toFixed(1) } };
+}
 self.addEventListener('message', async (e) => {
   const { type } = e.data;
   if (type === 'detect') {
-    post({ type: 'device', device: await detectDevice(e.data.forceCPU), reason: gpuReason });
+    post({ type: 'device', device: await detectDevice(e.data.forceCPU), reason: gpuReason, f16Speakers: hasF16 && !!NEMOTRON_F16_BASE });
     return;
   }
   if (type !== 'run') return;
@@ -530,6 +619,7 @@ self.addEventListener('message', async (e) => {
     vocabulary = [],
     preprocess: doPreprocess = true,
     secondPass,
+    speakerCheck = true, // false: the first speaker model alone (main.js, ?speakers=v1)
   } = e.data;
   debugVoices = !!e.data.debug;
   if (e.data.turboVariant) turboVariant = e.data.turboVariant;
@@ -543,16 +633,46 @@ self.addEventListener('message', async (e) => {
     const dev0 = await detectDevice();
     const modelKey = resolveModel(mode, dev0, modelOverride);
     post({ type: 'stage', stage: 'load' });
-    const dev = await loadModels(modelKey, wantDiarize, (p) => post({ type: 'progress', ...p }));
-    post({ type: 'device', device: dev, reason: gpuReason });
+    // Best Accuracy double-checks who spoke when with the second model (SPEAKER_DOUBLE_CHECK); Fast, one person, five
+    // or more chosen, or no speaker labels skip it (and its download)
+    const doubleCheck = SPEAKER_DOUBLE_CHECK && speakerCheck && wantDiarize && mode === 'best' && numSpeakers !== 1 && numSpeakers <= MAX_PEOPLE;
+    const dev = await loadModels(modelKey, wantDiarize, (p) => post({ type: 'progress', ...p }), doubleCheck);
+    post({ type: 'device', device: dev, reason: gpuReason, f16Speakers: hasF16 && !!NEMOTRON_F16_BASE });
 
     lap0.t = performance.now();
     configureDiarizer({ segModel, segProcessor, segDevice, embModel, embProcessor, embDevice, Tensor, debugVoices, status, lap, post });
     let segments = null;
+    let finalSpeakers = null; // the checked speaker result: decides who said each word once the text is there
     let diarStats = null;
     post({ type: 'stage', stage: 'speakers' });
     if (wantDiarize) ({ segments, stats: diarStats } = await diarize(audio, numSpeakers));
     else status('Detecting speech…');
+    // the second speaker model, combined with the first; any failure keeps the first model's result
+    if (doubleCheck && segments) {
+      status('Double-checking who spoke when…');
+      const t = performance.now();
+      const checked = await inOwnWorker(() => new Worker(new URL('./speaker-check-worker.js', import.meta.url), { type: 'module' }), { type: 'run', audio: audio.slice(), dev, f16: hasF16, wasmPaths: env.backends?.onnx?.wasm?.wasmPaths });
+      if (checked?.segments) {
+        try {
+          const second = checked.segments;
+          // combined, then people whose voices are the same merged (the second model can split one voice in two,
+          // engine/voice-guard.js); with more than four people left the first model's result is kept. The audio is
+          // still cut into clips at the first model's turns (below), as before: the finer result would make many short
+          // clips, and Whisper writes worse text on those (PROTOCOL.md addendum 7); it labels the lines afterwards.
+          const combined = combineSpeakers(second, segments, audio.length / SR, { maxSpeakers: numSpeakers || 0, unknown: UNKNOWN });
+          const samples = voiceSamples(combined, { unknown: UNKNOWN });
+          const guarded = mergeSameVoices(combined, centroidsOf(samples, await embedClips(audio, [...samples.values()].flat())), SAME_VOICE);
+          const use = useCombined(guarded.segments, numSpeakers || 0, UNKNOWN);
+          if (debugVoices) post({ type: 'debug', speakers: { first: segments, second, combined, guarded: guarded.segments, merged: guarded.merged, used: use } });
+          if (use) finalSpeakers = guarded.segments;
+          diarStats = { ...diarStats, combined: { device: checked.device, precision: checked.precision, used: use, people: peopleIn(guarded.segments, UNKNOWN), sameVoice: guarded.merged.length, seconds: +((performance.now() - t) / 1000).toFixed(1) } };
+          lap(`second speaker model (${checked.device})`);
+        } catch (err) {
+          console.warn('Combining the speaker results failed, using the first alone:', err);
+          diarStats = { ...diarStats, combined: { failed: true } };
+        }
+      } else diarStats = { ...diarStats, combined: { failed: true } };
+    }
 
     const turns = buildTurns(audio, segments);
     if (!turns.length) {
@@ -606,6 +726,8 @@ self.addEventListener('message', async (e) => {
         uncertain: r.avgLogprob < LOGPROB_THRESHOLD || !!r.loop,
       });
     });
+    const speakerWords = finalSpeakers ? await assignSpeakers(audio, lines, segments, finalSpeakers, dev) : null;
+    if (speakerWords) { lines.splice(0, lines.length, ...speakerWords.lines); diarStats = { ...diarStats, combined: { ...diarStats.combined, ...speakerWords.stats } }; lap('speakers per word'); }
     post({
       type: 'complete',
       lines,

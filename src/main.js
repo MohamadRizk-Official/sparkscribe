@@ -13,6 +13,7 @@ import { mascotSignal, mascotTravel } from './mascot/bus.js';
 import { confirmDialog, promptDialog } from './library/dialogs.js';
 import { putAudio, rekeyAudio, deleteAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
 import { envelopeFromSamples, paragraphIndexAt, splitSentences } from './lib/breath.js';
+import { continuationMarks } from './lib/continuation.js';
 import { createSentenceTiming } from './lib/sentence-timing.js';
 import { mountDashboard } from './home/dashboard.js';
 import { attachSpeedMenu } from './electric/speed-menu.js';
@@ -68,7 +69,9 @@ function markCached(key) { try { const s = cachedModels(); s.add(key); localStor
 const STAGE_SPAN = { decode: [0, 6], analyze: [6, 8], load: [8, 18], speakers: [18, 32], run: [32, 92], review: [92, 99], done: [100, 100] };
 // one-time model downloads shown to the user (MB, rounded): Whisper + speaker models
 const DOWNLOAD_MB = { fast: { webgpu: 200, wasm: 110 }, best: { webgpu: 600, wasm: 280 } };
-// the sentence-timing model (align-worker.js), downloaded after the first transcript, in the background
+// Best Accuracy's speaker double-check (worker.js NEMOTRON_FILES): the full- or half-precision GPU model, or the 8-bit
+// CPU one; and the sentence-timing model (align-worker.js), downloaded after the first transcript, in the background
+const SPEAKER_CHECK_MB = { webgpu: 400, webgpu16: 200, wasm: 105 };
 const TIMING_MB = 190;
 const QUALITY_LABEL = { good: 'Good', fair: 'Fair', difficult: 'Difficult' };
 const MODEL_LABEL = { tiny: 'Whisper tiny', base: 'Whisper base', small: 'Whisper small', turbo: 'Whisper large-v3 turbo' };
@@ -128,9 +131,17 @@ function updateModeNote() {
   const mode = modeValue();
   const custom = els.modelSelect.value;
   const parts = [];
+  const sp = els.speakersSelect.value;
+  const check = mode === 'best' && sp !== 'off' && sp !== '1' && !(+sp > 4); // the speaker double-check (worker.js doubleCheck)
+  // measured (PROTOCOL.md addendum 8, development recordings): on a GPU about a sixth more time in all; on the processor
+  // about a fifth (the second model, then word timing of the lines where the speaker changes)
+  const lighter = !custom && mode === 'best' && dev !== 'webgpu';
   if (custom) parts.push('Using the model chosen in Advanced settings.');
-  else if (mode === 'best' && dev !== 'webgpu') parts.push('Without a GPU, Best Accuracy uses a lighter model so it finishes in reasonable time.');
-  if (!custom && !cachedModels().has(modelKey())) parts.push(`Your first recording sets up the speech model once (about ${DOWNLOAD_MB[mode][dev === 'webgpu' ? 'webgpu' : 'wasm']} MB, then about ${TIMING_MB} MB more for jumping to a sentence). After that, recordings start right away.`);
+  if (check && dev === 'webgpu') parts.push('Best Accuracy also double-checks who said each sentence, which adds a little time on your GPU.');
+  else if (check) parts.push(`Without a GPU, Best Accuracy ${lighter ? 'uses a lighter speech model and ' : ''}double-checks who said each sentence, so speakers get mixed up less often. That takes about 20% longer; choose Fast to skip it.`);
+  else if (lighter) parts.push('Without a GPU, Best Accuracy uses a lighter speech model so it finishes in reasonable time.');
+  const kind = dev === 'webgpu' ? 'webgpu' : 'wasm';
+  if (!custom && !cachedModels().has(modelKey())) parts.push(`Your first recording sets up the models once (${check ? `about ${DOWNLOAD_MB[mode][kind] + SPEAKER_CHECK_MB[kind === 'webgpu' && deviceInfo.f16Speakers ? 'webgpu16' : kind] + TIMING_MB} MB, including the one for jumping to a sentence` : `about ${DOWNLOAD_MB[mode][kind]} MB, then about ${TIMING_MB} MB more for jumping to a sentence`}). After that, recordings start right away.`);
   els.modeNote.textContent = parts.join(' ');
 }
 [els.modelSelect, els.speakersSelect].forEach((s) => s.addEventListener('change', () => { savePrefs(); updateSettingsUI(); }));
@@ -199,7 +210,7 @@ afterLoad(() => ('requestIdleCallback' in window ? requestIdleCallback(detectDev
 
 function onWorkerMessage({ data }) {
   switch (data.type) {
-    case 'device': setDevice(data.device, data.reason); break;
+    case 'device': setDevice(data.device, data.reason, data.f16Speakers); break;
     case 'stage': setStage(data.stage); break;
     case 'status': onStatus(data.text); break;
     case 'progress': onDownload(data); break;
@@ -207,16 +218,16 @@ function onWorkerMessage({ data }) {
     case 'quality': showQuality(data.quality, data.preprocessing); break;
     case 'language': if (state) state.language = data.language; break;
     case 'complete': onComplete(data); break;
-    case 'debug': window.__dbg = data; break;
+    case 'debug': if (data.speakers) window.__dbgSpeakers = data.speakers; else window.__dbg = data; break;
     case 'error': showError(data.message + (data.stack ? '\n\n' + data.stack : '')); break;
   }
 }
 
 let deviceInfo = { dev: null, reason: null };
-function setDevice(dev, reason) {
+function setDevice(dev, reason, f16Speakers = false) {
   // the page itself may have WebGPU even when the background worker doesn't
   if (dev !== 'webgpu' && reason === 'no-webgpu' && 'gpu' in navigator) reason = 'worker-only';
-  deviceInfo = { dev, reason };
+  deviceInfo = { dev, reason, f16Speakers };
   els.deviceChip.classList.add('ok');
   els.deviceChip.classList.toggle('cpu', dev !== 'webgpu');
   els.deviceChip.innerHTML = dev === 'webgpu'
@@ -591,6 +602,7 @@ async function start(file) {
     numSpeakers: diarize && speakersChoice !== 'auto' ? Number(speakersChoice) : Number(q.get('k')) || 0,
     vocabulary: vocabulary(),
     debug: q.has('debug'),
+    speakerCheck: q.get('speakers') !== 'v1', // ?speakers=v1: the first speaker model alone (worker.js SPEAKER_DOUBLE_CHECK)
   }, [samples.buffer]);
 }
 
@@ -880,6 +892,8 @@ function renderTranscript() {
   let matches = 0;
   const frag = document.createDocumentFragment();
   state.segEls = new Array(state.lines.length);
+  // a speaker change inside a sentence shows "…" at the cut (lib/continuation.js; the words are unchanged)
+  const marks = continuationMarks(state.lines.map((l, i) => ({ ...l, text: lineText(i) })));
   for (const g of groups()) {
     const s = spk(g.speaker);
     const el = document.createElement('div');
@@ -896,7 +910,7 @@ function renderTranscript() {
     const body = el.querySelector('.grp-body');
     for (const i of g.idx) {
       const p = document.createElement('p');
-      p.className = state.lines[i].uncertain ? 'seg uncertain' : 'seg';
+      p.className = `seg${state.lines[i].uncertain ? ' uncertain' : ''}${marks[i].cut ? ' cut' : ''}${marks[i].cont ? ' cont' : ''}`;
       p.dataset.i = i;
       p.title = state.lines[i].uncertain ? `${fmtTime(state.lines[i].start)} · low model confidence, worth double-checking` : fmtTime(state.lines[i].start);
       // each sentence is its own click target (lib/sentence-timing.js says where it starts); search marks inside

@@ -20,6 +20,8 @@ export function chunkedCache(cacheName = 'transformers-cache', opts = {}) {
   return {
     async match(request) { try { return await inner.match(request); } catch { return undefined; } },
     async put(request, response) { try { await inner.put(request, response); } catch { /* not kept: downloaded again next time */ } },
+    // stored already? (looks at the entry or its small index only; nothing is read into memory)
+    async has(request) { try { return !!(await (await caches.open(cacheName)).match(keyOf(request))); } catch { return false; } },
   };
 }
 

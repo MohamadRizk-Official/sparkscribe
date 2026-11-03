@@ -10,6 +10,7 @@ import { renameTranscript, setFavorite, deleteTranscripts, markOpened, getRecord
 import { promptDialog, confirmDialog, confirmDeleteRecordings, folderPicker, toast } from '../library/dialogs.js';
 import { segmentsFromRow, segmentsToStored, fmtClock, RECORDING_TYPES, RECORDING_TYPE_LABEL } from '../lib/segments.js';
 import { toggleDetails } from '../lib/details-pop.js';
+import { continuationMarks } from '../lib/continuation.js';
 import { relatedMaterialHtml, bindRelatedMaterial } from '../lib/related-material.js';
 import { cleanText } from '../lib/clean.js';
 import { getAudio, putAudio, putEnvelope, keepAudioPref } from '../lib/audio-store.js';
@@ -115,6 +116,9 @@ function initials(name) {
       $('transcript').innerHTML = `<pre class="plain-transcript">${esc(row.transcript_text || '(empty)')}</pre>`;
       return;
     }
+    // a speaker change inside a sentence shows "…" at the cut (lib/continuation.js; the words are unchanged)
+    const marks = new Map(continuationMarks(segments.map((s) => ({ ...s, text: text(s) }))).map((m, k) => [segments[k].id, m]));
+    const markClass = (s) => `${marks.get(s.id)?.cut ? ' cut' : ''}${marks.get(s.id)?.cont ? ' cont' : ''}`;
     const groups = [];
     for (const s of segments) {
       const g = groups[groups.length - 1];
@@ -126,7 +130,7 @@ function initials(name) {
         <div class="avatar">${esc(initials(g.speaker))}</div>
         <div class="grp-body">
           <div class="grp-head">${coarse ? `<span class="who static">${esc(g.speaker)}</span>` : `<button class="who" type="button" data-g="${g.items[0].id}" aria-haspopup="menu" title="Change or rename this speaker"><span class="who-name">${esc(g.speaker)}</span>${CHEVRON}</button>`}<span class="grp-time">${fmtClock(g.items[0].start)}</span></div>
-          ${g.items.map((s) => `<p class="seg${player.getAttribute('src') ? '' : ' static'}" data-i="${s.id}" title="${fmtClock(s.start)}">${sentencesHtml(text(s))}</p>`).join('')}
+          ${g.items.map((s) => `<p class="seg${player.getAttribute('src') ? '' : ' static'}${markClass(s)}" data-i="${s.id}" title="${fmtClock(s.start)}">${sentencesHtml(text(s))}</p>`).join('')}
         </div>
       </div>`).join('');
   }
