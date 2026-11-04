@@ -1,10 +1,10 @@
 // Word times for transcript lines, for speaker splits (worker.js assignSpeakers, engine/speaker-words.js): forced
 // alignment of a line's own words (lib/ctc-align.js) with the sentence-click timing model (wav2vec2-base-960h, half
 // precision; same file and browser cache as align-worker.js, so nothing more to download once sentence clicks have used
-// it). On a GPU it runs in a worker of its own (word-timing-worker.js), ended after use: in the transcription worker the
-// runtime keeps freed GPU buffers pooled. On the processor it runs in the transcription worker, which reuses its own
-// memory (a worker of its own measured about 2 GB more: PROTOCOL.md addendum 9b).
-//   loadTiming(dev, progress_callback) -> { processor, model, vocab, device }
+// it). It runs in the transcription worker, on the GPU with a device of its own (engine/gpu-device.js, `gpu`; destroyed by
+// the caller after use, so its GPU memory is given back), otherwise on the processor, which reuses the worker's memory
+// (a worker of its own measured about 2 GB more: PROTOCOL.md addenda 9b and 10).
+//   loadTiming(dev, progress_callback, gpu) -> { processor, model, vocab, device }
 //   timeClip(timing, { audio, offset, words }) -> [{ s, e } | null] per word, seconds in the recording
 import { AutoProcessor, AutoModelForCTC, AutoTokenizer } from '@huggingface/transformers';
 import { forcedAlign, ALIGN_SETTINGS } from '../lib/ctc-align.js';
@@ -12,13 +12,14 @@ import { timingPlan } from '../lib/timing-plan.js';
 
 const MODEL = 'Xenova/wav2vec2-base-960h';
 
-export async function loadTiming(dev, progress_callback) {
+export async function loadTiming(dev, progress_callback, gpu = null) {
   const processor = await AutoProcessor.from_pretrained(MODEL, { progress_callback });
-  const plans = dev === 'webgpu' ? await timingPlan(self.navigator?.gpu) : [['wasm', 'fp16']];
+  const plans = dev === 'webgpu' && gpu ? await timingPlan(self.navigator?.gpu) : [['wasm', 'fp16']];
   let last = null;
   for (const [device, dtype] of plans) {
     try {
-      const model = await AutoModelForCTC.from_pretrained(MODEL, { device, dtype, progress_callback });
+      const own = device === 'webgpu' && { session_options: { executionProviders: [{ name: 'webgpu', device: gpu }] } };
+      const model = await AutoModelForCTC.from_pretrained(MODEL, { device, dtype, progress_callback, ...own });
       const v = (await AutoTokenizer.from_pretrained(MODEL, { progress_callback })).get_vocab();
       return { processor, model, vocab: v instanceof Map ? Object.fromEntries(v) : v, device };
     } catch (err) { last = err; }

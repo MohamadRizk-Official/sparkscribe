@@ -94,6 +94,30 @@ export function createSentenceTiming({ getSegs, getEnv, getBlob }) {
     }, 1500);
   }
 
+  // the timing model's worker: one per page, shared by paragraph timing and speaker splits (alignForSpeakers)
+  function ensureWorker() {
+    worker = new Worker(new URL('../align-worker.js', import.meta.url), { type: 'module' });
+    worker.onmessage = ({ data }) => {
+      const job = inFlight;
+      if (!job || data.id !== job.id) return;
+      inFlight = null;
+      if (data.type === 'aligned') {
+        if (jobsDone++ > 0) { const r = (performance.now() - job.sent) / job.dur; msPerS = msPerS == null ? r : 0.7 * msPerS + 0.3 * r; }
+        const at = (t) => +(t + job.offset).toFixed(3);
+        timed.set(job.k, { w: data.words.map((x) => (x ? [x[0], at(x[1]), at(x[2])] : null)), p: data.prevEnd == null ? null : at(data.prevEnd) });
+        persist();
+        job.done?.();
+      }
+      // a failure (model couldn't load, out of memory…) stops timing for this page; the estimates stay in use
+      if (data.type === 'failed') { enabled = false; job.done?.(); return; }
+      pump();
+    };
+    worker.onerror = () => { enabled = false; inFlight?.done?.(); inFlight = null; };
+    worker.addEventListener('message', ({ data }) => { const p = speakerJobs.get(data.id); if (p) { speakerJobs.delete(data.id); p(data.type === 'aligned' ? data.words : null); } });
+    worker.addEventListener('error', () => { for (const p of speakerJobs.values()) p(null); speakerJobs.clear(); });
+  }
+  const speakerJobs = new Map(); // id -> resolve, for alignForSpeakers
+
   async function pump() {
     if (!active || !enabled || inFlight || !queue.length) return;
     const k = queue.shift();
@@ -102,25 +126,7 @@ export function createSentenceTiming({ getSegs, getEnv, getBlob }) {
     const d = await ensureDecoded();
     if (!d) { enabled = false; return; }
     if (inFlight) { queue.unshift(k); return; }
-    if (!worker) {
-      worker = new Worker(new URL('../align-worker.js', import.meta.url), { type: 'module' });
-      worker.onmessage = ({ data }) => {
-        const job = inFlight;
-        if (!job || data.id !== job.id) return;
-        inFlight = null;
-        if (data.type === 'aligned') {
-          if (jobsDone++ > 0) { const r = (performance.now() - job.sent) / job.dur; msPerS = msPerS == null ? r : 0.7 * msPerS + 0.3 * r; }
-          const at = (t) => +(t + job.offset).toFixed(3);
-          timed.set(job.k, { w: data.words.map((x) => (x ? [x[0], at(x[1]), at(x[2])] : null)), p: data.prevEnd == null ? null : at(data.prevEnd) });
-          persist();
-          job.done?.();
-        }
-        // a failure (model couldn't load, out of memory…) stops timing for this page; the estimates stay in use
-        if (data.type === 'failed') { enabled = false; job.done?.(); return; }
-        pump();
-      };
-      worker.onerror = () => { enabled = false; inFlight?.done?.(); inFlight = null; };
-    }
+    if (!worker) ensureWorker();
     const c = clipFor(d, getSegs(), i);
     inFlight = { id: ++seq, k, offset: c.offset, done: waiters.get(k), sent: performance.now(), dur: c.audio.length / d.rate };
     waiters.delete(k);
@@ -216,6 +222,22 @@ export function createSentenceTiming({ getSegs, getEnv, getBlob }) {
         want(i, true);
       });
     },
+    // word times for speaker splits (main.js refineSpeakers): the same model and worker as paragraph timing, so a page
+    // that times sentences loads it once. clips: [{ audio: Float32Array (16 kHz), offset, words }] -> per clip [{ s, e } |
+    // null] in seconds of the recording, or null for a clip that failed; null when timing is off on this device
+    async alignForSpeakers(clips) {
+      if (!enabled) return null;
+      if (!worker) ensureWorker();
+      return Promise.all(clips.map(({ audio, offset, words }) => new Promise((resolve) => {
+        const id = 'spk' + ++seq;
+        speakerJobs.set(id, (w) => resolve(w ? w.map((x) => (x ? { s: x[1] + offset, e: x[2] + offset } : null)) : null));
+        worker.postMessage({ type: 'align', id, audio, words, context: 0, start: null, plain: true }, [audio.buffer]);
+      })));
+    },
+    // does this page time sentences (and so can time speaker splits)?
+    canTime() { return enabled; },
+    // drop the word times of these paragraphs (by start, seconds): their lines were split
+    forget(starts) { for (const s of starts) { const k = (+s).toFixed(2); timed.delete(k); const q = queue.indexOf(k); if (q >= 0) queue.splice(q, 1); } persist(); },
     ensureDecoded,
     reset() { timed = new Map(); key = null; queue.length = 0; visible.clear(); active = false; enabled = capable(); decoded = null; decoding = null; decodedFor = null; inFlight = null; waiters.clear(); clearTimeout(saveTimer); },
   };

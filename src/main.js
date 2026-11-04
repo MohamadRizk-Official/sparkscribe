@@ -14,6 +14,7 @@ import { confirmDialog, promptDialog } from './library/dialogs.js';
 import { putAudio, rekeyAudio, deleteAudio, PENDING_AUDIO_KEY } from './lib/audio-store.js';
 import { envelopeFromSamples, paragraphIndexAt, splitSentences } from './lib/breath.js';
 import { continuationMarks } from './lib/continuation.js';
+import { splitLine } from './engine/speaker-words.js';
 import { createSentenceTiming } from './lib/sentence-timing.js';
 import { mountDashboard } from './home/dashboard.js';
 import { attachSpeedMenu } from './electric/speed-menu.js';
@@ -603,6 +604,7 @@ async function start(file) {
     vocabulary: vocabulary(),
     debug: q.has('debug'),
     speakerCheck: q.get('speakers') !== 'v1', // ?speakers=v1: the first speaker model alone (worker.js SPEAKER_DOUBLE_CHECK)
+    pageTiming: timing.canTime(), // speaker splits are word-timed here, after the transcript is shown (refineSpeakers)
   }, [samples.buffer]);
 }
 
@@ -664,7 +666,7 @@ function drawWave(pk) {
 const waveEdge = (pct) => `calc(${WAVE_PAD}px + (100% - ${2 * WAVE_PAD}px) * ${(pct / 100).toFixed(4)})`;
 
 // ---------- results ----------
-function onComplete({ lines, language, ms, device, stats }) {
+function onComplete({ lines, language, ms, device, stats, speakerRefine }) {
   setStage('done');
   if (run?.modelKey) markCached(run.modelKey);
   const speakers = new Map();
@@ -694,6 +696,7 @@ function onComplete({ lines, language, ms, device, stats }) {
     renderAll();
     renderNextSteps();
     autoSave(); // in addition to showing the result; a failure never touches what's on screen
+    refineSpeakers(shownFor, speakerRefine);
     setTimeout(() => mascotSignal('results-shown'), 700);
   }, 900);
 }
@@ -992,6 +995,42 @@ function newSpeaker() {
   const k = Math.max(0, ...used) + 1;
   state.speakers.set(id, { name: `Speaker ${k}`, color: COLORS[n % COLORS.length], orig: `Speaker ${k}` });
   return id;
+}
+
+// Speaker changes inside a line (Best Accuracy; worker.js assignSpeakers): the transcript is shown and saved with one
+// label per line first, then the lines where the checked speaker result hears a change are split at their words'
+// times, by the sentence-timing worker this page loads for sentence clicks anyway (so the timing model is in memory once,
+// as in production). A line the student changed in the meantime is left as it is; the words are never changed. If
+// timing isn't possible the lines simply stay as shown.
+async function refineSpeakers(shown, refine) {
+  if (!refine?.items?.length) return;
+  const times = await timing.alignForSpeakers(refine.clips).catch(() => null);
+  if (!times || state !== shown || !state.lines) return;
+  const lines = state.lines.slice();
+  const refined = [];
+  for (let k = refine.items.length - 1; k >= 0; k--) {
+    const { i, runs, start, text, speaker } = refine.items[k], l = lines[i];
+    if (!l || !times[k] || l.start !== start || l.text !== text || l.speaker !== speaker) continue;
+    const pieces = splitLine(l, times[k], runs);
+    if (!pieces || pieces.length < 2) continue;
+    lines.splice(i, 1, ...pieces);
+    refined.push(start);
+  }
+  if (!refined.length) return;
+  timing.forget(refined); // word times made for the whole line no longer fit its first piece
+  let n = [...state.speakers.keys()].filter((id) => id !== UNKNOWN).length;
+  for (const l of lines) {
+    if (state.speakers.has(l.speaker)) continue;
+    if (l.speaker === UNKNOWN) state.speakers.set(UNKNOWN, { name: 'Unknown', color: UNKNOWN_COLOR, orig: 'Unknown' });
+    else { state.speakers.set(l.speaker, { name: `Speaker ${n + 1}`, color: COLORS[n % COLORS.length], orig: `Speaker ${n + 1}` }); n++; }
+  }
+  if (state.stats?.speakers?.combined) state.stats.speakers.combined = { ...state.stats.speakers.combined, linesWordTimed: times.filter(Boolean).length, linesSplit: refined.length };
+  state.lines = lines;
+  const y = window.scrollY;
+  renderAll();
+  window.scrollTo({ top: y });
+  scheduleSync();
+  window.__speakerRefined = refined.length; // (for tests)
 }
 
 function reassignGroup(g, to) {

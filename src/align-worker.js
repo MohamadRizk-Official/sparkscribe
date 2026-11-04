@@ -9,7 +9,8 @@
 // the same model file, with one more output appended as it is loaded (lib/onnx-output.js); if the head can't load, the
 // aligned starts are used as they are.
 //   in:  { type: 'align', id, audio: Float32Array (16 kHz mono), words: [context…, paragraph…], context: n,
-//          start: seconds from the clip's start where the paragraph's speaker turn begins }
+//          start: seconds from the clip's start where the paragraph's speaker turn begins,
+//          plain: true for a speaker split's word times (no onset head; lib/sentence-timing.js alignForSpeakers) }
 //   out: { type: 'aligned', id, words: [[word, start, end] | null, …] (the paragraph's, seconds from the clip's start),
 //          prevEnd: seconds | null (where the context speech ended) } | { type: 'failed', id }
 //        | { type: 'loaded', device, dtype, onset } (once: which model runs where, and whether the onset head runs, which
@@ -85,7 +86,7 @@ function logSoftmax(data, frames, V) {
 async function next() {
   if (busy || !queue.length) return;
   busy = true;
-  const { id, audio, words, context = 0, start = null } = queue.shift();
+  const { id, audio, words, context = 0, start = null, plain = false } = queue.shift();
   try {
     await load();
     const out = await model.forward(await processor(audio)); // all outputs: letters, and the hidden features when added
@@ -95,8 +96,9 @@ async function next() {
     const hidden = out[HIDDEN];
     // with the onset head, the alignment that absorbs untranscribed speech (both chosen together, ctc-align.js);
     // without it, the plain alignment measured before (PROTOCOL.md addendum 2)
-    const al = alignParagraph(logSoftmax(logits.data, frames, V), frames, vocab, words.slice(0, context), words.slice(context), start, head && hidden ? ALIGN_SETTINGS : {});
-    if (head && hidden?.dims?.[1] === frames) al.words = refineStarts(al.words, onsetScores(head, hidden.data, frames), 0, ONSET_SETTINGS);
+    // plain (speaker splits, worker.js assignSpeakers): the absorbing alignment alone, no onset head, as measured there
+    const al = alignParagraph(logSoftmax(logits.data, frames, V), frames, vocab, words.slice(0, context), words.slice(context), start, (head && hidden) || plain ? ALIGN_SETTINGS : {});
+    if (!plain && head && hidden?.dims?.[1] === frames) al.words = refineStarts(al.words, onsetScores(head, hidden.data, frames), 0, ONSET_SETTINGS);
     self.postMessage({
       type: 'aligned', id,
       words: al.words.map((x) => (x ? [x.w, +x.s.toFixed(3), +x.e.toFixed(3)] : null)),

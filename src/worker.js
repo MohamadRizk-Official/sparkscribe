@@ -36,6 +36,8 @@ import { SR, UNKNOWN, configureDiarizer, diarize, embedClips, frameEnergy, energ
 import { combineSpeakers } from './engine/combine.js';
 import { voiceSamples, centroidsOf, mergeSameVoices, useCombined, peopleIn, SAME_VOICE, MAX_PEOPLE } from './engine/voice-guard.js';
 import { prefetchModel } from './engine/fetch-model.js';
+import { runSpeakerCheck } from './engine/speaker-check.js';
+import { ownGpuDevice } from './engine/gpu-device.js';
 import { NEMOTRON_F16_BASE, nemotronFilesFor, enoughMemory } from './engine/nemotron-files.js';
 import { labelMap, planLines, splitLine, wordsOf } from './engine/speaker-words.js';
 import { loadTiming, timeClip } from './engine/word-timing.js';
@@ -54,9 +56,9 @@ const SEG_MODEL = 'onnx-community/pyannote-segmentation-3.0';
 const EMB_MODEL = 'onnx-community/wespeaker-voxceleb-resnet34-LM';
 
 // Second speaker model (engine/nemotron.js), combined with the first (engine/combine.js): measured to give far fewer
-// words to the wrong person, above all around speaker changes (accuracy/research/speaker-2026-10-30). It runs in a
-// worker of its own (speaker-check-worker.js), ended after each recording so its memory is freed; files and which runs
-// where: engine/nemotron-files.js. If it can't load or run, the first model's result is used as before.
+// words to the wrong person, above all around speaker changes (accuracy/research/speaker-2026-10-30). It runs here, on
+// a GPU device of its own that is destroyed after each recording (engine/speaker-check.js); files and which runs where:
+// engine/nemotron-files.js. If it can't load or run, the first model's result is used as before.
 // Best Accuracy only, with the same-voice check after it (engine/voice-guard.js): passed its pre-registered test on fresh
 // one- to three-person recordings (PROTOCOL.md addendum 6). Rollback without a code change: build with
 // VITE_SPEAKER_CHECK=off (or open a page with ?speakers=v1 to compare in one browser): the first model alone, as before.
@@ -221,8 +223,8 @@ async function loadModels(modelKey, diarize, progress_callback, doubleCheck = fa
       { device: 'wasm', dtype: 'q8' },
     );
   }
-  // the second speaker model is only downloaded here (first time, so it is part of "Get ready"); it is loaded and run in
-  // its own worker (speaker-check-worker.js)
+  // the second speaker model is only downloaded here (first time, so it is part of "Get ready"); it is loaded and run
+  // after the first speaker model (engine/speaker-check.js)
   if (diarize && doubleCheck) {
     for (const entry of nemotronFilesFor(dev, hasF16, self.navigator?.deviceMemory || 8)) {
       for (const [url, sha] of Array.isArray(entry[0]) ? entry : [entry]) { // alternatives: the first that downloads
@@ -231,25 +233,6 @@ async function loadModels(modelKey, diarize, progress_callback, doubleCheck = fa
     }
   }
   return dev;
-}
-
-// The short-lived workers (speaker-check-worker.js, word-timing-worker.js): started for one job, ended after it, so all
-// they loaded is freed (in this worker the runtime keeps freed GPU buffers pooled). Their download and progress messages
-// go to the page; a failure or a crash resolves to null and the caller goes on without them. (Each caller writes
-// new Worker(new URL(...)) out in full: that is how the build finds and bundles a worker.)
-function inOwnWorker(start, message, transfer = []) {
-  return new Promise((resolve) => {
-    let w;
-    try { w = start(); } catch (err) { console.warn('Worker could not start:', err); resolve(null); return; }
-    const end = (result) => { w.terminate(); resolve(result); };
-    w.onmessage = ({ data }) => {
-      if (data.type === 'progress' || data.type === 'run-progress') post(data);
-      else if (data.type === 'failed') { console.warn('Worker failed:', data.message); end(null); }
-      else end(data);
-    };
-    w.onerror = (e) => { console.warn('Worker crashed:', e.message || e); end(null); };
-    w.postMessage(message, transfer);
-  });
 }
 
 // ---------- 4. turns ----------
@@ -563,34 +546,44 @@ function mergeSplitPieces(turns, results) {
 // Lines are production's clips with Whisper's text; the checked speaker result relabels each line, and a line where it
 // hears a speaker change is split at its words' times (engine/speaker-words.js). Only those lines are word-timed, with
 // the sentence-click timing model (align-worker.js: same file, same browser cache, so no extra download once it has
-// been used; engine/word-timing.js: on a GPU in a worker of its own, on the processor here). If timing is
-// unavailable, those lines keep one label: whoever the result hears most in them. The text is never changed.
+// been used). On a page that times sentences (pageTiming, main.js) that is done there, after the transcript is shown:
+// its timing worker loads the model at that point anyway, so the model is in memory once, when production has it too;
+// the lines to split are handed over (refine). Elsewhere it is done here, on a GPU device of its own or on the processor
+// (engine/word-timing.js). Without word times a line keeps one label: whoever the result hears most in it.
+// The text is never changed.
 const TIMING_PAD_S = 0.2;
-async function assignSpeakers(audio, lines, first, final, dev) {
+async function assignSpeakers(audio, lines, first, final, dev, pageTiming) {
   const t0 = performance.now();
   const plan = planLines(lines, final, { map: labelMap(first, final, UNKNOWN), unknown: UNKNOWN });
   const mixed = plan.map((p, i) => (p.runs.length > 1 ? i : -1)).filter((i) => i >= 0);
+  const clipOf = (i) => {
+    const a = Math.max(0, Math.floor((lines[i].start - TIMING_PAD_S) * SR)), b = Math.min(audio.length, Math.ceil((lines[i].end + TIMING_PAD_S) * SR));
+    return { audio: audio.slice(a, b), offset: a / SR, words: wordsOf(lines[i].text) };
+  };
+  const relabel = (l, i) => ({ ...l, speaker: plan[i].speaker });
+  if (pageTiming && mixed.length) {
+    // one label per line now; the page splits the mixed ones once its timing model is loaded (main.js refineSpeakers)
+    const out = lines.map(relabel);
+    const refine = { items: mixed.map((i) => ({ i, runs: plan[i].runs, start: out[i].start, text: out[i].text, speaker: out[i].speaker })), clips: mixed.map(clipOf) };
+    return { lines: out, refine, stats: { linesWithChange: mixed.length, linesWordTimed: 0, linesSplit: 0, piecesRelabelled: out.filter((l, i) => l.speaker !== lines[i].speaker).length, timingDevice: 'page (after the transcript is shown)', wordSeconds: +((performance.now() - t0) / 1000).toFixed(1) } };
+  }
   const times = new Map();
   let timing = null;
   if (mixed.length) {
     status('Matching words to speakers…');
-    const clips = mixed.map((i) => {
-      const a = Math.max(0, Math.floor((lines[i].start - TIMING_PAD_S) * SR)), b = Math.min(audio.length, Math.ceil((lines[i].end + TIMING_PAD_S) * SR));
-      return { audio: audio.slice(a, b), offset: a / SR, words: wordsOf(lines[i].text) };
-    });
-    if (dev === 'webgpu') timing = await inOwnWorker(() => new Worker(new URL('./word-timing-worker.js', import.meta.url), { type: 'module' }), { type: 'time', clips, dev }, clips.map((c) => c.audio.buffer));
-    else {
-      try {
-        const m = await loadTiming(dev, () => {});
-        const t = [];
-        for (const [k, clip] of clips.entries()) {
-          try { t.push(await timeClip(m, clip)); } catch (err) { console.warn('Word timing failed for a line:', err); t.push(null); }
-          post({ type: 'run-progress', done: k + 1, total: clips.length });
-        }
-        try { await m.model.dispose(); } catch { /* freed with the worker anyway */ }
-        timing = { times: t, device: m.device };
-      } catch (err) { console.warn('Word timing unavailable, lines keep one speaker each:', err); }
-    }
+    const clips = mixed.map(clipOf);
+    const gpu = dev === 'webgpu' ? await ownGpuDevice().catch(() => null) : null;
+    try {
+      const m = await loadTiming(dev, () => {}, gpu);
+      const t = [];
+      for (const [k, clip] of clips.entries()) {
+        try { t.push(await timeClip(m, clip)); } catch (err) { console.warn('Word timing failed for a line:', err); t.push(null); }
+        post({ type: 'run-progress', done: k + 1, total: clips.length });
+      }
+      try { await m.model.dispose(); } catch { /* freed with the device below, or reused by the next model */ }
+      timing = { times: t, device: m.device };
+    } catch (err) { console.warn('Word timing unavailable, lines keep one speaker each:', err); }
+    try { gpu?.destroy(); } catch { /* already lost */ }
     if (timing?.times) mixed.forEach((i, k) => { if (timing.times[k]) times.set(i, timing.times[k]); });
   }
   const out = [];
@@ -599,7 +592,7 @@ async function assignSpeakers(audio, lines, first, final, dev) {
     const p = plan[i];
     const pieces = times.has(i) ? splitLine(l, times.get(i), p.runs) : null;
     if (pieces && pieces.length > 1) split++;
-    for (const q of pieces || [{ ...l, speaker: p.speaker }]) { if (q.speaker !== l.speaker) relabelled++; out.push(q); }
+    for (const q of pieces || [relabel(l, i)]) { if (q.speaker !== l.speaker) relabelled++; out.push(q); }
   });
   return { lines: out, stats: { linesWithChange: mixed.length, linesWordTimed: times.size, linesSplit: split, piecesRelabelled: relabelled, timingDevice: timing?.device ?? null, wordSeconds: +((performance.now() - t0) / 1000).toFixed(1) } };
 }
@@ -622,6 +615,7 @@ self.addEventListener('message', async (e) => {
     preprocess: doPreprocess = true,
     secondPass,
     speakerCheck = true, // false: the first speaker model alone (main.js, ?speakers=v1)
+    pageTiming = false, // the page times sentences: speaker splits are made there, after the transcript is shown
   } = e.data;
   debugVoices = !!e.data.debug;
   if (e.data.turboVariant) turboVariant = e.data.turboVariant;
@@ -653,7 +647,8 @@ self.addEventListener('message', async (e) => {
     if (doubleCheck && segments) {
       status('Double-checking who spoke when…');
       const t = performance.now();
-      const checked = await inOwnWorker(() => new Worker(new URL('./speaker-check-worker.js', import.meta.url), { type: 'module' }), { type: 'run', audio: audio.slice(), dev, f16: hasF16, wasmPaths: env.backends?.onnx?.wasm?.wasmPaths });
+      const checked = await runSpeakerCheck(audio, { dev, f16: hasF16, onProgress: (p) => post({ type: 'progress', ...p }), onRunProgress: (done, total) => post({ type: 'run-progress', done, total }) })
+        .catch((err) => { console.warn('Second speaker model failed:', err); return null; });
       if (checked?.segments) {
         try {
           const second = checked.segments;
@@ -728,11 +723,12 @@ self.addEventListener('message', async (e) => {
         uncertain: r.avgLogprob < LOGPROB_THRESHOLD || !!r.loop,
       });
     });
-    const speakerWords = finalSpeakers ? await assignSpeakers(audio, lines, segments, finalSpeakers, dev) : null;
+    const speakerWords = finalSpeakers ? await assignSpeakers(audio, lines, segments, finalSpeakers, dev, pageTiming) : null;
     if (speakerWords) { lines.splice(0, lines.length, ...speakerWords.lines); diarStats = { ...diarStats, combined: { ...diarStats.combined, ...speakerWords.stats } }; lap('speakers per word'); }
     post({
       type: 'complete',
       lines,
+      speakerRefine: speakerWords?.refine, // lines the page splits by speaker once its timing model is loaded (main.js)
       language: 'en',
       ms: performance.now() - lap0.t,
       device: dev,
