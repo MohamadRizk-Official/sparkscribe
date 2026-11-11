@@ -358,4 +358,3 @@ Deployed on Vercel: the static site plus the two functions in `api/` (`vercel.js
 - Speaker detection distinguishes voices but cannot know names — rename them yourself.
 - Long recordings take a while on CPU; a GPU (Chrome/Edge with WebGPU) is much faster.
 - Speaker detection works best with up to 3 clearly different voices and little overlap.
-<!-- . -->
