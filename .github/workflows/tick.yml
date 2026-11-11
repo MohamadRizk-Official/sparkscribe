@@ -1,0 +1,28 @@
+name: tick
+
+on:
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tick
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 300
+      - name: Set commit author
+        run: |
+          git config user.name "MohamadRizk-Official"
+          git config user.email "271346734+MohamadRizk-Official@users.noreply.github.com"
+      - name: Make ticks
+        run: bash .github/scripts/tick.sh
