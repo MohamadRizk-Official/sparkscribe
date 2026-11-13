@@ -22,5 +22,12 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/engine/diarize.js` (energy helpers) | [speech-energy.md](speech-energy.md) | `tests/diarize-energy-test.mjs` |
 | `src/lib/brand-markup.js` | the shared mark, wordmark and footer HTML used on every page | `tests/brand-markup-test.mjs` |
 | `src/lib/theme.js` | System / Light / Dark preference; default is Light, invalid stored values fall back to it | `tests/theme-test.mjs` |
+| `src/lib/segments.js` | [segments.md](segments.md) | `tests/segments-clock-test.mjs`, `tests/segments-stored-test.mjs`, `tests/segments-rows-test.mjs`, `tests/segments-citations-test.mjs`, `tests/segments-answers-test.mjs` |
+| `src/lib/speaker-refs.js` | [speaker-refs.md](speaker-refs.md) | `tests/speaker-refs-render-test.mjs`, `tests/speaker-refs-orig-codes-test.mjs` |
+| `src/lib/across-refs.js` | [across-refs.md](across-refs.md) | `tests/across-test.mjs`, `tests/across-refs-helpers-test.mjs` |
+| `src/lib/breath.js`, `src/lib/align-words.js` | [sentences.md](sentences.md) | `tests/split-sentences-test.mjs`, `tests/sentence-onsets-test.mjs` |
+| `server/ai/retrieve.js` | [retrieve.md](retrieve.md) | `tests/retrieve-chunks-test.mjs`, `tests/retrieve-select-test.mjs` |
+| `server/ai/grounding.js` | [grounding.md](grounding.md) | `tests/grounding-extra-test.mjs` |
+| `server/ai/prompts.js` | [prompts.md](prompts.md) | `tests/prompts-schemas-test.mjs`, `tests/prompts-instructions-test.mjs` |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
