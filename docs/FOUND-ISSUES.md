@@ -31,3 +31,19 @@ Behaviour noticed while writing tests and docs. These are write-ups only: nothin
 - **Impact:** low. The structured-output schema asks for integers, so this only matters if the model breaks its schema. The result would be an ungrounded item that looks grounded on the first line. Quotes and evidence are still checked word for word, so those items are not affected.
 - **Suggested fix (not applied):** accept only `typeof r === 'number'` or a non-empty digit string before converting.
 - **Test status:** `tests/grounding-extra-test.mjs` does not assert on `null` refs.
+
+## 3. `safeNext` lets `/.//evil.example` through, which becomes the protocol-relative `//evil.example`
+
+- **Where:** `safeNext` in `src/lib/account.js`, used for the `next` parameter in `src/pages/auth.js` and `src/pages/callback.js`.
+- **What the code says it does:** "Only ever redirect to a path on this site." It rejects control characters and backslashes, then lets the URL parser decide the origin, and returns `u.pathname + u.search + u.hash`.
+- **What happens:** the parser resolves dot segments, so the origin check passes (the resolved URL really is on this site), but the *returned path* is the parser's normalised pathname. For `/.//evil.example` and `/..//evil.example` that pathname is `//evil.example`. Handed to `location.replace(next)`, a path that starts with `//` is read by the browser as a link to another site.
+- **Reproduce:**
+  ```js
+  // in a browser console on the site, or in Node with location = new URL('https://www.spark-scribe.com/')
+  safeNext('/.//evil.example');    // "//evil.example"   (expected "/" )
+  safeNext('/..//evil.example');   // "//evil.example"   (expected "/" )
+  ```
+  The same thing in plain Node: `new URL('/.//evil.example', 'https://www.spark-scribe.com').pathname === '//evil.example'`.
+- **Impact:** an open redirect after sign-in. A link such as `https://www.spark-scribe.com/auth?next=/.//evil.example` would send the person to `evil.example` once they have signed in (`location.replace(next)` in `src/pages/auth.js` and `src/pages/callback.js`). It cannot read the session. It could be used for phishing from a trusted link.
+- **Suggested fix (not applied):** after the origin check, reject (or return the fallback for) any result that starts with `//`, for example `const out = u.pathname + u.search + u.hash; return out.startsWith('//') ? fallback : out;`. Rejecting `.` and `..` segments in the input would also work.
+- **Test status:** `tests/account-helpers-test.mjs` covers everything `safeNext` already handles (absolute URLs, `//host`, backslashes, tab/newline tricks, control characters, `javascript:`) and leaves this case out.
