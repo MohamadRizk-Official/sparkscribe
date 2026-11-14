@@ -20,9 +20,26 @@ node tests/srs-test.mjs   # or one script on its own
 
 ## What can be tested under plain Node
 Pure modules with no browser or Supabase imports: most of `src/engine/`, `src/insights/`, and helpers in `src/lib/`
-that don't import `supabase.js`. Modules that import `src/lib/supabase.js` (it reads `import.meta.env`), touch `document`,
-or load `@huggingface/transformers` / `onnxruntime-web` need a browser, a stub, or a split into a pure file first.
-Currently untestable that way: `billing.js`, `library.js`, `transcripts.js`, `recovery.js`, `align-worker.js`, `worker.js`.
+that don't import `supabase.js`. Modules that touch `document` at load time, or load `@huggingface/transformers` /
+`onnxruntime-web`, need a browser, a stub, or a split into a pure file first.
+
+### Modules that read `import.meta.env`
+`src/lib/supabase.js` and `src/lib/captcha.js` read Vite's `import.meta.env`, which plain Node does not have, so anything
+importing them (`account.js`, `library.js`, `transcripts.js`, `prefs.js`, `recovery.js`, `home/exam.js`, …) fails to load.
+`tests/vite-env-hook.mjs` is a small Node module hook that rewrites `import.meta.env` to an empty object in files under `src/`.
+Register it at the top of a test, **before** importing the module:
+
+```js
+import { register } from 'node:module';
+register('./vite-env-hook.mjs', import.meta.url);
+const T = await import(new URL('../src/lib/transcripts.js', import.meta.url).href);
+```
+
+With no env values, Supabase reads as "not configured" and Turnstile as off, so only the pure helpers are worth testing this way
+(`tests/exam-plan-test.mjs`, `account-helpers-test.mjs`, `transcripts-helpers-test.mjs`, `library-helpers-test.mjs`,
+`prefs-test.mjs`, `captcha-test.mjs`). Browser globals a module uses (`localStorage`, `location`, `window`, `document`) are
+stood in for by small objects set on `globalThis` before the import. Still not testable this way: `billing.js` (network calls
+at import-time paths), `align-worker.js`, `worker.js`.
 
 ## Pinning values on purpose
 A few tests pin exact values because other things depend on them: the draft-instruction fingerprint in
