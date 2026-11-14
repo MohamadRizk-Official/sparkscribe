@@ -22,4 +22,4 @@ Each lecture is `{ id, title, kinds:Set, missed, hasQuiz, quizTaken, due }`. The
 One lecture can appear in several groups. A lecture with study material and nothing outstanding gives no step.
 
 ## Where the data comes from
-`loadCourse` reads the course's lectures (`courseLectureIds`), their ready insights and artifacts from Supabase: quiz progress gives `missed` and `quizTaken`, the flashcard set's spaced-review schedule (`readSrs`, `dueIndexes` from `src/insights/srs.js`) gives `due`. For each topic the student listed, `searchLibrary` finds the lectures in the course that mention it.
+`loadCourse` reads the course's lectures (`courseLectureIds`), their ready insights and artifacts from Supabase: quiz progress gives `missed` (the length of `progress.missed`) and `quizTaken` (`progress.last_score` is set), the flashcard set's spaced-review schedule (`readSrs`, `dueIndexes` from `src/insights/srs.js`) gives `due`. For each topic the student listed, `searchLibrary` finds the lectures in the course that mention it.

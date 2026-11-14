@@ -29,5 +29,12 @@ Short explanations of how individual modules behave, written from the code. Each
 | `server/ai/retrieve.js` | [retrieve.md](retrieve.md) | `tests/retrieve-chunks-test.mjs`, `tests/retrieve-select-test.mjs` |
 | `server/ai/grounding.js` | [grounding.md](grounding.md) | `tests/grounding-extra-test.mjs` |
 | `server/ai/prompts.js` | [prompts.md](prompts.md) | `tests/prompts-schemas-test.mjs`, `tests/prompts-instructions-test.mjs` |
+| `src/home/exam.js` | [exam.md](exam.md) | `tests/exam-plan-test.mjs` |
+| `src/lib/onnx-output.js` | [onnx-output.md](onnx-output.md) | `tests/onnx-output-test.mjs` |
+| `server/ai/usage.js` | [ai-usage.md](ai-usage.md) | `tests/usage-cost-test.mjs`, `tests/usage-meter-test.mjs` |
+| `src/lib/audio-store.js` | [audio-store.md](audio-store.md) | `tests/audio-store-test.mjs` |
+| `server/ai/mock.js` | [browser-and-dev-helpers.md](browser-and-dev-helpers.md#mock-ai-provider) | `tests/mock-provider-test.mjs` |
+| `src/lib/account.js`, `transcripts.js`, `library.js`, `prefs.js`, `captcha.js` | [browser-and-dev-helpers.md](browser-and-dev-helpers.md) | `tests/account-helpers-test.mjs`, `tests/transcripts-helpers-test.mjs`, `tests/library-helpers-test.mjs`, `tests/prefs-test.mjs`, `tests/captcha-test.mjs` |
+| `server/ai/study.js`, `server/ai/studymap.js` (helpers) | the header comments in each file | `tests/study-helpers-test.mjs`, `tests/studymap-helpers-test.mjs` |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
