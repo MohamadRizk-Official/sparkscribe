@@ -15,33 +15,57 @@ const TRACES = [
 ];
 const NODES = [[1100, 262], [1232, 388], [266, 780], [90, 900]];
 
-// The study room: large book outlines in the empty side margins, so the background is never bare (owner request
-// 2026-10-30). Left: a stack of three books with an open book and its ribbon on top. Right: a shelf of standing books,
-// one leaning, and a mug. Drawn once; solid strokes and fills only (base.css colours them for each theme).
-const BOOK = (x, y, w, h, extra = '') => `<rect class="bk" x="${x}" y="${y}" width="${w}" height="${h}" rx="9"/>${extra}`;
-const BOOKS_LEFT = `<svg class="bg-books bg-books-l" viewBox="0 0 420 640" aria-hidden="true" focusable="false">
-  ${BOOK(40, 520, 340, 64, '<path d="M72 520v64M348 520v64"/><rect class="ac" x="160" y="538" width="100" height="28" rx="5"/>')}
-  ${BOOK(70, 462, 290, 58, '<path d="M98 462v58M332 462v58"/><circle class="ac2" cx="215" cy="491" r="11"/>')}
-  ${BOOK(55, 410, 300, 52, '<path d="M83 410v52M327 410v52M170 430h70M178 444h54"/>')}
-  <path class="bk" d="M52 326v72c60-8 120-4 153 12 33-16 93-20 153-12v-72"/>
-  <path class="pg" d="M205 404c-30-16-85-20-143-12v-74c58-8 113-4 143 14z"/>
-  <path class="pg" d="M205 404c30-16 85-20 143-12v-74c-58-8-113-4-143 14z"/>
-  <path d="M205 332v72M82 338c40-6 80-4 108 8M82 354c40-6 80-4 108 8M82 370c34-5 64-4 84 3M328 338c-40-6-80-4-108 8M328 354c-40-6-80-4-108 8M328 370c-34-5-64-4-84 3"/>
-  <path class="rb" d="M211 404v40l7-8 7 8v-42"/>
-</svg>`;
-const BOOKS_RIGHT = `<svg class="bg-books bg-books-r" viewBox="0 0 400 640" aria-hidden="true" focusable="false">
-  ${BOOK(40, 300, 46, 260, '<path d="M40 330h46M40 530h46"/><rect x="51" y="384" width="24" height="60" rx="4"/>')}
-  ${BOOK(86, 260, 58, 300, '<path d="M86 292h58M86 528h58"/><circle class="ac2" cx="115" cy="352" r="12"/><path d="M103 392h24M106 406h18"/>')}
-  ${BOOK(144, 320, 40, 240, '<path d="M144 348h40M144 534h40"/>')}
-  ${BOOK(184, 280, 52, 280, '<path d="M184 310h52M184 530h52"/><rect class="ac" x="196" y="370" width="28" height="44" rx="4"/>')}
-  <g transform="translate(330 560) rotate(-12.5)">${BOOK(-44, -240, 44, 240, '<path d="M-44 -212h44M-44 -26h44"/>')}</g>
-  <rect class="bk" x="342" y="514" width="36" height="46" rx="7"/>
-  <path d="M378 524c15 0 15 24 0 24M352 502c-6-8 6-14 0-22M366 502c-6-8 6-14 0-22"/>
-  <rect class="bk" x="20" y="560" width="370" height="16" rx="4"/>
-</svg>`;
-function mountBooks(bg) {
-  if (bg.querySelector('.bg-books')) return;
-  bg.insertAdjacentHTML('beforeend', BOOKS_LEFT + BOOKS_RIGHT);
+// The side margins: one lightning strike on each side, so the background is never bare (owner request 2026-11-14,
+// replacing the book outlines). Each bolt is drawn once from a fixed seed (the same bolt on every visit, nothing in it
+// moves) as three stacked strokes: a wide blurred haze, a cyan glow and a bright core, fading in from the top and
+// landing in a small glow. A few sparks drift down beside it (CSS transforms and opacity only; none with reduced
+// motion). base.css colours both themes.
+const W = 160, H = 1000; // viewBox of a bolt
+const seeded = (seed) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+// midpoint displacement: split every segment, push its middle sideways by a random amount that shrinks each pass
+function zigzag(rand, from, to, spread, passes, edge = 10) {
+  let pts = [from, to];
+  for (let p = 0; p < passes; p++, spread *= 0.5) {
+    const next = [pts[0]];
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1], [bx, by] = pts[i], len = Math.hypot(bx - ax, by - ay) || 1, off = (rand() - 0.5) * spread;
+      next.push([Math.min(W - edge, Math.max(edge, (ax + bx) / 2 - ((by - ay) / len) * off)), (ay + by) / 2 + ((bx - ax) / len) * off], [bx, by]);
+    }
+    pts = next;
+  }
+  return pts;
+}
+const toPath = (pts) => 'M' + pts.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L');
+function boltMarkup(side, seed) {
+  const rand = seeded(seed);
+  const main = zigzag(rand, [W / 2 + (rand() - 0.5) * 30, 0], [W / 2 + (rand() - 0.5) * 20, H - 14], 120, 7);
+  // three forks off the middle of the strike, each pointing down and outward, alternating sides
+  const forks = [0.3, 0.5, 0.68].map((at, k) => {
+    const [x, y] = main[Math.round(at * (main.length - 1))], dir = (k % 2 ? 1 : -1) * (side === 'l' ? 1 : -1);
+    const len = 70 + rand() * 60, angle = (0.3 + rand() * 0.3) * dir;
+    return toPath(zigzag(rand, [x, y], [x + Math.sin(angle) * len, y + Math.cos(angle) * len], 26, 5, -40));
+  });
+  const d = toPath(main), layer = (cls) => `<g class="${cls}" stroke="url(#bt-${cls}-${side})"><path d="${d}"/>${forks.map((f) => `<path class="fork" d="${f}"/>`).join('')}</g>`;
+  const fade = (cls) => `<linearGradient id="bt-${cls}-${side}" class="bt-${cls}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${H}">
+    <stop offset="0" stop-opacity="0"/><stop offset=".14"/><stop offset="1"/></linearGradient>`;
+  // sparks: start on the lower half of the bolt, fall 60-150px with a little sideways drift, staggered
+  const sparks = Array.from({ length: 7 }, () => {
+    const [x, y] = main[Math.round((0.42 + rand() * 0.5) * (main.length - 1))];
+    return `<i style="left:${(((x + (rand() - 0.5) * 24) / W) * 100).toFixed(1)}%;top:${((y / H) * 100).toFixed(1)}%;--s:${(2.2 + rand() * 1.8).toFixed(1)}px;--fall:${Math.round(60 + rand() * 90)}px;--dx:${Math.round((rand() - 0.5) * 24)}px;--t:${(6 + rand() * 5).toFixed(1)}s;--d:-${(rand() * 11).toFixed(1)}s"></i>`;
+  }).join('');
+  const [ex] = main[main.length - 1];
+  return `<div class="bg-bolt bg-bolt-${side}" aria-hidden="true"><svg viewBox="0 0 ${W} ${H}" focusable="false">
+  <defs>${fade('haze')}${fade('glow')}${fade('core')}
+    <filter id="bt-blur-${side}" x="-60%" y="-5%" width="220%" height="110%"><feGaussianBlur stdDeviation="7"/></filter>
+    <filter id="bt-soft-${side}" x="-30%" y="-2%" width="160%" height="104%"><feGaussianBlur stdDeviation="2.2"/></filter>
+    <radialGradient id="bt-land-${side}" class="bt-land"><stop offset="0"/><stop offset="1" stop-opacity="0"/></radialGradient></defs>
+  <ellipse class="land" cx="${ex.toFixed(1)}" cy="${H - 14}" rx="70" ry="16" fill="url(#bt-land-${side})"/>
+  <g filter="url(#bt-blur-${side})">${layer('haze')}</g><g filter="url(#bt-soft-${side})">${layer('glow')}</g>${layer('core')}
+</svg>${sparks}</div>`;
+}
+function mountBolts(bg) {
+  if (bg.querySelector('.bg-bolt')) return;
+  bg.insertAdjacentHTML('beforeend', boltMarkup('l', 20261114) + boltMarkup('r', 7340021));
 }
 
 const NO_CIRCUIT = true;
@@ -54,7 +78,7 @@ export function mountAmbient() {
     bg.innerHTML = '<div class="bg-glow bg-glow-a"></div><div class="bg-glow bg-glow-b"></div><div class="bg-noise"></div>';
     document.body.prepend(bg);
   }
-  mountBooks(bg);
+  mountBolts(bg);
   // the background is one solid colour now (edges.css): the circuit lines and their moving current are not drawn
   if (NO_CIRCUIT || bg.querySelector('.e-circuit')) return;
   const svg = document.createElementNS(SVG_NS, 'svg');

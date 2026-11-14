@@ -39,22 +39,30 @@ html[data-theme="light"] .bg .bg-glow-b { background: radial-gradient(closest-si
 html[data-theme="light"] .bg .bg-noise { opacity: .025; }
 .e-circuit { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
 
-/* the study room (chrome.js mountBooks): big book outlines in the side margins, behind everything. One solid stroke
-   (never a hairline) and a fill a step lighter than the canvas, so the books read as shapes without pulling focus */
-.bg-books { position: absolute; z-index: 1; height: auto; pointer-events: none; overflow: visible;
-  --bk-line: #22395a; --bk-fill: #0a1726; --bk-page: #0c1b2c; --bk-ribbon: #1f5370; --bk-ac: #173f57; --bk-ac2: #2c2758; }
-.bg-books * { fill: none; stroke: var(--bk-line); stroke-width: 2.5px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.bg-books .bk { fill: var(--bk-fill); }
-.bg-books .pg { fill: var(--bk-page); }
-.bg-books .rb { stroke: var(--bk-ribbon); fill: var(--bk-ribbon); }
-.bg-books .ac { fill: var(--bk-ac); }
-.bg-books .ac2 { fill: var(--bk-ac2); }
-/* sized to the margin beside the ~1200px content column, pinned to the outer edges */
-.bg-books-l { left: 24px; bottom: 3vh; width: clamp(220px, calc(50vw - 640px), 380px); }
-.bg-books-r { right: 24px; top: 18vh; width: clamp(210px, calc(50vw - 650px), 360px); }
-html[data-theme="light"] .bg-books { --bk-line: #c3d0e3; --bk-fill: #f5f8fc; --bk-page: #ffffff; --bk-ribbon: #9fc2e6; --bk-ac: #d6e6f7; --bk-ac2: #e4ddf8; }
+/* the side margins (chrome.js mountBolts): one static lightning strike each side, behind everything. Stroke colours
+   come from the gradients' stops (each fades in from the top); sparks drift down beside the lower half. 90vh tall,
+   centred in the margin beside the ~1200px content column */
+.bg-bolt { position: absolute; z-index: 1; top: 5vh; height: 90vh; aspect-ratio: 160 / 1000; pointer-events: none;
+  --bt-haze: rgba(74, 123, 255, .6); --bt-glow: #20d4f4; --bt-core: #effcff; --bt-land: rgba(32, 212, 244, .45);
+  --bt-spark: #d8f9ff; --bt-spark-glow: rgba(32, 212, 244, .85); }
+.bg-bolt-l { left: calc(25vw - 300px - 7.2vh); }
+.bg-bolt-r { right: calc(25vw - 300px - 7.2vh); }
+.bg-bolt svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.bg-bolt path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.bg-bolt .land { stroke: none; }
+.bg-bolt .haze path { stroke-width: 28px; } .bg-bolt .haze .fork { stroke-width: 14px; }
+.bg-bolt .glow path { stroke-width: 7.5px; } .bg-bolt .glow .fork { stroke-width: 3.5px; opacity: .8; }
+.bg-bolt .core path { stroke-width: 2.2px; } .bg-bolt .core .fork { stroke-width: 1.2px; opacity: .85; }
+.bt-haze stop { stop-color: var(--bt-haze); } .bt-glow stop { stop-color: var(--bt-glow); } .bt-core stop { stop-color: var(--bt-core); }
+.bt-land stop { stop-color: var(--bt-land); }
+.bg-bolt i { position: absolute; width: var(--s); height: var(--s); margin: calc(var(--s) / -2); border-radius: 50%; opacity: 0;
+  background: var(--bt-spark); box-shadow: 0 0 6px 1px var(--bt-spark-glow); will-change: transform, opacity;
+  animation: bolt-spark var(--t) cubic-bezier(.45, 0, .75, .6) var(--d) infinite; }
+@keyframes bolt-spark { 0% { opacity: 0; transform: translate(0, 0); } 12% { opacity: 1; } 70% { opacity: .7; } 100% { opacity: 0; transform: translate(var(--dx), var(--fall)); } }
+html[data-theme="light"] .bg-bolt { --bt-haze: rgba(52, 97, 240, .3); --bt-glow: #1aa3e0; --bt-core: #ffffff; --bt-land: rgba(52, 97, 240, .16);
+  --bt-spark: #4f8ff5; --bt-spark-glow: rgba(52, 97, 240, .45); }
 /* only where the margins beside the content are wide enough to hold them; narrower, they'd sit under text and cards */
-@media (max-width: 1679px) { .bg-books { display: none; } }
+@media (max-width: 1679px) { .bg-bolt { display: none; } }
 /* no mask and no filters: a full-viewport masked or filtered layer is repainted on every frame the current runs */
 .e-circuit .ec-trace { fill: none; stroke: rgba(170, 196, 235, .07); stroke-width: 1; }
 .e-circuit .ec-node { fill: var(--e-canvas); stroke: rgba(170, 196, 235, .14); stroke-width: 1; }
@@ -119,6 +127,7 @@ html[data-theme="light"] .btn-primary:hover { background: linear-gradient(100deg
   .btn, .btn-primary { transition: background-color var(--e-t-hover), box-shadow var(--e-t-hover), color var(--e-t-hover); }
   .btn:hover, .btn-primary:hover, .btn:active, .btn-primary:active { transform: none; }
   .e-circuit .ec-live { display: none; }
+  .bg-bolt i { display: none; }
 }
 
 /* a page's own quiet trust line (e.g. Plan & billing: "Payments are handled by Stripe…"), in the text face */
