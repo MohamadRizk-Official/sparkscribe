@@ -38,8 +38,8 @@ const T = await import(new URL('../src/lib/transcripts.js', import.meta.url).hre
 With no env values, Supabase reads as "not configured" and Turnstile as off, so only the pure helpers are worth testing this way
 (`tests/exam-plan-test.mjs`, `account-helpers-test.mjs`, `transcripts-helpers-test.mjs`, `library-helpers-test.mjs`,
 `prefs-test.mjs`, `captcha-test.mjs`). Browser globals a module uses (`localStorage`, `location`, `window`, `document`) are
-stood in for by small objects set on `globalThis` before the import. Still not testable this way: `billing.js` (network calls
-at import-time paths), `align-worker.js`, `worker.js`.
+stood in for by small objects set on `globalThis` before the import. Still not testable this way: `align-worker.js` and
+`worker.js` (they load the speech models).
 
 ## Pinning values on purpose
 A few tests pin exact values because other things depend on them: the draft-instruction fingerprint in
