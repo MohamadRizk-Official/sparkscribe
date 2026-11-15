@@ -7,10 +7,10 @@
 
 export const THEME_KEY = 'sparkscribe.theme';
 export const THEME_MODES = ['system', 'light', 'dark'];
-export const THEME_DEFAULT = 'light'; // new visitors start in Light; System and Dark stay one click away
+export const THEME_DEFAULT = 'dark'; // new visitors start in Dark (owner 2026-11-14); System and Light stay one click away
 
 // Plain ES5 on purpose: it runs before any module, in every browser.
-export const THEME_BOOT = `<script>(function(){var d=document.documentElement,p='light';try{p=localStorage.getItem('${THEME_KEY}')||'light'}catch(e){}
+export const THEME_BOOT = `<script>(function(){var d=document.documentElement,p='${THEME_DEFAULT}';try{p=localStorage.getItem('${THEME_KEY}')||'${THEME_DEFAULT}'}catch(e){}
 var t=p==='light'||p==='dark'?p:(window.matchMedia&&matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');d.setAttribute('data-theme',t);d.setAttribute('data-theme-pref',p)})();</script>`;
 
 const system = typeof matchMedia === 'function' ? matchMedia('(prefers-color-scheme: light)') : null;

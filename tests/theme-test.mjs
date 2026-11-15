@@ -16,16 +16,16 @@ const T = await import(new URL('../src/lib/theme.js', import.meta.url).href);
 
 ok(T.THEME_KEY === 'sparkscribe.theme', 'the storage key is sparkscribe.theme');
 ok(T.THEME_MODES.join() === 'system,light,dark', 'three modes: system, light, dark');
-ok(T.THEME_DEFAULT === 'light', 'new visitors start in light');
+ok(T.THEME_DEFAULT === 'dark', 'new visitors start in dark');
 
-ok(T.getThemePref() === 'light', 'nothing stored gives the default');
+ok(T.getThemePref() === 'dark', 'nothing stored gives the default');
 store.set(T.THEME_KEY, 'dark');
 ok(T.getThemePref() === 'dark', 'a stored mode is returned');
 store.set(T.THEME_KEY, 'neon');
-ok(T.getThemePref() === 'light', 'an unknown stored value falls back to the default');
+ok(T.getThemePref() === 'dark', 'an unknown stored value falls back to the default');
 const real = globalThis.localStorage;
 globalThis.localStorage = { getItem() { throw new Error('blocked'); } };
-ok(T.getThemePref() === 'light', 'blocked storage falls back to the default');
+ok(T.getThemePref() === 'dark', 'blocked storage falls back to the default');
 globalThis.localStorage = real;
 
 ok(T.resolvedTheme('light') === 'light' && T.resolvedTheme('dark') === 'dark', 'light and dark resolve to themselves');

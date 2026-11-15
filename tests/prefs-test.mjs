@@ -31,7 +31,7 @@ await P.setMascotPref('off', { sync: false });
 ok(P.getMascotPref() === 'off', 'sync: false still saves locally');
 
 // ---- appearance
-ok(P.getThemePref() === 'light', 'appearance defaults to light');
+ok(P.getThemePref() === 'dark', 'appearance defaults to dark');
 await P.setThemePref('dark');
 ok(P.getThemePref() === 'dark' && store.get('sparkscribe.theme') === 'dark', 'dark is stored');
 ok(document.documentElement.dataset.theme === 'dark' && document.documentElement.dataset.themePref === 'dark', 'it is applied to the page straight away');
@@ -55,7 +55,7 @@ ok(heard.length === 0, 'adopting an identical value does nothing');
 
 // ---- blocked storage
 globalThis.localStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
-ok(P.getMascotPref() === 'on' && P.getThemePref() === 'light', 'blocked storage reads as the defaults');
+ok(P.getMascotPref() === 'on' && P.getThemePref() === 'dark', 'blocked storage reads as the defaults');
 heard.length = 0;
 await P.setMascotPref('quiet');
 ok(heard.some((h) => h[0] === 'mascot' && h[1] === 'quiet'), 'the choice still reaches this page when it cannot be stored');

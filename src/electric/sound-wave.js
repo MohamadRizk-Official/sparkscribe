@@ -18,7 +18,7 @@ const TAPS = 6;
 const VERT = `
 precision highp float;
 attribute float aU; attribute float aS; attribute float aSeed;
-uniform float uTime; uniform vec2 uView; uniform float uMid; uniform float uAmp; uniform float uSize; uniform float uDim; uniform float uGlow;
+uniform float uTime; uniform vec2 uView; uniform float uMid; uniform float uAmp; uniform float uSize; uniform float uDim; uniform float uGlow; uniform float uLight;
 uniform vec2 uPointer; uniform vec4 uTaps[${TAPS}];
 varying float vAlpha; varying vec3 vColor;
 
@@ -61,9 +61,13 @@ void main() {
   gl_Position = vec4(clip, 0.0, 1.0);
   gl_PointSize = uSize * (0.8 + 0.4 * aSeed) * (1.0 + uGlow * 4.0);
 
-  // colour along the wave: cyan at the ends, blue, violet and a little magenta toward the middle
+  // colour along the wave: cyan at the ends, blue, violet and a little magenta toward the middle. Dark: luminous
+  // colours whose light adds up; light: the same hues, deeper and fully saturated, so they stay vivid on a pale page
   float c = 0.5 + 0.5 * sin(x * 6.2832 * 1.2 - 1.6 + aS * 1.2);
-  vec3 cyan = vec3(0.22, 0.72, 1.0), blue = vec3(0.24, 0.36, 1.0), violet = vec3(0.54, 0.26, 1.0), pink = vec3(0.84, 0.32, 0.96);
+  vec3 cyan = mix(vec3(0.22, 0.72, 1.0), vec3(0.0, 0.60, 0.96), uLight);
+  vec3 blue = mix(vec3(0.24, 0.36, 1.0), vec3(0.12, 0.30, 1.0), uLight);
+  vec3 violet = mix(vec3(0.54, 0.26, 1.0), vec3(0.47, 0.16, 0.98), uLight);
+  vec3 pink = mix(vec3(0.84, 0.32, 0.96), vec3(0.86, 0.12, 0.80), uLight);
   vColor = c < 0.5 ? mix(cyan, blue, c * 2.0) : mix(violet, pink, (c - 0.5) * 2.0);
   vColor = mix(vColor, blue, 0.15 * (1.0 - aS));
   // quiet at the very edges of the screen, softer behind the reading column in the middle
@@ -117,7 +121,7 @@ export function mountSoundWave(bg) {
     gl.vertexAttribPointer(loc, 1, gl.FLOAT, false, 12, i * 4);
   });
   const U = {};
-  for (const name of ['uTime', 'uView', 'uMid', 'uAmp', 'uSize', 'uDim', 'uGlow', 'uPointer', 'uTaps', 'uOpacity', 'uDeep']) U[name] = gl.getUniformLocation(prog, name);
+  for (const name of ['uTime', 'uView', 'uMid', 'uAmp', 'uSize', 'uDim', 'uGlow', 'uLight', 'uPointer', 'uTaps', 'uOpacity', 'uDeep']) U[name] = gl.getUniformLocation(prog, name);
   gl.enable(gl.BLEND);
 
   const taps = new Float32Array(TAPS * 4).fill(-1e4);
@@ -133,9 +137,11 @@ export function mountSoundWave(bg) {
     const light = html.dataset.theme === 'light';
     // dark: the light adds up where strands cross (glow); light: ordinary blending, deeper colours, softer
     if (light) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); else gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-    gl.uniform1f(U.uOpacity, light ? 0.9 : 1.35);
-    gl.uniform1f(U.uDeep, light ? 0.8 : 1);
-    gl.uniform1f(U.uDim, light ? 0.36 : 0.45);
+    gl.uniform1f(U.uOpacity, light ? 1.5 : 1.35);
+    gl.uniform1f(U.uDeep, 1);
+    gl.uniform1f(U.uLight, light ? 1 : 0);
+    gl.uniform1f(U.uSize, (light ? 3.6 : 3.2) * dpr);
+    gl.uniform1f(U.uDim, light ? 0.4 : 0.45);
   }
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -145,7 +151,7 @@ export function mountSoundWave(bg) {
     gl.uniform2f(U.uView, w, h);
     gl.uniform1f(U.uMid, h * 0.58);
     gl.uniform1f(U.uAmp, Math.min(h * 0.34, 360));
-    gl.uniform1f(U.uSize, 3.2 * dpr);
+    gl.uniform1f(U.uSize, (html.dataset.theme === 'light' ? 3.6 : 3.2) * dpr);
   }
   function draw() {
     eased.x += (pointer.x - eased.x) * 0.25; eased.y += (pointer.y - eased.y) * 0.25;
@@ -175,6 +181,9 @@ export function mountSoundWave(bg) {
   }
 
   resize(); theme(); wake();
+  // a theme switch redraws at once, inside the switch itself: the switch animation takes its picture of the new page
+  // right away, and a frame still drawn for the old theme would show in it until the animation ends
+  window.addEventListener('sparkscribe:theme', () => { theme(); if (canvas.width) draw(); });
   new MutationObserver(() => { theme(); wake(); if (calm.matches) draw(); }).observe(html, { attributes: true, attributeFilter: ['data-theme', 'class'] });
   document.addEventListener('visibilitychange', wake);
   shown.addEventListener?.('change', () => { resize(); wake(); });
