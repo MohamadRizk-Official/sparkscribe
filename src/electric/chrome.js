@@ -15,52 +15,52 @@ const TRACES = [
 ];
 const NODES = [[1100, 262], [1232, 388], [266, 780], [90, 900]];
 
-// The side margins: one lightning strike on each side, so the background is never bare (owner request 2026-11-14,
-// replacing the book outlines). Each bolt is drawn once from a fixed seed (the same bolt on every visit, nothing in it
-// moves) as three stacked strokes: a wide blurred haze, a cyan glow and a bright core, fading in from the top and
-// landing in a small glow. A few sparks drift down beside it (CSS transforms and opacity only; none with reduced
-// motion). base.css colours both themes.
-const W = 160, H = 1000; // viewBox of a bolt
+// The side margins: a quiet pattern of lightning, so the background is never bare (owner request 2026-11-14,
+// replacing the book outlines). One branching network per side: a strike from the top of the page that forks, and forks
+// again, every branch growing out of another so the whole pattern is connected. Drawn once from a fixed seed (the same
+// pattern on every visit, nothing in it moves), in muted strokes that thin and fade with each fork. A few dim sparks
+// drift down along it (CSS transforms and opacity only; none with reduced motion). base.css colours both themes.
+// Drawn for the left margin (x 0 = the page edge, x W = the content side; branches that reach further fade out before
+// it, base.css); the right one is mirrored in CSS.
+const W = 300, H = 1000; // viewBox of a margin
 const seeded = (seed) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
 // midpoint displacement: split every segment, push its middle sideways by a random amount that shrinks each pass
-function zigzag(rand, from, to, spread, passes, edge = 10) {
+function zigzag(rand, from, to, spread, passes) {
   let pts = [from, to];
   for (let p = 0; p < passes; p++, spread *= 0.5) {
     const next = [pts[0]];
     for (let i = 1; i < pts.length; i++) {
       const [ax, ay] = pts[i - 1], [bx, by] = pts[i], len = Math.hypot(bx - ax, by - ay) || 1, off = (rand() - 0.5) * spread;
-      next.push([Math.min(W - edge, Math.max(edge, (ax + bx) / 2 - ((by - ay) / len) * off)), (ay + by) / 2 + ((bx - ax) / len) * off], [bx, by]);
+      next.push([(ax + bx) / 2 - ((by - ay) / len) * off, (ay + by) / 2 + ((bx - ax) / len) * off], [bx, by]);
     }
     pts = next;
   }
   return pts;
 }
+// a branch, then its forks from points along it (most reach out toward the page edge), down to three levels
+function grow(rand, lines, from, angle, len, depth) {
+  const pts = zigzag(rand, from, [from[0] + Math.sin(angle) * len, from[1] + Math.cos(angle) * len], len * 0.24, 7 - depth);
+  (lines[depth] ||= []).push(pts);
+  if (depth === 3) return;
+  for (let k = 0; k < [5, 3, 2][depth]; k++) {
+    const at = pts[Math.floor((0.1 + rand() * 0.75) * (pts.length - 1))];
+    const turn = (0.35 + rand() * 0.55) * (rand() < 0.65 ? -1 : 1);
+    grow(rand, lines, at, Math.max(-1.3, Math.min(1.3, angle + turn)), len * (0.26 + rand() * 0.3), depth + 1);
+  }
+}
 const toPath = (pts) => 'M' + pts.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L');
 function boltMarkup(side, seed) {
-  const rand = seeded(seed);
-  const main = zigzag(rand, [W / 2 + (rand() - 0.5) * 30, 0], [W / 2 + (rand() - 0.5) * 20, H - 14], 120, 7);
-  // three forks off the middle of the strike, each pointing down and outward, alternating sides
-  const forks = [0.3, 0.5, 0.68].map((at, k) => {
-    const [x, y] = main[Math.round(at * (main.length - 1))], dir = (k % 2 ? 1 : -1) * (side === 'l' ? 1 : -1);
-    const len = 70 + rand() * 60, angle = (0.3 + rand() * 0.3) * dir;
-    return toPath(zigzag(rand, [x, y], [x + Math.sin(angle) * len, y + Math.cos(angle) * len], 26, 5, -40));
-  });
-  const d = toPath(main), layer = (cls) => `<g class="${cls}" stroke="url(#bt-${cls}-${side})"><path d="${d}"/>${forks.map((f) => `<path class="fork" d="${f}"/>`).join('')}</g>`;
-  const fade = (cls) => `<linearGradient id="bt-${cls}-${side}" class="bt-${cls}" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${H}">
-    <stop offset="0" stop-opacity="0"/><stop offset=".14"/><stop offset="1"/></linearGradient>`;
-  // sparks: start on the lower half of the bolt, fall 60-150px with a little sideways drift, staggered
-  const sparks = Array.from({ length: 7 }, () => {
-    const [x, y] = main[Math.round((0.42 + rand() * 0.5) * (main.length - 1))];
-    return `<i style="left:${(((x + (rand() - 0.5) * 24) / W) * 100).toFixed(1)}%;top:${((y / H) * 100).toFixed(1)}%;--s:${(2.2 + rand() * 1.8).toFixed(1)}px;--fall:${Math.round(60 + rand() * 90)}px;--dx:${Math.round((rand() - 0.5) * 24)}px;--t:${(6 + rand() * 5).toFixed(1)}s;--d:-${(rand() * 11).toFixed(1)}s"></i>`;
+  const rand = seeded(seed), lines = [];
+  grow(rand, lines, [W * (0.55 + rand() * 0.15), -10], (rand() - 0.5) * 0.12, H + 20, 0);
+  const d = lines.map((group) => group.map(toPath).join(''));
+  // sparks: start somewhere on the strike or its first forks, fall 50-120px with a little sideways drift, staggered
+  const near = [...lines[0], ...lines[1]];
+  const sparks = Array.from({ length: 5 }, () => {
+    const branch = near[Math.floor(rand() * near.length)], [x, y] = branch[Math.floor((0.2 + rand() * 0.7) * (branch.length - 1))];
+    return `<i style="left:${((Math.max(4, x) / W) * 100).toFixed(1)}%;top:${((Math.max(60, y) / H) * 100).toFixed(1)}%;--s:${(1.6 + rand()).toFixed(1)}px;--fall:${Math.round(50 + rand() * 70)}px;--dx:${Math.round((rand() - 0.5) * 20)}px;--t:${(7 + rand() * 5).toFixed(1)}s;--d:-${(rand() * 12).toFixed(1)}s"></i>`;
   }).join('');
-  const [ex] = main[main.length - 1];
-  return `<div class="bg-bolt bg-bolt-${side}" aria-hidden="true"><svg viewBox="0 0 ${W} ${H}" focusable="false">
-  <defs>${fade('haze')}${fade('glow')}${fade('core')}
-    <filter id="bt-blur-${side}" x="-60%" y="-5%" width="220%" height="110%"><feGaussianBlur stdDeviation="7"/></filter>
-    <filter id="bt-soft-${side}" x="-30%" y="-2%" width="160%" height="104%"><feGaussianBlur stdDeviation="2.2"/></filter>
-    <radialGradient id="bt-land-${side}" class="bt-land"><stop offset="0"/><stop offset="1" stop-opacity="0"/></radialGradient></defs>
-  <ellipse class="land" cx="${ex.toFixed(1)}" cy="${H - 14}" rx="70" ry="16" fill="url(#bt-land-${side})"/>
-  <g filter="url(#bt-blur-${side})">${layer('haze')}</g><g filter="url(#bt-soft-${side})">${layer('glow')}</g>${layer('core')}
+  return `<div class="bg-bolt bg-bolt-${side}" aria-hidden="true"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" focusable="false">
+  <path class="halo" d="${d[0]}${d[1]}"/>${d.map((x, i) => `<path class="ln${i}" d="${x}"/>`).join('')}
 </svg>${sparks}</div>`;
 }
 function mountBolts(bg) {
