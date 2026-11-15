@@ -69,7 +69,7 @@ void main() {
   // quiet at the very edges of the screen, softer behind the reading column in the middle
   float edge = smoothstep(0.0, 0.06, x) * smoothstep(1.0, 0.94, x);
   float col = mix(uDim, 1.0, smoothstep(500.0, 680.0, abs(p.x - uView.x * 0.5)));
-  vAlpha = edge * col * (0.35 + 0.65 * aS) * (1.0 - uGlow * 0.93);
+  vAlpha = edge * col * (0.5 + 0.5 * aS) * (1.0 - uGlow * 0.88);
 }`;
 
 const FRAG = `
@@ -133,9 +133,9 @@ export function mountSoundWave(bg) {
     const light = html.dataset.theme === 'light';
     // dark: the light adds up where strands cross (glow); light: ordinary blending, deeper colours, softer
     if (light) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); else gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
-    gl.uniform1f(U.uOpacity, light ? 0.7 : 1);
+    gl.uniform1f(U.uOpacity, light ? 0.9 : 1.35);
     gl.uniform1f(U.uDeep, light ? 0.8 : 1);
-    gl.uniform1f(U.uDim, light ? 0.3 : 0.38);
+    gl.uniform1f(U.uDim, light ? 0.36 : 0.45);
   }
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -143,9 +143,9 @@ export function mountSoundWave(bg) {
     canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.uniform2f(U.uView, w, h);
-    gl.uniform1f(U.uMid, h * 0.6);
-    gl.uniform1f(U.uAmp, Math.min(h * 0.24, 250));
-    gl.uniform1f(U.uSize, 2.6 * dpr);
+    gl.uniform1f(U.uMid, h * 0.58);
+    gl.uniform1f(U.uAmp, Math.min(h * 0.34, 360));
+    gl.uniform1f(U.uSize, 3.2 * dpr);
   }
   function draw() {
     eased.x += (pointer.x - eased.x) * 0.25; eased.y += (pointer.y - eased.y) * 0.25;
