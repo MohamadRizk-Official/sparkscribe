@@ -39,28 +39,27 @@ html[data-theme="light"] .bg .bg-glow-b { background: radial-gradient(closest-si
 html[data-theme="light"] .bg .bg-noise { opacity: .025; }
 .e-circuit { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; pointer-events: none; }
 
-/* the side margins (chrome.js mountBolts): a quiet, connected pattern of lightning in each margin, behind everything.
-   Muted strokes (never a glow that pulls focus) that thin and fade with each fork; a few dim sparks drift along it.
-   Fills the margin beside the ~1200px content column, edge to edge, full height; the right one is the left mirrored */
+/* the side margins (chrome.js mountBolts): a calm, connected pattern of flowing lines in each margin, behind
+   everything. Soft muted strokes that thin and fade with each division; now and then a soft light runs slowly down one
+   line (.bt-live, its own layer so the pattern itself is never repainted). Fills the margin beside the ~1200px content
+   column, edge to edge, full height, fading out before the content; the right one is the left mirrored */
 .bg-bolt { position: absolute; z-index: 1; top: 0; height: 100vh; width: calc(50vw - 620px); pointer-events: none;
-  --bt-rgb: 120, 165, 225; --bt-a0: .3; --bt-a1: .22; --bt-a2: .16; --bt-a3: .11; --bt-halo: rgba(90, 150, 240, .05);
-  --bt-spark: rgba(175, 210, 250, .6); --bt-spark-glow: rgba(120, 170, 240, .35); }
+  --bt-rgb: 118, 160, 228; --bt-a0: .2; --bt-a1: .15; --bt-a2: .11; --bt-a3: .08;
+  --bt-core: rgba(170, 230, 255, .9); --bt-glow: rgba(70, 170, 255, .22); }
 .bg-bolt-l { left: 0; }
 .bg-bolt-r { right: 0; transform: scaleX(-1); }
-.bg-bolt svg { display: block; width: 100%; height: 100%; overflow: hidden;
+.bg-bolt svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; overflow: hidden;
   -webkit-mask-image: linear-gradient(90deg, #000 62%, transparent 96%); mask-image: linear-gradient(90deg, #000 62%, transparent 96%); }
+.bg-bolt .bt-live { will-change: transform; }
 .bg-bolt path { fill: none; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.bg-bolt .halo { stroke: var(--bt-halo); stroke-width: 9px; }
-.bg-bolt .ln0 { stroke: rgba(var(--bt-rgb), var(--bt-a0)); stroke-width: 2.2px; }
-.bg-bolt .ln1 { stroke: rgba(var(--bt-rgb), var(--bt-a1)); stroke-width: 1.7px; }
-.bg-bolt .ln2 { stroke: rgba(var(--bt-rgb), var(--bt-a2)); stroke-width: 1.4px; }
-.bg-bolt .ln3 { stroke: rgba(var(--bt-rgb), var(--bt-a3)); stroke-width: 1.2px; }
-.bg-bolt i { position: absolute; width: var(--s); height: var(--s); margin: calc(var(--s) / -2); border-radius: 50%; opacity: 0;
-  background: var(--bt-spark); box-shadow: 0 0 4px 1px var(--bt-spark-glow); will-change: transform, opacity;
-  animation: bolt-spark var(--t) cubic-bezier(.45, 0, .75, .6) var(--d) infinite; }
-@keyframes bolt-spark { 0% { opacity: 0; transform: translate(0, 0); } 15% { opacity: 1; } 70% { opacity: .6; } 100% { opacity: 0; transform: translate(var(--dx), var(--fall)); } }
-html[data-theme="light"] .bg-bolt { --bt-rgb: 70, 110, 180; --bt-a0: .22; --bt-a1: .16; --bt-a2: .12; --bt-a3: .085; --bt-halo: rgba(52, 97, 240, .035);
-  --bt-spark: rgba(70, 110, 180, .45); --bt-spark-glow: rgba(52, 97, 240, .2); }
+.bg-bolt .ln0 { stroke: rgba(var(--bt-rgb), var(--bt-a0)); stroke-width: 2px; }
+.bg-bolt .ln1 { stroke: rgba(var(--bt-rgb), var(--bt-a1)); stroke-width: 1.6px; }
+.bg-bolt .ln2 { stroke: rgba(var(--bt-rgb), var(--bt-a2)); stroke-width: 1.3px; }
+.bg-bolt .ln3 { stroke: rgba(var(--bt-rgb), var(--bt-a3)); stroke-width: 1.1px; }
+.bg-bolt .glow { stroke: var(--bt-glow); stroke-width: 10px; }
+.bg-bolt .core { stroke: var(--bt-core); stroke-width: 2px; }
+html[data-theme="light"] .bg-bolt { --bt-rgb: 80, 118, 185; --bt-a0: .17; --bt-a1: .13; --bt-a2: .095; --bt-a3: .07;
+  --bt-core: rgba(52, 110, 235, .65); --bt-glow: rgba(52, 97, 240, .14); }
 /* only where the margins beside the content are wide enough to hold them; narrower, they'd sit under text and cards */
 @media (max-width: 1679px) { .bg-bolt { display: none; } }
 /* no mask and no filters: a full-viewport masked or filtered layer is repainted on every frame the current runs */
@@ -127,7 +126,6 @@ html[data-theme="light"] .btn-primary:hover { background: linear-gradient(100deg
   .btn, .btn-primary { transition: background-color var(--e-t-hover), box-shadow var(--e-t-hover), color var(--e-t-hover); }
   .btn:hover, .btn-primary:hover, .btn:active, .btn-primary:active { transform: none; }
   .e-circuit .ec-live { display: none; }
-  .bg-bolt i { display: none; }
 }
 
 /* a page's own quiet trust line (e.g. Plan & billing: "Payments are handled by Stripe…"), in the text face */

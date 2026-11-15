@@ -15,57 +15,91 @@ const TRACES = [
 ];
 const NODES = [[1100, 262], [1232, 388], [266, 780], [90, 900]];
 
-// The side margins: a quiet pattern of lightning, so the background is never bare (owner request 2026-11-14,
-// replacing the book outlines). One branching network per side: a strike from the top of the page that forks, and forks
-// again, every branch growing out of another so the whole pattern is connected. Drawn once from a fixed seed (the same
-// pattern on every visit, nothing in it moves), in muted strokes that thin and fade with each fork. A few dim sparks
-// drift down along it (CSS transforms and opacity only; none with reduced motion). base.css colours both themes.
-// Drawn for the left margin (x 0 = the page edge, x W = the content side; branches that reach further fade out before
-// it, base.css); the right one is mirrored in CSS.
+// The side margins: a calm pattern of flowing lines, so the background is never bare (owner request 2026-11-14,
+// replacing the book outlines). One branching network per side: a line from the top of the page that gently curves and
+// divides, and divides again, every branch growing out of another so the whole pattern is connected. Drawn once from a
+// fixed seed (the same pattern on every visit), in soft muted strokes that thin and fade with each division. Now and
+// then a soft light runs slowly down one of the lines from where it starts and fades out partway (runPulses).
+// Drawn for the left margin (x 0 = the page edge, x W = the content side; lines that reach further fade out before it,
+// base.css); the right one is mirrored in CSS.
 const W = 300, H = 1000; // viewBox of a margin
 const seeded = (seed) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-// midpoint displacement: split every segment, push its middle sideways by a random amount that shrinks each pass
-function zigzag(rand, from, to, spread, passes) {
-  let pts = [from, to];
-  for (let p = 0; p < passes; p++, spread *= 0.5) {
-    const next = [pts[0]];
-    for (let i = 1; i < pts.length; i++) {
-      const [ax, ay] = pts[i - 1], [bx, by] = pts[i], len = Math.hypot(bx - ax, by - ay) || 1, off = (rand() - 0.5) * spread;
-      next.push([(ax + bx) / 2 - ((by - ay) / len) * off, (ay + by) / 2 + ((bx - ax) / len) * off], [bx, by]);
-    }
-    pts = next;
-  }
-  return pts;
-}
-// a branch, then its forks from points along it (most reach out toward the page edge), down to three levels
+// a branch walks in even steps, turning a little at each (with a slow overall bend), so it curves instead of zigzagging;
+// then its own branches start from points along it, most leaning out toward the page edge, down to three levels
 function grow(rand, lines, from, angle, len, depth) {
-  const pts = zigzag(rand, from, [from[0] + Math.sin(angle) * len, from[1] + Math.cos(angle) * len], len * 0.24, 7 - depth);
+  const step = 42, pts = [from], bend = (rand() - 0.5) * 0.08;
+  for (let i = 0, a = angle; i < Math.max(3, Math.round(len / step)); i++) {
+    a = Math.max(-1.2, Math.min(1.2, a + bend + (rand() - 0.5) * 0.3));
+    const [x, y] = pts[pts.length - 1];
+    pts.push([x + Math.sin(a) * step, y + Math.cos(a) * step]);
+  }
   (lines[depth] ||= []).push(pts);
   if (depth === 3) return;
-  for (let k = 0; k < [5, 3, 2][depth]; k++) {
-    const at = pts[Math.floor((0.1 + rand() * 0.75) * (pts.length - 1))];
-    const turn = (0.35 + rand() * 0.55) * (rand() < 0.65 ? -1 : 1);
-    grow(rand, lines, at, Math.max(-1.3, Math.min(1.3, angle + turn)), len * (0.26 + rand() * 0.3), depth + 1);
+  for (let k = 0; k < [6, 3, 2][depth]; k++) {
+    const at = pts[1 + Math.floor(rand() * (pts.length - 2))];
+    const turn = (0.3 + rand() * 0.45) * (rand() < 0.65 ? -1 : 1);
+    grow(rand, lines, at, angle + turn, len * (0.32 + rand() * 0.3), depth + 1);
   }
 }
-const toPath = (pts) => 'M' + pts.map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`).join('L');
-function boltMarkup(side, seed) {
+// a smooth curve through the points (Catmull-Rom as cubic Béziers)
+const f = (v) => v.toFixed(1);
+function smooth(pts) {
+  let d = `M${f(pts[0][0])} ${f(pts[0][1])}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i], [x1, y1] = pts[i], [x2, y2] = pts[i + 1], p3 = pts[i + 2] || pts[i + 1];
+    d += `C${f(x1 + (x2 - p0[0]) / 6)} ${f(y1 + (y2 - p0[1]) / 6)} ${f(x2 - (p3[0] - x1) / 6)} ${f(y2 - (p3[1] - y1) / 6)} ${f(x2)} ${f(y2)}`;
+  }
+  return d;
+}
+function patternMarkup(side, seed) {
   const rand = seeded(seed), lines = [];
-  grow(rand, lines, [W * (0.55 + rand() * 0.15), -10], (rand() - 0.5) * 0.12, H + 20, 0);
-  const d = lines.map((group) => group.map(toPath).join(''));
-  // sparks: start somewhere on the strike or its first forks, fall 50-120px with a little sideways drift, staggered
-  const near = [...lines[0], ...lines[1]];
-  const sparks = Array.from({ length: 5 }, () => {
-    const branch = near[Math.floor(rand() * near.length)], [x, y] = branch[Math.floor((0.2 + rand() * 0.7) * (branch.length - 1))];
-    return `<i style="left:${((Math.max(4, x) / W) * 100).toFixed(1)}%;top:${((Math.max(60, y) / H) * 100).toFixed(1)}%;--s:${(1.6 + rand()).toFixed(1)}px;--fall:${Math.round(50 + rand() * 70)}px;--dx:${Math.round((rand() - 0.5) * 20)}px;--t:${(7 + rand() * 5).toFixed(1)}s;--d:-${(rand() * 12).toFixed(1)}s"></i>`;
-  }).join('');
-  return `<div class="bg-bolt bg-bolt-${side}" aria-hidden="true"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" focusable="false">
-  <path class="halo" d="${d[0]}${d[1]}"/>${d.map((x, i) => `<path class="ln${i}" d="${x}"/>`).join('')}
-</svg>${sparks}</div>`;
+  grow(rand, lines, [W * (0.5 + rand() * 0.15), -20], (rand() - 0.5) * 0.1, H + 60, 0);
+  const curves = lines.map((group) => group.map(smooth));
+  const html = `<div class="bg-bolt bg-bolt-${side}" aria-hidden="true"><svg class="bt-net" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" focusable="false">
+  ${curves.map((group, i) => `<path class="ln${i}" d="${group.join('')}"/>`).join('')}
+</svg><svg class="bt-live" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" focusable="false"></svg></div>`;
+  // the lights run on the longer lines more often than on the smallest ones
+  return { html, routes: curves.flatMap((group, i) => group.map((d) => [d, 4 - i])) };
 }
 function mountBolts(bg) {
   if (bg.querySelector('.bg-bolt')) return;
-  bg.insertAdjacentHTML('beforeend', boltMarkup('l', 20261114) + boltMarkup('r', 7340021));
+  const sides = [patternMarkup('l', 20261114), patternMarkup('r', 7340021)];
+  bg.insertAdjacentHTML('beforeend', sides.map((x) => x.html).join(''));
+  runPulses([...bg.querySelectorAll('.bt-live')].map((svg, i) => [svg, sides[i].routes]));
+}
+
+// The lights: every 1-2.8 s (at most four at a time) one starts at the top of a random line, runs slowly down it as a
+// short soft glow and fades out somewhere between 40% and the end. Nothing runs with reduced motion, in a hidden tab, or
+// while the pattern isn't displayed (narrow screens).
+function runPulses(sides) {
+  const calm = matchMedia('(prefers-reduced-motion: reduce)'), shown = matchMedia('(min-width: 1680px)');
+  let live = 0;
+  const pick = (routes) => {
+    let r = Math.random() * routes.reduce((t, [, w]) => t + w, 0);
+    return routes.find(([, w]) => (r -= w) < 0)?.[0] || routes[0][0];
+  };
+  const pulse = () => {
+    const [svg, routes] = sides[Math.floor(Math.random() * sides.length)], d = pick(routes);
+    const g = document.createElementNS(SVG_NS, 'g');
+    g.innerHTML = `<path class="glow" d="${d}"/><path class="core" d="${d}"/>`;
+    svg.appendChild(g);
+    // a comet: the soft glow and the bright core share a head, the glow trails further behind it
+    const total = g.firstChild.getTotalLength(), dash = 120 + Math.random() * 100, run = total * (0.4 + Math.random() * 0.6) + dash;
+    const timing = { duration: Math.max(4000, run * 16), easing: 'cubic-bezier(.35, 0, .65, 1)' };
+    let done = 0;
+    live++;
+    [...g.children].forEach((path, i) => {
+      const len = i ? dash * 0.45 : dash;
+      path.style.strokeDasharray = `${len} ${total + dash * 2}`;
+      path.animate([{ strokeDashoffset: len, opacity: 0 }, { opacity: 1, offset: 0.18 }, { opacity: 1, offset: 0.65 }, { strokeDashoffset: len - run, opacity: 0 }], timing)
+        .onfinish = () => { if (++done === 2) { g.remove(); live--; } };
+    });
+  };
+  const tick = () => {
+    if (!calm.matches && shown.matches && !document.hidden && live < 4) pulse();
+    setTimeout(tick, 1000 + Math.random() * 1800);
+  };
+  setTimeout(tick, 800);
 }
 
 const NO_CIRCUIT = true;
