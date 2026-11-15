@@ -220,7 +220,7 @@ function onWorkerMessage({ data }) {
     case 'language': if (state) state.language = data.language; break;
     case 'complete': onComplete(data); break;
     case 'debug': if (data.speakers) window.__dbgSpeakers = data.speakers; else window.__dbg = data; break;
-    case 'error': showError(data.message + (data.stack ? '\n\n' + data.stack : '')); break;
+    case 'error': document.documentElement.classList.remove('bg-working'); showError(data.message + (data.stack ? '\n\n' + data.stack : '')); break;
   }
 }
 
@@ -331,6 +331,7 @@ function reset({ restartWorker = !!run && !state?.lines } = {}) {
   els.player.removeAttribute('src');
   if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
   state = null; currentFile = null; run = null;
+  document.documentElement.classList.remove('bg-working');
   timing.reset();
   resetSave();
   if (location.pathname !== '/') history.replaceState(history.state, '', '/');
@@ -410,6 +411,7 @@ function setStage(stage) {
   run.stage = stage;
   run.stageStart = performance.now();
   run.stagePct = 0;
+  document.documentElement.classList.toggle('bg-working', stage !== 'done'); // the background wave rests while the GPU works
   if (stage === 'review') els.steps.querySelector('[data-step="review"]').classList.remove('hidden');
   layoutSteps();
   const idx = STEPS.indexOf(stage);
