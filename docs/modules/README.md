@@ -36,5 +36,17 @@ Short explanations of how individual modules behave, written from the code. Each
 | `server/ai/mock.js` | [browser-and-dev-helpers.md](browser-and-dev-helpers.md#mock-ai-provider) | `tests/mock-provider-test.mjs` |
 | `src/lib/account.js`, `transcripts.js`, `library.js`, `prefs.js`, `captcha.js` | [browser-and-dev-helpers.md](browser-and-dev-helpers.md) | `tests/account-helpers-test.mjs`, `tests/transcripts-helpers-test.mjs`, `tests/library-helpers-test.mjs`, `tests/prefs-test.mjs`, `tests/captcha-test.mjs` |
 | `server/ai/study.js`, `server/ai/studymap.js` (helpers) | the header comments in each file | `tests/study-helpers-test.mjs`, `tests/studymap-helpers-test.mjs` |
+| `src/engine/model-cache.js`, `src/engine/fetch-model.js` | [model-cache.md](model-cache.md), [fetch-model.md](fetch-model.md) | `tests/model-cache-test.mjs` |
+| `src/engine/nemotron-files.js`, `speaker-check.js`, `gpu-device.js` | [nemotron-files.md](nemotron-files.md), [speaker-check.md](speaker-check.md), [gpu-device.md](gpu-device.md) | `tests/nemotron-files-test.mjs` |
+| `src/engine/voice-guard.js` | [voice-guard.md](voice-guard.md) | `tests/voice-guard-test.mjs` |
+| `src/engine/speaker-words.js` | [speaker-words-overview.md](speaker-words-overview.md) | `tests/speaker-words-test.mjs` |
+| `src/lib/continuation.js` | [continuation.md](continuation.md) | `tests/continuation-test.mjs` |
+| `src/lib/fetch-progress.js` | [fetch-progress.md](fetch-progress.md) | `tests/fetch-progress-test.mjs` |
+| `src/lib/timing-plan.js` | [timing-plan.md](timing-plan.md) | `tests/timing-plan-test.mjs` |
+| `src/lib/metrics.js` | [metrics.md](metrics.md) | `tests/metrics-test.mjs` |
+| `src/lib/pricing-catalog.js` | [pricing-catalog.md](pricing-catalog.md) | `tests/pricing-catalog-test.mjs` |
+| `src/insights/answer-format.js` | [answer-format.md](answer-format.md) | `tests/ask-format-test.mjs` |
+| `src/insights/focus-review.js` | [focus-review.md](focus-review.md) | `tests/focus-review-test.mjs` |
+| `src/home/dashboard.js` | [dashboard.md](dashboard.md) | none (needs a browser and Supabase) |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
