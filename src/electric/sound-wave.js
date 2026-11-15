@@ -9,6 +9,8 @@
 // computed from time and a few uniforms, so the processor does almost nothing per frame) follows the technique of the
 // particle hero on javvad.dev; this is our own code and our own shape, in plain WebGL (no library).
 //
+// It spawns in gently when the page opens and again after a theme switch.
+//
 // Calm by design: it rests (no frames drawn) in a hidden tab, while a recording is being transcribed (the GPU is busy),
 // on screens narrower than 900px, and with reduced motion (one still frame, no ripples).
 
@@ -18,7 +20,7 @@ const TAPS = 6;
 const VERT = `
 precision highp float;
 attribute float aU; attribute float aS; attribute float aSeed;
-uniform float uTime; uniform vec2 uView; uniform float uMid; uniform float uAmp; uniform float uSize; uniform float uDim; uniform float uGlow; uniform float uLight;
+uniform float uTime; uniform vec2 uView; uniform float uMid; uniform float uAmp; uniform float uSize; uniform float uDim; uniform float uGlow; uniform float uLight; uniform float uIntro;
 uniform vec2 uPointer; uniform vec4 uTaps[${TAPS}];
 varying float vAlpha; varying vec3 vColor;
 
@@ -38,6 +40,12 @@ void main() {
   float x = fract(aU + t * 0.01);                 // the points themselves drift slowly to the right
   vec2 p = vec2(x * uView.x, uMid - wave(x, aS, t) * uAmp);
   p.y += (aSeed - 0.5) * 0.8 + sin(t * 1.3 + aSeed * 90.0) * 0.5;   // a little grain and breath
+
+  // spawning in (page opened, theme switched): each point drifts in from a little to the left and a little scattered,
+  // fading up as it settles into the wave, the points staggered so the wave gathers rather than appears
+  float enter = smoothstep(0.0, 1.0, clamp(uIntro * 1.6 - aSeed * 0.6, 0.0, 1.0));
+  float sa = aSeed * 18.85;
+  p += (vec2(cos(sa), sin(sa)) * (30.0 + 70.0 * fract(aSeed * 13.7)) - vec2(90.0, 0.0)) * (1.0 - enter);
 
   // the pointer stirs the points it passes over
   vec2 d = p - uPointer;
@@ -73,7 +81,7 @@ void main() {
   // quiet at the very edges of the screen, softer behind the reading column in the middle
   float edge = smoothstep(0.0, 0.06, x) * smoothstep(1.0, 0.94, x);
   float col = mix(uDim, 1.0, smoothstep(500.0, 680.0, abs(p.x - uView.x * 0.5)));
-  vAlpha = edge * col * (0.5 + 0.5 * aS) * (1.0 - uGlow * 0.88);
+  vAlpha = edge * col * (0.5 + 0.5 * aS) * (1.0 - uGlow * 0.88) * enter;
 }`;
 
 const FRAG = `
@@ -121,12 +129,15 @@ export function mountSoundWave(bg) {
     gl.vertexAttribPointer(loc, 1, gl.FLOAT, false, 12, i * 4);
   });
   const U = {};
-  for (const name of ['uTime', 'uView', 'uMid', 'uAmp', 'uSize', 'uDim', 'uGlow', 'uLight', 'uPointer', 'uTaps', 'uOpacity', 'uDeep']) U[name] = gl.getUniformLocation(prog, name);
+  for (const name of ['uTime', 'uView', 'uMid', 'uAmp', 'uSize', 'uDim', 'uGlow', 'uLight', 'uIntro', 'uPointer', 'uTaps', 'uOpacity', 'uDeep']) U[name] = gl.getUniformLocation(prog, name);
   gl.enable(gl.BLEND);
 
   const taps = new Float32Array(TAPS * 4).fill(-1e4);
   let tapSlot = 0, t = 0, last = performance.now(), raf = 0, dpr = 1, w = 0, h = 0;
   const pointer = { x: -1e4, y: -1e4 }, eased = { x: -1e4, y: -1e4 };
+  // the spawn: starts with the first frame drawn; held at nothing while a theme switch animates
+  const SPAWN_MS = 1600;
+  let spawnFrom = null, held = false;
 
   const calm = matchMedia('(prefers-reduced-motion: reduce)');
   const shown = matchMedia('(min-width: 900px)');
@@ -158,6 +169,8 @@ export function mountSoundWave(bg) {
     gl.uniform1f(U.uTime, t);
     gl.uniform2f(U.uPointer, eased.x, eased.y);
     gl.uniform4fv(U.uTaps, taps);
+    if (spawnFrom === null && !held) spawnFrom = performance.now();
+    gl.uniform1f(U.uIntro, held ? 0 : calm.matches ? 1 : Math.min(1, (performance.now() - spawnFrom) / SPAWN_MS));
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
     // two passes over the same points: a wide faint halo (the bloom around the strands), then the strands themselves
@@ -181,10 +194,19 @@ export function mountSoundWave(bg) {
   }
 
   resize(); theme(); wake();
-  // a theme switch redraws at once, inside the switch itself: the switch animation takes its picture of the new page
-  // right away, and a frame still drawn for the old theme would show in it until the animation ends
-  window.addEventListener('sparkscribe:theme', () => { theme(); if (canvas.width) draw(); });
-  new MutationObserver(() => { theme(); wake(); if (calm.matches) draw(); }).observe(html, { attributes: true, attributeFilter: ['data-theme', 'class'] });
+  // A theme switch: the wave leaves at once (cleared inside the switch itself) and spawns in again in the new colours
+  // once the switch's circle animation has finished (html.theme-vt, lib/theme-toggle.js). That animation plays on a
+  // picture of the page, in which the wave looks paler than it really is; with nothing drawn there, there is no jump.
+  const respawn = () => { held = false; spawnFrom = null; wake(); if (calm.matches) draw(); };
+  window.addEventListener('sparkscribe:theme', () => {
+    held = true; theme();
+    if (canvas.width) draw();
+    if (!html.classList.contains('theme-vt')) respawn();
+  });
+  new MutationObserver(() => {
+    theme(); wake();
+    if (held && !html.classList.contains('theme-vt')) respawn(); else if (calm.matches) draw();
+  }).observe(html, { attributes: true, attributeFilter: ['data-theme', 'class'] });
   document.addEventListener('visibilitychange', wake);
   shown.addEventListener?.('change', () => { resize(); wake(); });
   calm.addEventListener?.('change', wake);
