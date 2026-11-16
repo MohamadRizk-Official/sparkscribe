@@ -4,8 +4,9 @@ Plans, usage and billing for the browser. **Display only**: what a user may actu
 the database (entitlements), never here. Plan names, prices and allowances come from the `billing_plans` table, the same
 source the server uses.
 
-> Not unit-tested yet: the module imports `src/lib/supabase.js`, which reads `import.meta.env` and cannot load under plain
-> `node`. The pure formatters below would need to move to a separate file to be testable.
+> Tested in `tests/billing-display-test.mjs`, which loads the module through `tests/vite-env-hook.mjs` (the hook makes
+> `import.meta.env` empty, so Supabase reads as "not configured"). The formatters, `planWith`, `can` and `BillingApiError`
+> are covered; the server calls need Supabase and are not.
 
 ## Loading
 - `loadPlans()` lists the four-tier lineup (Free, Flash, Bolt, Thunder) in tier order. Rows without a tier (retired plans) are never listed. Cached; returns `[]` when Supabase is not configured, and the cache is cleared on error so it can retry.
