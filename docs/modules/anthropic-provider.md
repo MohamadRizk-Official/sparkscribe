@@ -20,11 +20,11 @@ The error type every AI path throws. `server/http.js` `sendError` turns it into 
 ### Failures and retries (`post`)
 | situation | result |
 |---|---|
-| 429, 500, 502, 503 or 529 on the first try | wait 1.5 s and try once more; after a second failure, a 503 "busy" (rate limits end as 503) |
+| 429, 500, 502, 503 or 529 on the first try | wait 1.5 s and try once more; if the second try fails too, it is treated like any other error status (below), so two rate limits end as a `503` and the others as a `502` |
 | network error | tried twice, then `504` "Could not reach the analysis service." |
 | timeout | **never retried** (a second try would not fit the function's time limit and could be billed unseen): `504` "took too long" |
 | 401 | `502` "not set up correctly" |
-| any other error status | `502` "returned an error" |
+| any other error status | `502` "returned an error" (a 429 is reported as `503`) |
 Only the HTTP status and the error *type* are logged; neither the request, the key nor the service's message is ever logged or forwarded.
 
 ### `stream(opts, onDelta)` → `{ text, model, usage, truncated }`
