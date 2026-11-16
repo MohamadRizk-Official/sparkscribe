@@ -13,8 +13,8 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/lib/tool-settings.js` | [tool-settings.md](tool-settings.md) | `tests/tool-settings-test.mjs` |
 | `src/engine/preprocess.js` | [audio-analysis.md](audio-analysis.md) | `tests/audio-analysis-test.mjs` |
 | `src/lib/seek.js` | [seek.md](seek.md) | `tests/seek-test.mjs` |
-| `src/lib/billing.js` | [billing-display.md](billing-display.md) | none (imports Supabase) |
-| `src/lib/recovery.js` | [password-recovery.md](password-recovery.md) | none (imports Supabase) |
+| `src/lib/billing.js` | [billing-display.md](billing-display.md) | `tests/billing-display-test.mjs` |
+| `src/lib/recovery.js` | [password-recovery.md](password-recovery.md) | `tests/recovery-session-test.mjs` |
 | `src/lib/course-tone.js` | a course's accent colour: one of cyan, violet, amber, blue, magenta, derived from the course id | `tests/course-tone-test.mjs` |
 | `server/entitlements.js` | [entitlements.md](entitlements.md) | `tests/entitlements-test.mjs` |
 | `server/ai/provider.js` | [ai-provider.md](ai-provider.md) | `tests/provider-test.mjs` |
@@ -43,10 +43,18 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/lib/continuation.js` | [continuation.md](continuation.md) | `tests/continuation-test.mjs` |
 | `src/lib/fetch-progress.js` | [fetch-progress.md](fetch-progress.md) | `tests/fetch-progress-test.mjs` |
 | `src/lib/timing-plan.js` | [timing-plan.md](timing-plan.md) | `tests/timing-plan-test.mjs` |
-| `src/lib/metrics.js` | [metrics.md](metrics.md) | `tests/metrics-test.mjs` |
+| `src/lib/metrics.js` | [metrics.md](metrics.md) | `tests/metrics-normalize-test.mjs`, `tests/metrics-wer-test.mjs`, `tests/metrics-terms-speakers-test.mjs` (`tests/metrics-test.mjs` tests the speaker metrics in `accuracy/lab/metrics.mjs`, not this file) |
 | `src/lib/pricing-catalog.js` | [pricing-catalog.md](pricing-catalog.md) | `tests/pricing-catalog-test.mjs` |
 | `src/insights/answer-format.js` | [answer-format.md](answer-format.md) | `tests/ask-format-test.mjs` |
 | `src/insights/focus-review.js` | [focus-review.md](focus-review.md) | `tests/focus-review-test.mjs` |
 | `src/home/dashboard.js` | [dashboard.md](dashboard.md) | none (needs a browser and Supabase) |
+| `server/ai/tools.js` (validators) | [create-tool-validators.md](create-tool-validators.md) | `tests/tools-validators-test.mjs`, `tests/study-schemas-strict-test.mjs` |
+| `src/insights/tools.js` (`localGrade`) | [short-answer-grading.md](short-answer-grading.md) | `tests/local-grade-test.mjs` |
+| `src/insights/tools.js` (`artifactBlocks`, `blocksToText`, `toolsFor`) | [create-export-text.md](create-export-text.md) | `tests/artifact-blocks-test.mjs` |
+| `server/http.js` | [server-http.md](server-http.md) | `tests/http-test.mjs`, `tests/http-helpers-test.mjs` |
+| `server/ai/anthropic.js` | [anthropic-provider.md](anthropic-provider.md) | `tests/anthropic-provider-test.mjs` |
+| `src/lib/breath.js` (envelope, start points) | [breath-envelope.md](breath-envelope.md) | `tests/breath-envelope-test.mjs` |
+| `src/lib/supabase.js` (unconfigured) | the header comment in the file | `tests/supabase-unconfigured-test.mjs` |
+| `src/lib/quiz-sound.js` | the header comment in the file | `tests/quiz-sound-test.mjs` |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
