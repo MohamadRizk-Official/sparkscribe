@@ -25,4 +25,4 @@ no words is skipped.
 
 ## What it deliberately does not do
 - It does not accept synonyms or paraphrases ("powerhouse" for "mitochondria"); that is the server's job.
-- One word of a three-word alternative is not enough (25 % of 3 words rounds below the 75 % line).
+- One word of a three-word alternative is not enough (a third of the words is under the 75 % line).
