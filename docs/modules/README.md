@@ -41,6 +41,7 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/engine/word-timing.js` | [word-timing.md](word-timing.md) | none (needs a browser; alignment is covered by `tests/ctc-align-test.mjs`) |
 | `src/mascot/motion.js` | [mascot-motion.md](mascot-motion.md) | `tests/mascot-motion-test.mjs`, `tests/mascot-animator-test.mjs` |
 | `src/lib/sentence-timing.js` | [sentence-timing.md](sentence-timing.md) | `tests/sentence-timing-test.mjs` |
+| `src/insights/api.js` | [insights-api.md](insights-api.md) | `tests/insights-api-unconfigured-test.mjs` |
 | `src/engine/voice-guard.js` | [voice-guard.md](voice-guard.md) | `tests/voice-guard-test.mjs` |
 | `src/engine/speaker-words.js` | [speaker-words-overview.md](speaker-words-overview.md) | `tests/speaker-words-test.mjs` |
 | `src/lib/continuation.js` | [continuation.md](continuation.md) | `tests/continuation-test.mjs` |
