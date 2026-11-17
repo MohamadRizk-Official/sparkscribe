@@ -36,6 +36,7 @@ Short explanations of how individual modules behave, written from the code. Each
 | `server/ai/mock.js` | [browser-and-dev-helpers.md](browser-and-dev-helpers.md#mock-ai-provider) | `tests/mock-provider-test.mjs` |
 | `src/lib/account.js`, `transcripts.js`, `library.js`, `prefs.js`, `captcha.js` | [browser-and-dev-helpers.md](browser-and-dev-helpers.md) | `tests/account-helpers-test.mjs`, `tests/transcripts-helpers-test.mjs`, `tests/library-helpers-test.mjs`, `tests/prefs-test.mjs`, `tests/captcha-test.mjs` |
 | `server/ai/study.js`, `server/ai/studymap.js` (helpers) | the header comments in each file | `tests/study-helpers-test.mjs`, `tests/studymap-helpers-test.mjs` |
+| `server/ai/study.js` (prompts, validation) | [study-validation.md](study-validation.md) | `tests/study-instructions-test.mjs`, `tests/study-validate-quiz-test.mjs` |
 | `src/engine/model-cache.js`, `src/engine/fetch-model.js` | [model-cache.md](model-cache.md), [fetch-model.md](fetch-model.md) | `tests/model-cache-test.mjs` |
 | `src/engine/nemotron-files.js`, `speaker-check.js`, `gpu-device.js` | [nemotron-files.md](nemotron-files.md), [speaker-check.md](speaker-check.md), [gpu-device.md](gpu-device.md) | `tests/nemotron-files-test.mjs` |
 | `src/engine/word-timing.js` | [word-timing.md](word-timing.md) | none (needs a browser; alignment is covered by `tests/ctc-align-test.mjs`) |
