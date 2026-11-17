@@ -41,6 +41,13 @@ With no env values, Supabase reads as "not configured" and Turnstile as off, so 
 stood in for by small objects set on `globalThis` before the import. Still not testable this way: `align-worker.js` and
 `worker.js` (they load the speech models).
 
+## Other things that load in plain Node
+- **Scripts and the accuracy lab.** Modules under `scripts/` and `accuracy/lab/` that export plain functions can be imported directly (`tests/stripe-permissions-helpers-test.mjs`, `tests/lab-reference-test.mjs`, `tests/lab-metrics-parts-test.mjs`). Importing `scripts/stripe-permissions.mjs` needs no Stripe package; `scripts/stripe-setup.mjs` does, so install dependencies first (`npm ci --ignore-scripts` is enough).
+- **Server prompt builders** (`server/ai/study.js`, `studymap.js`, `studyrun.js`, `across.js`) are pure functions returning strings or objects. Assert the parts other code depends on (the count ceiling, the settings fallbacks, the rule text that carries a guarantee), not the whole prompt, so wording can still be improved.
+- **Browser globals the module needs only at call time.** `src/mascot/bus.js` touches `window` and `sessionStorage` inside `try`; its test loads it with neither set, then sets small stand-ins (`tests/mascot-bus-test.mjs`). Note that Node re-throws an exception from an event listener asynchronously, so a "listener that throws" case cannot be asserted the way it can in a browser.
+- **Factories that start workers lazily.** `createSentenceTiming` (`src/lib/sentence-timing.js`) only creates its worker when timing is enabled; in Node timing is off, so the stored-timings and fallback paths can be tested (`tests/sentence-timing-test.mjs`).
+- **Float32 pose data.** Values stored in a `Float32Array` (the mascot's poses) are not equal to the JavaScript number they were set from; compare with a small tolerance.
+
 ## Pinning values on purpose
 A few tests pin exact values because other things depend on them: the draft-instruction fingerprint in
 `tool-settings-test.mjs` (changing it orphans stored drafts) and the course tone for a known id in
