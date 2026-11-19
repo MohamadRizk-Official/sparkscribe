@@ -69,3 +69,7 @@ Short explanations of how individual modules behave, written from the code. Each
 | tuned numbers across modules | [tuned-constants.md](tuned-constants.md) | the tests it lists |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
+| `src/lib/captcha.js` | [captcha.md](captcha.md) | `tests/captcha-test.mjs` |
+| `src/lib/prefs.js` | [prefs.md](prefs.md) | `tests/prefs-test.mjs` |
+| `src/lib/quiz-sound.js` | [quiz-sound.md](quiz-sound.md) | `tests/quiz-sound-test.mjs` |
+| `src/lib/related-material.js` | [related-material.md](related-material.md) | `tests/related-material-brand-test.mjs` |
