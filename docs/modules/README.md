@@ -64,5 +64,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/lib/breath.js` (envelope, start points) | [breath-envelope.md](breath-envelope.md) | `tests/breath-envelope-test.mjs` |
 | `src/lib/supabase.js` (unconfigured) | the header comment in the file | `tests/supabase-unconfigured-test.mjs` |
 | `src/lib/quiz-sound.js` | the header comment in the file | `tests/quiz-sound-test.mjs` |
+| `src/engine/combine.js` | [combine-speakers.md](combine-speakers.md) | `tests/combine-test.mjs`, `tests/combine-gate-test.mjs` |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
