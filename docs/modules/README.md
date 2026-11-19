@@ -66,5 +66,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/lib/quiz-sound.js` | the header comment in the file | `tests/quiz-sound-test.mjs` |
 | `src/engine/combine.js` | [combine-speakers.md](combine-speakers.md) | `tests/combine-test.mjs`, `tests/combine-gate-test.mjs` |
 | `src/engine/decoding.js` | [decoding.md](decoding.md) | `tests/whisper-control-test.mjs`, `tests/compat-test.mjs` |
+| tuned numbers across modules | [tuned-constants.md](tuned-constants.md) | the tests it lists |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
