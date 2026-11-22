@@ -74,5 +74,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/lib/onset-head.js` | [onset-head.md](onset-head.md) | `tests/onset-test.mjs`, `tests/onset-head-shape-test.mjs` |
 | `src/lib/theme-toggle.js`, `src/lib/details-pop.js`, `src/lib/brand.js` | [small-ui-widgets.md](small-ui-widgets.md) | none: browser-only |
 | `server/billing/service.js` | [billing-service.md](billing-service.md) | none: needs Stripe and Supabase (see `qa/`) |
+| `server/ai/service.js` | [ai-service.md](ai-service.md) | `tests/service-test.mjs`, `tests/service-constants-test.mjs`, `tests/ai-limits-test.mjs` |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
