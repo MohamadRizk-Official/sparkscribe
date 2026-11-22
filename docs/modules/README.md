@@ -71,5 +71,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/lib/prefs.js` | [prefs.md](prefs.md) | `tests/prefs-test.mjs` |
 | `src/lib/quiz-sound.js` | [quiz-sound.md](quiz-sound.md) | `tests/quiz-sound-test.mjs` |
 | `src/lib/related-material.js` | [related-material.md](related-material.md) | `tests/related-material-brand-test.mjs` |
+| `src/lib/onset-head.js` | [onset-head.md](onset-head.md) | `tests/onset-test.mjs`, `tests/onset-head-shape-test.mjs` |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
