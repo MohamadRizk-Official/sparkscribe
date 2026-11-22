@@ -47,11 +47,19 @@ stood in for by small objects set on `globalThis` before the import. Still not t
 - **Browser globals the module needs only at call time.** `src/mascot/bus.js` touches `window` and `sessionStorage` inside `try`; its test loads it with neither set, then sets small stand-ins (`tests/mascot-bus-test.mjs`). Note that Node re-throws an exception from an event listener asynchronously, so a "listener that throws" case cannot be asserted the way it can in a browser.
 - **Factories that start workers lazily.** `createSentenceTiming` (`src/lib/sentence-timing.js`) only creates its worker when timing is enabled; in Node timing is off, so the stored-timings and fallback paths can be tested (`tests/sentence-timing-test.mjs`).
 - **Float32 pose data.** Values stored in a `Float32Array` (the mascot's poses) are not equal to the JavaScript number they were set from; compare with a small tolerance.
+- **Stand-in model sessions.** `nemotronDiarize` (`src/engine/nemotron.js`) takes its ONNX sessions and `ort` as arguments, so `tests/nemotron-diarize-stub-test.mjs` passes small objects whose `run()` returns a chosen logit pattern and checks the segments that come out. The front end (`nemotronFeatures`) is pure; give it a synthetic mel matrix where each row reads one FFT bin and the result can be checked by hand (`tests/nemotron-features-test.mjs`). The same idea works for any module that receives its model as a parameter.
+- **Safety properties over a list of hostile inputs.** `tests/answer-format-safety-test.mjs` does not compare whole HTML strings; it lists tags and attributes the renderer may produce, runs many malicious or malformed model answers through it and checks that nothing outside the list appears. Prefer this for anything that turns untrusted text into markup.
+- **Floating-point boundaries.** A rule such as "a gap of at most 0.05 s" cannot be tested with `1.05 - 1`, which is `0.05000000000000004`. Test with values clearly on either side of the limit (`tests/continuation-edges-test.mjs`).
 
 ## Pinning values on purpose
 A few tests pin exact values because other things depend on them: the draft-instruction fingerprint in
 `tool-settings-test.mjs` (changing it orphans stored drafts) and the course tone for a known id in
 `course-tone-test.mjs`. If one fails, decide whether the change was intended before editing the test.
+
+## Repository checks
+Two tests look at the repository itself rather than at app code:
+- `tests/test-script-wiring-test.mjs` fails if a `tests/*-test.mjs` file is missing from the `test` script in `package.json`, is listed twice, or is listed but does not exist.
+- `tests/module-docs-links-test.mjs` fails if a guide in `docs/modules/` is not linked from its README, or names a `src/`, `server/` or `tests/` file that does not exist, or links to a guide that does not exist. Rename a file and this tells you which guide to update.
 
 ## Module guides
 Short explanations of tested modules are in `docs/modules/`.
