@@ -6,3 +6,4 @@ One page per serverless function in `api/`. All of them need a signed-in user (a
 |---|---|
 | `POST /api/ask` | [ask.md](ask.md) |
 | `GET/POST /api/insights` | [insights.md](insights.md) |
+| `POST /api/tools` | [tools.md](tools.md) |
