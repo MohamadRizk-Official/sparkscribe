@@ -22,3 +22,12 @@
 6. Each gets `codeOf` (original speaker label to `S1`, `S2`, stable through renames) and `speakers` (`R2.S1` to the current name).
 
 Each entry carries: `id`, `title` ("Untitled recording" if empty), `createdAt`, `duration` (the stored length, else the last line's end), `version`, `segments`, `basis`.
+
+## Orientation: `digestOf`, `mapOf`, `collectionStatus`
+A stored result is **current** for a recording when it is `ready`, has content, and either was made for the same content version or for a later one that only renamed speakers (`sameBasis`).
+
+- `digestOf(db, rec)`: the recording's stored `overview` insight (summary + key points) with current speaker names, or `null` if none is current. Key points are kept only if they cite real lines, and are added in order until the `DIGEST_TOKENS` budget (450) is spent.
+- `mapOf(db, rec, { coded })`: the newest current artifact from study engine 3 or later that has a map with concepts, or `null`. With `coded: true` the map's speaker codes (`{{S1}}`) become this recording's across codes (`{{R2.S1}}`), so the combined guide refers to speakers by stable code.
+- `collectionStatus(db, ids)`: what the page needs before asking, with **no AI call**. For each recording: `label, id, title, createdAt, duration, version, hasSummary, hasMap`, plus `limits: { ask: 12, guide: 10 }`. A failing digest or map lookup counts as "none", never as an error.
+
+`hasMap` is what the guide button uses to decide whether recordings must be prepared first (`409 needs_maps`).
