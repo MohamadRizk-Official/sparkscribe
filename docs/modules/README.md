@@ -81,5 +81,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/engine/nemotron.js` | [nemotron-diarization.md](nemotron-diarization.md) | `tests/nemotron-features-test.mjs`, `tests/nemotron-diarize-stub-test.mjs` |
 | `src/electric/transport.js`, `src/electric/speed-menu.js` | [audio-player-controls.md](audio-player-controls.md) | `tests/electric-helpers-test.mjs` (speed options only) |
 | `src/audio.js` | [audio-decoding.md](audio-decoding.md) | `tests/audio-peaks-test.mjs` (peaks only) |
+| `src/electric/thunder.js` | [thunder-upgrade-dialog.md](thunder-upgrade-dialog.md) | none: browser-only |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
