@@ -53,3 +53,19 @@ Citations look like `[R2:45]` (recording R2, line 45). A group may continue: `[R
 - `groundAcross(text, allowed)` keeps only citations of lines the model was **given** (`allowed`: label to set of line ids). A citation of a line it was not given is removed, so a claim cannot be attributed to a recording it did not come from. A group left with nothing is removed entirely; a partly valid group is rewritten with the valid ones. It returns `{ answer, refs, invalid }`: de-duplicated `refs` and the number of citations dropped. Spaces left before punctuation are tidied over the **whole** answer.
 
 The lines allowed for a recording are the chosen passages plus the first line of each digest key point.
+
+## Asking: `askAcross`
+Steps, in order:
+
+1. **Question**: whitespace collapsed, cut to 500 characters. Empty is `400` "Type a question first." A `requestId` that is not a UUID is replaced by a fresh one.
+2. **One at a time**: if the user already has two reserved requests with feature prefix `across:` within the last 120 seconds, `429 busy` "Your other questions across recordings are still being answered. Try again in a moment." (see `activeAi` in [server-db.md](server-db.md)).
+3. Load the collection (up to 12) and emit `status: searching`.
+4. Reserve usage for the worst case: passages + digests + 2000 tokens of instructions, before any model call ([ai-usage.md](ai-usage.md)).
+5. **Keywords**: with more than 40 lines in total, one cheap `expand` call widens the search words (up to 20). If it fails, the question's own words still rank the passages.
+6. Select passages, emit `names` (for showing recording titles while streaming) and `status: answering`, then stream the answer (`delta` events).
+7. Ground the citations, turn recording and speaker names into `{{R2}}` tokens, and build `refs` with title, line and start time.
+
+### `found` and `unsupported`
+`found` is `true` when the answer has at least one valid citation, **or** it does not read as a negative ("don't", "did not", "none of", "no recording", "not mention/cover/discuss"). `unsupported` is `found && no citations`: an answer the page may show but flags as having no source. The saved content is `{ answer, refs, found, unsupported, mode }`.
+
+Any failure after reservation is recorded on the usage meter and surfaced as the known `AIError`, or a generic "The answer couldn't be generated. Try again."
