@@ -30,3 +30,21 @@ The study guide has three optional focus notes that change emphasis and depth on
 | `exam` | short overview; thorough `exam_info`, `emphasis`, `definitions`, `review`; essentials only for concepts and examples |
 | `concepts` | concentrate on concepts, definitions and relationships; keep examples and review short |
 | `detailed` | cover every topic taught, more points per section, full steps of processes |
+
+## `flashcards` and `quiz`
+Both take their schema (`FLASHCARDS_SCHEMA`, `QUIZ_SCHEMA`) and instructions (`flashcardInstructions`, `quizInstructions`) from `server/ai/study.js` ([study-validation.md](study-validation.md)) and run on study engine 3.
+
+- `itemsKey` is `cards` for flashcards and `questions` for quiz. It names the list the generic code works on.
+- `beforeGrounding` runs `inheritRefs(items, json)` first, so an item that came back without its own line references inherits them from the study-map section it was made from; then grounding drops what still has no real line.
+- Validation is `validateFlashcards` / `validateQuiz`.
+
+### How many cards
+`cardCount(minutes, size)` is the standard target, and the model may return fewer when the material is thin:
+
+| recording length | standard |
+|---|---|
+| under 10 minutes | 8 |
+| 10 to under 40 minutes | 15 |
+| 40 minutes or more | 25 |
+
+`size: 'fewer'` halves it (rounded, never below 5); `size: 'more'` multiplies by 1.6 (rounded, never above 40). The quiz count uses `questionCount`, which is `quizQuestionCount` from `src/lib/tool-settings.js`, so the setup screen and the server agree.
