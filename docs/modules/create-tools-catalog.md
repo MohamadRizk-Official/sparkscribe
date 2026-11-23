@@ -80,3 +80,20 @@ Schema: `is_interview` (boolean), `pairs` (`question`, `asked_by`, `response`, `
 
 ## `episode_notes`
 Schema: `summary` (3-5 sentences), `outline` (chapters in order, each with the line where it begins), `takeaways`, `quotes` (same word-for-word rule as above). Uses the `GROUNDED` rule. The outline's start lines are cleaned afterwards (`fixStarts`).
+
+## `action_plan`
+Answers one question: *what still needs to happen after this recording ends?* The model reads the whole conversation first, because things that sound like tasks are often settled later in the same recording.
+
+For each candidate it decides whether the task was agreed, whether it was done later, replaced or cancelled, whether it was only hypothetical, and whether anyone is actually responsible. Then it gives **one status as of the end of the recording**:
+
+| status | meaning |
+|---|---|
+| `open` | agreed or assigned work that has not happened by the end |
+| `completed_in_recording` | done during the conversation (needs `resolution` and `resolution_refs`) |
+| `discussed_only` | an idea, hypothetical, option, wish, or a description of how something already works; nobody committed |
+| `cancelled` | dropped, rejected or replaced (needs `resolution` and `resolution_refs`) |
+| `unclear` | cannot tell whether it still needs to happen |
+
+Other fields: `task` (a short imperative phrase), `owner` (null when nobody is responsible), `owner_basis` (`assigned`, `volunteered`, `inferred` or `none`), `deadline` (only a specific time or date as said; vague timing such as "soon" is null), `evidence` and `refs`.
+
+Further rules from the instructions: do not invent tasks that would merely make sense, and merge duplicates (the same work mentioned several times) into one task with all its refs. The code side of these rules is in [create-tool-validators.md](create-tool-validators.md#action-plan-rules).
