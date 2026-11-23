@@ -91,3 +91,13 @@ Counts (at most 5) of the user's own ledger rows that are still `reserved` for f
 
 ### `settleAi(id, ok, {input, output, costMicrousd})`
 Replaces the estimate with the real cost through `ai_settle`. It does nothing without both an `id` and a secret. If `AI_LIMITS_REQUIRED=1` but no secret is set, it logs a one-time warning: costs then stay at their estimates, so use is still limited but not exact. A settle error is logged by code only and never thrown.
+
+## 5. Plan and entitlements
+`entitlements()` returns the signed-in user's effective plan and the four-tier catalogue:
+
+```js
+{ plan, planName, tier, features, plans }
+```
+- The plan comes from the database function `billing_status`, which works from the subscription Stripe reported. **Nothing the browser sends is read.**
+- `plans` are the rows of `billing_plans` that have a tier (`key, name, tier, features`), ordered by tier. It is used to say *which* plan has a missing capability.
+- If `billing_status` fails, returns nothing, or `features` is not an array, the function **throws** (`entitlements unavailable: <code>`). Callers refuse rather than guess: `requireCapability` in `server/entitlements.js` turns this into `503 plan_unavailable` ([entitlements.md](entitlements.md)).
