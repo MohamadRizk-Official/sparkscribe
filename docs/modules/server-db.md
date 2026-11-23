@@ -101,3 +101,16 @@ Replaces the estimate with the real cost through `ai_settle`. It does nothing wi
 - The plan comes from the database function `billing_status`, which works from the subscription Stripe reported. **Nothing the browser sends is read.**
 - `plans` are the rows of `billing_plans` that have a tier (`key, name, tier, features`), ordered by tier. It is used to say *which* plan has a missing capability.
 - If `billing_status` fails, returns nothing, or `features` is not an array, the function **throws** (`entitlements unavailable: <code>`). Callers refuse rather than guess: `requireCapability` in `server/entitlements.js` turns this into `503 plan_unavailable` ([entitlements.md](entitlements.md)).
+
+## 6. Saved Thunder history (`across_items`)
+Answers and study guides made across several recordings. Table `public.across_items`; written **only** through the `across_save` database function with a server secret.
+
+| function | notes |
+|---|---|
+| `saveAcross({requestId, kind, ids, question, content, sources})` | with no secret (`BILLING_DB_SECRET`, else `AI_DB_SECRET`) returns `{ saved: false, reason: 'unavailable' }`. A database error or empty reply logs the code and returns `{ saved: false, reason: 'error' }`. Otherwise the function's own reply. `requestId` lets the database ignore a repeat of the same request |
+| `listAcross({limit = 300})` | light rows only (no content), newest first |
+| `acrossItemsFor(ids, {limit = 60})` | items whose `recording_ids` **contain all** of `ids`, with content and sources, newest first. The caller keeps those whose *other* recordings still exist |
+| `deleteAcross(id)` | deletes one row; returns `true` only if a row was actually removed |
+| `transcriptionTitles(ids)` | `id, title, created_at` for these recordings; `[]` without a query when `ids` is empty |
+
+Reading and deleting use the user's own RLS access, so they work on every plan; saving needs the server secret.
