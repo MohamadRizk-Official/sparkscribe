@@ -61,3 +61,22 @@ Two strictly separate lists:
 | `worth_reviewing` | points that seem important (stressed, repeated, called key) but were **not** tied to an assessment | `text`, `reason` (neutral, e.g. "stressed twice"), `refs` |
 
 The instructions forbid saying that anything in `worth_reviewing` will be examined, and the validator enforces the first list in code: an `explicit` item that is not `examBacked` moves to `worth_reviewing` with the reason "Not tied to an exam in the recording".
+
+## `meeting_recap`
+Schema: `overview` (3-5 sentences: purpose and outcome, keeping the speakers' own certainty), `topics` (in order, with the line each begins at), `decisions`, `action_items`, `open_questions`, `follow_ups`, `important_dates`. The `decision` and `actionItem` shapes and the `DECISION_RULE` / `ACTION_RULE` text are shared with the summary prompts in `server/ai/prompts.js` ([prompts.md](prompts.md)).
+
+Instructions in plain terms:
+- `open_questions`: raised and not resolved. `follow_ups`: something someone said should be checked, revisited or scheduled.
+- `important_dates`: dates and deadlines exactly as said.
+- *A discussion, suggestion, preference or priority is not a decision.* Empty lists are the right answer when nothing qualifies.
+
+`participants` is **not** asked of the model. After generation it is built from the transcript's own speakers (see [create-tool-validators.md](create-tool-validators.md)).
+
+## `interview_qa`
+Schema: `is_interview` (boolean), `pairs` (`question`, `asked_by`, `response`, `answered_by`, `refs`) and `quotes`.
+- Every real question that was asked and answered, in order; `response` is a faithful summary that keeps the answer's certainty.
+- If the recording is not really question-and-answer, the model sets `is_interview` to false and returns only genuine questions, if any. It must never force statements into Q&A form.
+- `quotes`: 3-6 memorable lines copied word for word from **a single** transcript line (no paraphrase, no merging lines).
+
+## `episode_notes`
+Schema: `summary` (3-5 sentences), `outline` (chapters in order, each with the line where it begins), `takeaways`, `quotes` (same word-for-word rule as above). Uses the `GROUNDED` rule. The outline's start lines are cleaned afterwards (`fixStarts`).
