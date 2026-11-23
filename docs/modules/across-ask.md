@@ -31,3 +31,17 @@ A stored result is **current** for a recording when it is `ready`, has content, 
 - `collectionStatus(db, ids)`: what the page needs before asking, with **no AI call**. For each recording: `label, id, title, createdAt, duration, version, hasSummary, hasMap`, plus `limits: { ask: 12, guide: 10 }`. A failing digest or map lookup counts as "none", never as an error.
 
 `hasMap` is what the guide button uses to decide whether recordings must be prepared first (`409 needs_maps`).
+
+## Choosing passages: `selectAcross`
+Full transcripts are never all sent, so a 10-hour collection costs about the same as one long recording.
+
+- **Small collections**: if every line fits in the budget, everything is sent (`mode: 'full'`). That is cheaper than ranking and nothing can be missed.
+- **Otherwise** (`mode: 'retrieval'`):
+  1. Each recording is cut into chunks (`buildChunks`, see [retrieve.md](retrieve.md)) and ranked with BM25 over the **whole collection**, so document frequencies are shared.
+  2. The question's words weigh 1; the expanded keywords weigh 0.6.
+  3. Chunks that contain lines behind a key point which shares words with the question get a bonus of half the top score.
+  4. A per-recording cap, `max(budget / matching recordings * 2, budget * 0.3)`, stops one recording taking everything when others also match.
+  5. Picking order: the best chunk of **every** matching recording, then the best ten overall, then their neighbours for context, then whatever budget remains.
+- The result is a map from recording label to line ids in order. Total cost never exceeds the budget.
+
+The line cost estimate includes the `[R00:12] 00:00 Speaker:` prefix each line gets in the prompt.
