@@ -80,5 +80,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `server/ai/service.js` | [ai-service.md](ai-service.md) | `tests/service-test.mjs`, `tests/service-constants-test.mjs`, `tests/ai-limits-test.mjs` |
 | `src/engine/nemotron.js` | [nemotron-diarization.md](nemotron-diarization.md) | `tests/nemotron-features-test.mjs`, `tests/nemotron-diarize-stub-test.mjs` |
 | `src/electric/transport.js`, `src/electric/speed-menu.js` | [audio-player-controls.md](audio-player-controls.md) | `tests/electric-helpers-test.mjs` (speed options only) |
+| `src/audio.js` | [audio-decoding.md](audio-decoding.md) | `tests/audio-peaks-test.mjs` (peaks only) |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
