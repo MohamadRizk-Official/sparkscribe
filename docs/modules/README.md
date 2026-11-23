@@ -60,6 +60,7 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/insights/tools.js` (`localGrade`) | [short-answer-grading.md](short-answer-grading.md) | `tests/local-grade-test.mjs` |
 | `src/insights/tools.js` (`artifactBlocks`, `blocksToText`, `toolsFor`) | [create-export-text.md](create-export-text.md) | `tests/artifact-blocks-test.mjs` |
 | `server/http.js` | [server-http.md](server-http.md) | `tests/http-test.mjs`, `tests/http-helpers-test.mjs` |
+| `server/db.js` | [server-db.md](server-db.md) | none: needs a database (in-memory stores in `tests/service-test.mjs`) |
 | `server/ai/anthropic.js` | [anthropic-provider.md](anthropic-provider.md) | `tests/anthropic-provider-test.mjs` |
 | `src/lib/breath.js` (envelope, start points) | [breath-envelope.md](breath-envelope.md) | `tests/breath-envelope-test.mjs` |
 | `src/lib/supabase.js` (unconfigured) | the header comment in the file | `tests/supabase-unconfigured-test.mjs` |
