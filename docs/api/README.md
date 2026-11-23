@@ -8,3 +8,4 @@ One page per serverless function in `api/`. All of them need a signed-in user (a
 | `GET/POST /api/insights` | [insights.md](insights.md) |
 | `POST /api/tools` | [tools.md](tools.md) |
 | `POST /api/across` | [across.md](across.md) |
+| `POST /api/billing` | [billing.md](billing.md) |
