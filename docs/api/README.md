@@ -9,3 +9,4 @@ One page per serverless function in `api/`. All of them need a signed-in user (a
 | `POST /api/tools` | [tools.md](tools.md) |
 | `POST /api/across` | [across.md](across.md) |
 | `POST /api/billing` | [billing.md](billing.md) |
+| `POST /api/stripe-webhook` | [stripe-webhook.md](stripe-webhook.md) |
