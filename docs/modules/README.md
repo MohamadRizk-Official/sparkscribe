@@ -46,6 +46,7 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/insights/api.js` | [insights-api.md](insights-api.md) | `tests/insights-api-unconfigured-test.mjs` |
 | `accuracy/lab/*.mjs` | [accuracy-lab-metrics.md](accuracy-lab-metrics.md) | `tests/metrics-test.mjs`, `tests/lab-metrics-parts-test.mjs`, `tests/lab-reference-test.mjs`, `tests/lab-spans-diagnostics-test.mjs` |
 | `server/ai/across.js` (combined guide) | [across-guide.md](across-guide.md) | `tests/across-test.mjs`, `tests/across-guide-grounding-test.mjs` |
+| `server/ai/across.js` (loading, ask, history) | [across-ask.md](across-ask.md) | `tests/across-test.mjs`, `tests/across-history-test.mjs`, `tests/across-digest-test.mjs` |
 | `server/ai/studymap.js`, `server/ai/studyrun.js` | [studymap-pipeline.md](studymap-pipeline.md) | `tests/studymap-test.mjs`, `tests/studymap-helpers-test.mjs`, `tests/studymap-prompts-test.mjs` |
 | `src/engine/voice-guard.js` | [voice-guard.md](voice-guard.md) | `tests/voice-guard-test.mjs` |
 | `src/engine/speaker-words.js` | [speaker-words-overview.md](speaker-words-overview.md) | `tests/speaker-words-test.mjs` |
