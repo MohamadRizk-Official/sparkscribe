@@ -42,3 +42,22 @@ A `null` tells the caller another request owns the work.
 ### Failing keeps the old content
 `failInsight` writes only `status`, `error` and (when a version is given) `source_version`; it never touches `content`. A failed regeneration therefore leaves the previous result visible, still tagged with the version it was made for.
 `bumpInsightVersion` uses `.lt('source_version', version)`, so it only ever moves a version forward.
+
+## 2. Artifacts (Create tab outputs)
+Artifacts (`transcription_artifacts`) follow exactly the same pattern as insights, with two differences: they are keyed by `settings_key` (a normalised form of the user's settings, so different settings are different rows) and they carry a `progress` column.
+
+| function | notes |
+|---|---|
+| `listArtifacts(transcriptionId)` | all saved tools for the transcript |
+| `getArtifact(transcriptionId, kind, settingsKey)` | the row for that kind and settings |
+| `startArtifact(existing, {transcriptionId, kind, settings, settingsKey, version})` | same compare-on-`updated_at` claim as `startInsight`; unique violation `23505` returns `null` |
+| `finishArtifact(id, {content, model, usage})` | `ready`, content stored, token counts stored, and **`progress` is reset to `null`** |
+| `failArtifact(id, message, previousVersion)` | `failed`, message cut to 500 characters, old content kept |
+
+Columns come from `ARTIFACT_COLUMNS`, which includes `settings`, `settings_key` and `progress`.
+
+### `appendFollowups(artifact, items)`
+Focused Review adds new practice questions to an existing quiz.
+- The new content is `{ ...artifact.content, followups: [...existing followups, ...items] }`: earlier follow-ups are kept, new ones go on the end.
+- The update applies only when the row is still `ready` **and** `updated_at` is what the caller read. If the quiz was regenerated or changed meanwhile, `null` is returned and nothing is overwritten.
+- Only `content` is written. `progress`, the learner's own state, is left alone.
