@@ -68,3 +68,26 @@ Table `transcription_questions` holds each question the user asked about a recor
 - `listQuestions(transcriptionId)` reads the **newest 100** (`created_at` descending, limit 100) and then reverses them, so the caller gets them **oldest first**. History shows them in that order; follow-up questions use the last three.
 - `findAnswer(transcriptionId, normalized, version, norm)` looks for an earlier identical question. It reads the newest 100 rows **for the same `source_version`** and returns the first whose `norm(question)` equals the already-normalised question, or `null`. The comparison function is passed in by the caller (the service) so the database module has no wording rules of its own. A transcript that was edited (new version) never reuses an answer written for the old text.
 - `saveQuestion({…})` stores the question, answer, `refs`, `found`, the version, the model and the token counts and returns `{ id }`. **If saving fails it returns `null` rather than throwing**: the answer was already shown, and failing to keep it is not worth an error.
+
+## 4. AI usage ledger
+Used with the SQL in `supabase/proposed/*_ai_usage_limits.sql`. See [ai-usage.md](ai-usage.md) for how costs are estimated and [ai-service.md](ai-service.md) for where the checks sit.
+
+### `reserveAi(feature, estimateMicrousd)`
+Called before every model call. It asks the `ai_reserve` database function whether the call is allowed and records a reservation. Possible results:
+
+| situation | result |
+|---|---|
+| `AI_LIMITS_DISABLED=1` (operator's emergency switch) | `{ allowed: true, id: null, unmetered: true }`; logs once, loudly, that checks are off |
+| the database function does not exist (`PGRST202` or `42883`) and `AI_LIMITS_REQUIRED` is not `1` | allowed, unmetered: the rollout fallback before the migration is applied |
+| the same, but `AI_LIMITS_REQUIRED=1` | refused: `{ allowed: false, reason: 'unavailable' }` |
+| any other error, including a thrown exception (network, timeout) | refused, `reason: 'unavailable'`; only the error code is logged |
+| reply is not an object with a boolean `allowed` | refused, `reason: 'unavailable'` |
+| a well-formed reply | returned as is |
+
+The guiding rule, from the code comment: **a broken check must never mean unlimited AI.** `feature` is cut to 80 characters and the estimate is coerced to an integer. The server secret is `AI_DB_SECRET`, falling back to `BILLING_DB_SECRET`.
+
+### `activeAi(prefix, withinMs)`
+Counts (at most 5) of the user's own ledger rows that are still `reserved` for features starting with `prefix` and were created within the window. It is used to run expensive cross-recording requests one at a time. If the ledger cannot be read it returns `0`: the reservation itself still applies the limits.
+
+### `settleAi(id, ok, {input, output, costMicrousd})`
+Replaces the estimate with the real cost through `ai_settle`. It does nothing without both an `id` and a secret. If `AI_LIMITS_REQUIRED=1` but no secret is set, it logs a one-time warning: costs then stay at their estimates, so use is still limited but not exact. A settle error is logged by code only and never thrown.
