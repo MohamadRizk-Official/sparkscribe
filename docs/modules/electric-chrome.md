@@ -4,7 +4,7 @@ Shared by every page. `mountAccountMenu` in `src/lib/account.js` calls `mountAmb
 
 ## `mountAmbient()`
 - Finds `body > .bg`, or creates it (`aria-hidden`, prepended to `body`) with two light sources (`bg-glow-a`, `bg-glow-b`) and a noise layer.
-- Loads `sound-wave.js` afterwards (a dynamic import, so it never delays the page). If the import fails, the error is swallowed and the page simply has no wave.
+- Loads `sound-wave.js` afterwards (a dynamic import, so it never delays the page). If the import fails, the error is swallowed and the page simply has no wave: see [electric-sound-wave.md](electric-sound-wave.md).
 - The faint circuit (right-angled SVG traces near the edges of a 1440 x 900 room, with a slow current running along one at a time) is **switched off**: `NO_CIRCUIT = true`, because the background is one solid colour now (`edges.css`). The `TRACES`, `NODES` and `runCurrents` code remain, but `mountAmbient` returns before drawing them. Calling it twice does nothing extra: the existing `.bg` is reused.
 
 ## `mountHeaderState()`

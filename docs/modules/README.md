@@ -83,5 +83,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/audio.js` | [audio-decoding.md](audio-decoding.md) | `tests/audio-peaks-test.mjs` (peaks only) |
 | `src/electric/thunder.js` | [thunder-upgrade-dialog.md](thunder-upgrade-dialog.md) | none: browser-only |
 | `src/electric/chrome.js` | [electric-chrome.md](electric-chrome.md) | none: browser-only |
+| `src/electric/sound-wave.js` | [electric-sound-wave.md](electric-sound-wave.md) | none: browser-only (WebGL) |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
