@@ -45,3 +45,11 @@ Full transcripts are never all sent, so a 10-hour collection costs about the sam
 - The result is a map from recording label to line ids in order. Total cost never exceeds the budget.
 
 The line cost estimate includes the `[R00:12] 00:00 Speaker:` prefix each line gets in the prompt.
+
+## Citations: `parseCites` and `groundAcross`
+Citations look like `[R2:45]` (recording R2, line 45). A group may continue: `[R2:45, 47; R3:9]`, where a bare number continues the last label.
+
+- `parseCites(group)` returns `[{ label, line }]` in order of appearance.
+- `groundAcross(text, allowed)` keeps only citations of lines the model was **given** (`allowed`: label to set of line ids). A citation of a line it was not given is removed, so a claim cannot be attributed to a recording it did not come from. A group left with nothing is removed entirely; a partly valid group is rewritten with the valid ones. It returns `{ answer, refs, invalid }`: de-duplicated `refs` and the number of citations dropped. Spaces left before punctuation are tidied over the **whole** answer.
+
+The lines allowed for a recording are the chosen passages plus the first line of each digest key point.
