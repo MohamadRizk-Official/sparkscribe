@@ -48,3 +48,16 @@ Both take their schema (`FLASHCARDS_SCHEMA`, `QUIZ_SCHEMA`) and instructions (`f
 | 40 minutes or more | 25 |
 
 `size: 'fewer'` halves it (rounded, never below 5); `size: 'more'` multiplies by 1.6 (rounded, never above 40). The quiz count uses `questionCount`, which is `quizQuestionCount` from `src/lib/tool-settings.js`, so the setup screen and the server agree.
+
+## `definitions`
+Schema: a list of `{ term, definition, evidence, refs }`. The instructions allow a term only if the lecturer explicitly defined it or meaningfully explained what it is: *a term that was only mentioned does not get a definition*. `definition` is what the lecturer said, lightly cleaned, with the same meaning; `evidence` is their exact words. Duplicate terms are removed afterwards.
+
+## `exam_points`
+Two strictly separate lists:
+
+| list | holds | each item |
+|---|---|---|
+| `explicit` | only what the lecturer connected to an exam, test, quiz, midterm, assignment or grading, or "know this", "study this", "this will be on…", "important for the exam" | `text`, `evidence` (those exact words), `refs` |
+| `worth_reviewing` | points that seem important (stressed, repeated, called key) but were **not** tied to an assessment | `text`, `reason` (neutral, e.g. "stressed twice"), `refs` |
+
+The instructions forbid saying that anything in `worth_reviewing` will be examined, and the validator enforces the first list in code: an `explicit` item that is not `examBacked` moves to `worth_reviewing` with the reason "Not tied to an exam in the recording".
