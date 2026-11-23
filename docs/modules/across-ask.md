@@ -69,3 +69,26 @@ Steps, in order:
 `found` is `true` when the answer has at least one valid citation, **or** it does not read as a negative ("don't", "did not", "none of", "no recording", "not mention/cover/discuss"). `unsupported` is `found && no citations`: an answer the page may show but flags as having no source. The saved content is `{ answer, refs, found, unsupported, mode }`.
 
 Any failure after reservation is recorded on the usage meter and surfaced as the known `AIError`, or a generic "The answer couldn't be generated. Try again."
+
+## Saved work: `resolveItem`, `threadFor`, `historySets`, `deleteItem`
+Answers and guides are saved to the account (see "Saved Thunder history" in [server-db.md](server-db.md)). Nothing in them contains a recording title or speaker name: those are tokens, filled in when a saved item is opened, so it always shows **current** names.
+
+### `resolveItem(row, live)`
+Marks every recording behind the item:
+
+| status | when |
+|---|---|
+| `current` | the recording exists and its version is unchanged (or only speakers were renamed) |
+| `edited` | the recording exists but its words or who-said-what changed: the result may be out of date |
+| `deleted` | the recording is gone; links are disabled (`available: false`) and the old title is kept |
+
+It returns `{ id, kind, question, createdAt, content, recordings }` with names rendered into the text and into each source.
+
+### `threadFor(db, ids)`
+Saved answers and guides for one selection, newest first, at most **40**. Fewer than 2 or more than 12 ids give `{ items: [] }`. It also includes work saved for a *larger* selection whose other recordings have since been deleted: the selection shrank because they are gone, not because the user chose so.
+
+### `historySets(db, { limit = 20 })`
+Groups the user's most recent 300 saved rows by selection (`set_key`) and returns the newest `limit` selections with `asks`, `guides`, `lastAt`, `lastQuestion` and the recordings (current title, date, `available`), oldest recording first. `total` is the number of rows read.
+
+### `deleteItem(db, id)`
+Not a UUID: `400` "Unknown item." Nothing deleted: `404 not_found` "That item is already gone." Otherwise `{ deleted: true }`.
