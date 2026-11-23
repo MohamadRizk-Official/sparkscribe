@@ -61,3 +61,10 @@ Focused Review adds new practice questions to an existing quiz.
 - The new content is `{ ...artifact.content, followups: [...existing followups, ...items] }`: earlier follow-ups are kept, new ones go on the end.
 - The update applies only when the row is still `ready` **and** `updated_at` is what the caller read. If the quiz was regenerated or changed meanwhile, `null` is returned and nothing is overwritten.
 - Only `content` is written. `progress`, the learner's own state, is left alone.
+
+## 3. Ask history
+Table `transcription_questions` holds each question the user asked about a recording.
+
+- `listQuestions(transcriptionId)` reads the **newest 100** (`created_at` descending, limit 100) and then reverses them, so the caller gets them **oldest first**. History shows them in that order; follow-up questions use the last three.
+- `findAnswer(transcriptionId, normalized, version, norm)` looks for an earlier identical question. It reads the newest 100 rows **for the same `source_version`** and returns the first whose `norm(question)` equals the already-normalised question, or `null`. The comparison function is passed in by the caller (the service) so the database module has no wording rules of its own. A transcript that was edited (new version) never reuses an answer written for the old text.
+- `saveQuestion({…})` stores the question, answer, `refs`, `found`, the version, the model and the token counts and returns `{ id }`. **If saving fails it returns `null` rather than throwing**: the answer was already shown, and failing to keep it is not worth an error.
