@@ -88,5 +88,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/pages/settings.js` | [settings-page.md](settings-page.md) | none: browser-only |
 | `src/pages/account.js` | [account-page.md](account-page.md) | none: browser-only |
 | `src/pages/eval.js` | [accuracy-lab-page.md](accuracy-lab-page.md) | none: browser-only, dev build |
+| `src/mascot/stage.js` | [mascot-stage.md](mascot-stage.md) | none: browser-only (WebGL) |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
