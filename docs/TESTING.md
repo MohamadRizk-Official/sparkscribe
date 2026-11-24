@@ -56,6 +56,19 @@ A few tests pin exact values because other things depend on them: the draft-inst
 `tool-settings-test.mjs` (changing it orphans stored drafts) and the course tone for a known id in
 `course-tone-test.mjs`. If one fails, decide whether the change was intended before editing the test.
 
+## Stand-ins used by the browser-leaning tests
+Several `src/lib/` modules import the Supabase client or read `location` / `localStorage`. The existing tests handle that in three ways:
+- `register('./vite-env-hook.mjs', import.meta.url)` before the dynamic `import()` makes `import.meta.env` readable in plain Node (no keys, so Supabase reads as "not configured" and no data call is made). Example: `tests/recovery-age-test.mjs`.
+- `globalThis.location = new URL('https://www.spark-scribe.com/library?view=all')` stands in for the site origin where a module builds or checks URLs (`tests/account-redirect-edges-test.mjs`).
+- `globalThis.localStorage = { getItem, setItem, removeItem }` backed by a `Map` (or no-ops) stands in for storage (`tests/transcripts-format-edges-test.mjs`).
+
+A function that uses `location.pathname` as a default argument throws `ReferenceError` when called without that argument in Node: pass the argument explicitly in the test.
+
+## Edge-case files
+Some modules have a second file named `<topic>-edges-test.mjs` (or a name that says what it adds, such as `tool-settings-keys-test.mjs`) next to the first test. These add boundary inputs (empty, null, negative, over-limit, hostile) without touching the original file. Each starts with a comment that names the module and the behaviour covered, and is listed at the end of the `test` script like any other.
+
+When a new assertion fails because of a genuine app bug, don't weaken the test: leave the assertion out and describe the behaviour in `docs/FOUND-ISSUES.md` (what the code says, what happens, a reproduction, the impact), as was done for the dropped-citation space.
+
 ## Repository checks
 Two tests look at the repository itself rather than at app code:
 - `tests/test-script-wiring-test.mjs` fails if a `tests/*-test.mjs` file is missing from the `test` script in `package.json`, is listed twice, or is listed but does not exist.
