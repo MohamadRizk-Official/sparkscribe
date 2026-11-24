@@ -84,5 +84,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/electric/thunder.js` | [thunder-upgrade-dialog.md](thunder-upgrade-dialog.md) | none: browser-only |
 | `src/electric/chrome.js` | [electric-chrome.md](electric-chrome.md) | none: browser-only |
 | `src/electric/sound-wave.js` | [electric-sound-wave.md](electric-sound-wave.md) | none: browser-only (WebGL) |
+| `src/pages/pricing.js` | [pricing-page.md](pricing-page.md) | none: browser-only |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
