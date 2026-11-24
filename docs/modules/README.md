@@ -90,5 +90,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/pages/eval.js` | [accuracy-lab-page.md](accuracy-lab-page.md) | none: browser-only, dev build |
 | `src/mascot/stage.js` | [mascot-stage.md](mascot-stage.md) | none: browser-only (WebGL) |
 | `src/insights/export.js` | [export-dialog.md](export-dialog.md) | `tests/export-test.mjs`, `tests/export-doc-builders-test.mjs` (the dialog is browser-only) |
+| `src/pages/library.js` | [library-page.md](library-page.md) | none: browser-only |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
