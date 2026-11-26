@@ -93,6 +93,7 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/pages/library.js` | [library-page.md](library-page.md) | none: browser-only |
 | `src/lib/library.js` | [library-data.md](library-data.md) | `tests/library-helpers-test.mjs` (display helpers only) |
 | `src/pages/across.js` | [across-page.md](across-page.md) | none: browser-only |
+| `src/lib/account.js` | [account-actions.md](account-actions.md) | `tests/account-actions-test.mjs`, `tests/account-helpers-test.mjs`, `tests/account-redirect-edges-test.mjs` |
 | `src/lib/transcripts.js` | [transcripts-save.md](transcripts-save.md) | `tests/transcripts-data-calls-test.mjs`, `tests/transcripts-helpers-test.mjs`, `tests/transcripts-format-edges-test.mjs` |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
