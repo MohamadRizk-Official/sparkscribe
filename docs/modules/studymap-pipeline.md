@@ -17,3 +17,14 @@ guides are all written from that map. This page lists the steps and what each pr
 
 ## Reusing a stored map
 `storedMap(artifacts, basis)` returns the most recently updated artifact that is `ready`, from engine 3 or later, has map concepts, and has the same transcript basis (so a rename of speakers still counts as current). Otherwise `null` and the map is built; `studyMap` waits up to `MAP_WAIT_MS` (90 s) for a map another request is already building.
+
+### What counts as "the same map" (pinned by `tests/studyrun-map-reuse-test.mjs`)
+A stored result is reused only when **all** of these hold; if any fails, a new map is built and paid for:
+- `status` is `ready` (a map still `generating`, or `failed`, is skipped; a fresh `generating` one is waited for instead).
+- `content.engine` is 3 or higher (results from the older engine have a different shape).
+- `content.map.concepts` exists (a result without a map, or with an empty `map: {}`, does not count).
+- `content.basis` equals the transcript's basis on all three of `n`, `text` and `parts`: the number of lines, the words, and the speaker layout. Changing the words or reassigning speakers makes the old map stale; a plain rename of a speaker does not, because the basis does not include display names. With no basis at all, nothing matches.
+
+The artifact's `kind` does not matter: a flashcard or quiz result that carries the map is as good as a dedicated `study_map` one. When several qualify, the newest `updated_at` wins. A reused map reports `reused: true` and its section count from `content.quality.sections` (or `null` when it was saved without quality notes); no AI call is made at all.
+
+While a map is being prepared, `studyMap` re-reads the artifacts every 1.5 seconds until it is ready or `MAP_WAIT_MS` has passed, then reuses it, so opening the Create tab and asking for a quiz straight away does not build the map twice.
