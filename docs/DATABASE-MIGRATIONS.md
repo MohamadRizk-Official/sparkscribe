@@ -30,6 +30,7 @@ rollback in `supabase/proposed/rollback/`.
 ## Rollbacks and proposals
 - `supabase/proposed/rollback/<name>.down.sql` undoes the matching migration. The migration's own header names its rollback file.
 - `supabase/proposed/` also holds changes that are written but **not** applied (for example the second stage of the four-tier cutover, `20261016110000_four_tier_cutover.sql`). A proposed file is never copied into `migrations/` under the same name.
+- `20261017200000_course_exams` has a rollback file but its header does not mention it; every other migration from `20261012100000` on names its rollback.
 - Headers that start with "Applied to production <date>" record when the owner approved and applied the file.
 
 ## One oddity
