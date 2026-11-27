@@ -90,3 +90,5 @@ needs more than this, split its logic into a pure function first.
 | `tests/insights-api-calls-test.mjs` | browser calls to `/api/insights`, `/api/ask`, `/api/across`, `/api/tools` |
 | `tests/recovery-guard-test.mjs` | ending sessions and guarding password-reset sessions |
 | `tests/speaker-names-dom-test.mjs` | renaming speakers in rendered results |
+
+See also [indexeddb-stand-in.md](indexeddb-stand-in.md) for the in-memory IndexedDB used by `tests/audio-store-idb-test.mjs`.
