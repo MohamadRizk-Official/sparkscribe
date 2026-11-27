@@ -64,4 +64,5 @@ is ignored whenever `VERCEL` is set and needs the request to opt in with a heade
 | `VITE_PAID_PLANS=1` | only in the build that launches paid plans; until then the pricing page cannot start a payment |
 | `VITE_REQUIRE_ACCOUNT=1` | the transcription page requires sign-in. Off by default |
 | `VITE_ACCOUNT_DELETION=1` | shows account deletion in Settings once the database function exists |
+| `VITE_SPEAKER_CHECK=off` | turns off the second speaker model that double-checks the first (`SPEAKER_DOUBLE_CHECK` in `src/worker.js`); any other value keeps the check on. A page opened with `?speakers=v1` compares in one browser |
 | `VITE_NEMOTRON_F16_BASE` | replaces the download sources of the speaker model (local tests) |
