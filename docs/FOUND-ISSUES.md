@@ -47,3 +47,17 @@ Behaviour noticed while writing tests and docs. These are write-ups only: nothin
 - **Impact:** an open redirect after sign-in. A link such as `https://www.spark-scribe.com/auth?next=/.//evil.example` would send the person to `evil.example` once they have signed in (`location.replace(next)` in `src/pages/auth.js` and `src/pages/callback.js`). It cannot read the session. It could be used for phishing from a trusted link.
 - **Suggested fix (not applied):** after the origin check, reject (or return the fallback for) any result that starts with `//`, for example `const out = u.pathname + u.search + u.hash; return out.startsWith('//') ? fallback : out;`. Rejecting `.` and `..` segments in the input would also work.
 - **Test status:** `tests/account-helpers-test.mjs` covers everything `safeNext` already handles (absolute URLs, `//host`, backslashes, tab/newline tricks, control characters, `javascript:`) and leaves this case out.
+
+## 4. The local dev server only loads a fixed, partly outdated list of server settings from `.env.local`
+
+- **Where:** `SERVER_ENV` and the `/api` middleware in `vite.config.js` (`for (const k of SERVER_ENV) if (env[k] && !process.env[k]) process.env[k] = env[k]`).
+- **What the code says it does:** "Server-only settings the /api functions read from process.env. Locally they come from .env.local."
+- **What happens:** `npm run dev` copies only the names in that list from `.env.local` into `process.env`. The list still names the old two-plan variables `STRIPE_PLUS_PRICE_ID` and `STRIPE_PRO_PRICE_ID`, and it does not name several settings the server code reads today:
+  - the four-tier prices and offers: `STRIPE_FLASH_PRICE_ID`, `STRIPE_BOLT_PRICE_ID`, `STRIPE_THUNDER_PRICE_ID`, their `_YEARLY_` forms and `STRIPE_<PLAN>_INTRO_COUPON` (read by `priceIdFor` and `introCouponFor` in `server/billing/config.js`);
+  - `AI_MODEL_TOOLS` (the model for the study tools), `AI_DB_SECRET`, `AI_LIMITS_REQUIRED`, `AI_LIMITS_DISABLED`;
+  - `BILLING_LIVE_APPROVED`, `BILLING_CHECKOUT_ALLOWLIST`, `BILLING_SCOPE`, `STRIPE_AUTOMATIC_TAX`, `STRIPE_REQUIRE_TOS`;
+  - `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` and the `AI_MOCK_*` switches.
+- **Reproduce:** put `AI_MODEL_TOOLS=some-model` (or `STRIPE_FLASH_PRICE_ID=price_123`) in `.env.local`, run `npm run dev`, and call the tools or checkout route: the setting is not seen, so the built-in default is used and Flash shows as "not available yet". Exporting the same variable in the shell before starting the server does work, because values already in `process.env` are used as they are.
+- **Impact:** local development only. Deployments on Vercel read the project's own environment variables and are not affected. The cost is confusion while testing the four-tier billing and the per-task models locally.
+- **Suggested fix (not applied):** copy every variable from `loadEnv(mode, process.cwd(), '')` that is not already set (or build the list from the names in `docs/ENVIRONMENT-VARIABLES.md`), and drop the two retired names.
+- **Test status:** no test covers the dev-server middleware, so nothing was left out. The full list of variables the code reads is in [ENVIRONMENT-VARIABLES.md](ENVIRONMENT-VARIABLES.md).
