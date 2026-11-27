@@ -61,3 +61,11 @@ Behaviour noticed while writing tests and docs. These are write-ups only: nothin
 - **Impact:** local development only. Deployments on Vercel read the project's own environment variables and are not affected. The cost is confusion while testing the four-tier billing and the per-task models locally.
 - **Suggested fix (not applied):** copy every variable from `loadEnv(mode, process.cwd(), '')` that is not already set (or build the list from the names in `docs/ENVIRONMENT-VARIABLES.md`), and drop the two retired names.
 - **Test status:** no test covers the dev-server middleware, so nothing was left out. The full list of variables the code reads is in [ENVIRONMENT-VARIABLES.md](ENVIRONMENT-VARIABLES.md).
+
+## 5. The `20261017200000_course_exams` migration does not name its rollback file
+
+- **Where:** the header of `supabase/migrations/20261017200000_course_exams.sql`.
+- **What happens:** every other migration from `20261012100000` on says in its header where its rollback is (`supabase/proposed/rollback/<name>.down.sql`). This one does not, although `supabase/proposed/rollback/20261017200000_course_exams.down.sql` exists.
+- **Impact:** none on behaviour. Someone reading only the migration would not know a rollback is ready.
+- **Suggested fix (not applied):** add the usual "Rollback: …" line to the header. Migrations that were already applied are normally not edited, so a note in `docs/DATABASE-MIGRATIONS.md` (added) may be enough.
+- **Test status:** `tests/migration-rollbacks-test.mjs` requires the rollback file to exist for every migration from `20261012100000` on, and requires the header to name the right file only where it names one.
