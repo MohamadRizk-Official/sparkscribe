@@ -95,5 +95,6 @@ Short explanations of how individual modules behave, written from the code. Each
 | `src/pages/across.js` | [across-page.md](across-page.md) | none: browser-only |
 | `src/lib/account.js` | [account-actions.md](account-actions.md) | `tests/account-actions-test.mjs`, `tests/account-helpers-test.mjs`, `tests/account-redirect-edges-test.mjs` |
 | `src/lib/transcripts.js` | [transcripts-save.md](transcripts-save.md) | `tests/transcripts-data-calls-test.mjs`, `tests/transcripts-helpers-test.mjs`, `tests/transcripts-format-edges-test.mjs` |
+| `server/ai/studyrun.js` (`studyGuide`) | [study-guide-compose.md](study-guide-compose.md) | `tests/studyguide-compose-test.mjs` |
 
 See also [../TESTING.md](../TESTING.md) and [../PROJECT-CONTEXT.md](../PROJECT-CONTEXT.md).
